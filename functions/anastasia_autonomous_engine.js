@@ -26,6 +26,26 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const alpacaService = require('./alpaca_service');
 const pepperstoneService = require('./pepperstone_centinela');
+const ti = require('./technical_indicators');
+const { evaluateStrategiesForBar } = require('./strategy_signals');
+
+const PROMO_MATRIX_FILE = path.join(__dirname, 'promoted_strategies.json');
+let promotedMatrix = null;
+function loadPromotedMatrix() {
+    if (fs.existsSync(PROMO_MATRIX_FILE)) {
+        try {
+            promotedMatrix = JSON.parse(fs.readFileSync(PROMO_MATRIX_FILE, 'utf8'));
+        } catch(e) {}
+    }
+}
+loadPromotedMatrix();
+
+let latestEnrichedBars = {
+    NVDA: [],
+    TSLA: [],
+    XAUUSD: [],
+    SOLUSD: []
+};
 
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || '';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
@@ -149,23 +169,18 @@ async function notifyPedro(htmlText) {
 }
 
 // ------------------------------------------------------------------------------
-// 📡 FEED DE MERCADO EN VIVO PARA LOS 4 ACTIVOS
+// 📡 FEED DE MERCADO EN VIVO PARA LOS 4 ACTIVOS (VELAS REALES 5M CON INDICADORES)
 // ------------------------------------------------------------------------------
 async function fetchMarketQuotes() {
     const quotes = {};
+    const alpacaHeaders = {
+        'APCA-API-KEY-ID': alpacaService.ALPACA_CONFIG.apiKey,
+        'APCA-API-SECRET-KEY': alpacaService.ALPACA_CONFIG.secretKey
+    };
 
-    // 1. NVDA & TSLA vía Alpaca Data API
-    try {
-        const alpacaHeaders = {
-            'APCA-API-KEY-ID': alpacaService.ALPACA_CONFIG.apiKey,
-            'APCA-API-SECRET-KEY': alpacaService.ALPACA_CONFIG.secretKey
-        };
-        const stocksData = await new Promise((resolve) => {
-            https.get({
-                hostname: 'data.alpaca.markets',
-                path: '/v2/stocks/bars/latest?symbols=NVDA,TSLA',
-                headers: alpacaHeaders
-            }, (res) => {
+    function fetchBarsUrl(url) {
+        return new Promise((resolve) => {
+            https.get(url, { headers: alpacaHeaders }, (res) => {
                 let d = '';
                 res.on('data', c => d += c);
                 res.on('end', () => {
@@ -173,68 +188,44 @@ async function fetchMarketQuotes() {
                 });
             }).on('error', () => resolve(null));
         });
-
-        if (stocksData && stocksData.bars) {
-            if (stocksData.bars.NVDA) quotes.NVDA = stocksData.bars.NVDA.c;
-            if (stocksData.bars.TSLA) quotes.TSLA = stocksData.bars.TSLA.c;
-        }
-    } catch(e) {
-        console.warn('[FEED] Error Alpaca Stocks:', e.message);
     }
 
-    // 2. SOL/USD vía Alpaca Crypto API
     try {
-        const alpacaHeaders = {
-            'APCA-API-KEY-ID': alpacaService.ALPACA_CONFIG.apiKey,
-            'APCA-API-SECRET-KEY': alpacaService.ALPACA_CONFIG.secretKey
-        };
-        const cryptoData = await new Promise((resolve) => {
-            https.get({
-                hostname: 'data.alpaca.markets',
-                path: '/v1beta3/crypto/us/latest/bars?symbols=SOL/USD',
-                headers: alpacaHeaders
-            }, (res) => {
-                let d = '';
-                res.on('data', c => d += c);
-                res.on('end', () => {
-                    try { resolve(JSON.parse(d)); } catch(e) { resolve(null); }
-                });
-            }).on('error', () => resolve(null));
-        });
+        const [nvdaData, tslaData, gldData, cryptoData] = await Promise.all([
+            fetchBarsUrl('https://data.alpaca.markets/v2/stocks/NVDA/bars?timeframe=5Min&limit=50&feed=sip'),
+            fetchBarsUrl('https://data.alpaca.markets/v2/stocks/TSLA/bars?timeframe=5Min&limit=50&feed=sip'),
+            fetchBarsUrl('https://data.alpaca.markets/v2/stocks/GLD/bars?timeframe=5Min&limit=50&feed=sip'),
+            fetchBarsUrl('https://data.alpaca.markets/v1beta3/crypto/us/bars?symbols=SOL/USD&timeframe=5Min&limit=50')
+        ]);
 
-        if (cryptoData && cryptoData.bars && cryptoData.bars['SOL/USD']) {
-            quotes.SOLUSD = cryptoData.bars['SOL/USD'].c;
+        if (nvdaData && nvdaData.bars && nvdaData.bars.length > 0) {
+            latestEnrichedBars.NVDA = ti.enrichBarsWithIndicators(nvdaData.bars);
+            quotes.NVDA = latestEnrichedBars.NVDA[latestEnrichedBars.NVDA.length - 1].c;
+        }
+
+        if (tslaData && tslaData.bars && tslaData.bars.length > 0) {
+            latestEnrichedBars.TSLA = ti.enrichBarsWithIndicators(tslaData.bars);
+            quotes.TSLA = latestEnrichedBars.TSLA[latestEnrichedBars.TSLA.length - 1].c;
+        }
+
+        if (gldData && gldData.bars && gldData.bars.length > 0) {
+            latestEnrichedBars.XAUUSD = ti.enrichBarsWithIndicators(gldData.bars);
+            quotes.XAUUSD = latestEnrichedBars.XAUUSD[latestEnrichedBars.XAUUSD.length - 1].c;
+        }
+
+        if (cryptoData && cryptoData.bars && cryptoData.bars['SOL/USD'] && cryptoData.bars['SOL/USD'].length > 0) {
+            latestEnrichedBars.SOLUSD = ti.enrichBarsWithIndicators(cryptoData.bars['SOL/USD']);
+            quotes.SOLUSD = latestEnrichedBars.SOLUSD[latestEnrichedBars.SOLUSD.length - 1].c;
         }
     } catch(e) {
-        console.warn('[FEED] Error Alpaca Crypto:', e.message);
-    }
-
-    // 3. XAUUSD (Oro) vía Yahoo Gold / Spotware (5m)
-    try {
-        const goldData = await new Promise((resolve) => {
-            https.get('https://query1.finance.yahoo.com/v8/finance/chart/GC=F?interval=5m&range=1d', {
-                headers: { 'User-Agent': 'Mozilla/5.0' }
-            }, (res) => {
-                let d = '';
-                res.on('data', c => d += c);
-                res.on('end', () => {
-                    try {
-                        const j = JSON.parse(d);
-                        resolve(j.chart.result[0].meta.regularMarketPrice);
-                    } catch(e) { resolve(null); }
-                });
-            }).on('error', () => resolve(null));
-        });
-        if (goldData) quotes.XAUUSD = goldData;
-    } catch(e) {
-        console.warn('[FEED] Error Gold:', e.message);
+        console.warn('[FEED] Error descargando velas 5m:', e.message);
     }
 
     // Fallbacks si el mercado estuviera cerrado o sin tick
-    if (!quotes.NVDA) quotes.NVDA = 187.62;
-    if (!quotes.TSLA) quotes.TSLA = 359.01;
-    if (!quotes.SOLUSD) quotes.SOLUSD = 90.05;
-    if (!quotes.XAUUSD) quotes.XAUUSD = 4074.90;
+    if (!quotes.NVDA) quotes.NVDA = 177.28;
+    if (!quotes.TSLA) quotes.TSLA = 372.91;
+    if (!quotes.SOLUSD) quotes.SOLUSD = 85.84;
+    if (!quotes.XAUUSD) quotes.XAUUSD = 373.64;
 
     return quotes;
 }
@@ -302,123 +293,20 @@ computePerformanceStats();
 
 
 // ------------------------------------------------------------------------------
-// 🧠 EVALUACIÓN MULTI-ESTRATEGIA 5M (LAS 5 PISTAS EN PARALELO - MANDATO DE PEDRO)
+// 🧠 EVALUACIÓN MULTI-ESTRATEGIA 5M (VELAS REALES ALPACA - CERO NÚMEROS ALEATORIOS)
 // ------------------------------------------------------------------------------
-// 1. Pista 1: 🐬 Delfín Rápido de Pedro (Scalping 5m - Escalera 4x4)
-// 2. Pista 2: 🟢 Base Institucional (Ambos - Tendencia Sólida)
-// 3. Pista 3: ⏳ TimeMachine Probabilística (Odds > 65%)
-// 4. Pista 4: 🌊 VWAP + Volume Burst Scalper (Scalping Puro 5m) [OPCIÓN 1 SELECCIONADA POR PEDRO]
-// 5. Pista 5: ⚡ SuperTrend + EMA Ribbon 9/21 (Anti-Caídas 5m) [OPCIÓN 2 SELECCIONADA POR PEDRO]
-
 function evaluateAllStrategies(ticker, currentPrice) {
-    const atr = ASSETS_CONFIG[ticker] ? ASSETS_CONFIG[ticker].baseAtr : 2.0;
-    const seed = (currentPrice * 100) % 100;
-    const strategies = [];
-
-    // --- PISTA 1: 🐬 DELFÍN RÁPIDO (ESCALERA 4X4 DINÁMICA) ---
-    const p1Score = Math.min(95, Math.max(40, Math.round(50 + (seed % 35))));
-    const tp1 = parseFloat((currentPrice + (atr * 0.75)).toFixed(2));
-    const tp2 = parseFloat((currentPrice + (atr * 1.50)).toFixed(2));
-    const tp3 = parseFloat((currentPrice + (atr * 2.25)).toFixed(2));
-    const tp4 = parseFloat((currentPrice + (atr * 3.00)).toFixed(2));
-    strategies.push({
-        stratCode: 'p1',
-        strategyName: 'Pista 1: 🐬 Delfín Rápido de Pedro (Scalping 5m)',
-        pez: '🐬 DELFÍN',
-        score: p1Score,
-        action: p1Score >= 60 ? 'BUY' : 'HOLD',
-        atr,
-        sl: parseFloat((currentPrice - (atr * 1.5)).toFixed(2)),
-        tp: tp4,
-        tp1, tp2, tp3, tp4,
-        isDelfin4x4: true,
-        breakevenTrigger: tp2
-    });
-
-    // --- PISTA 2: 🟢 BASE INSTITUCIONAL (AMBOS) ---
-    const p2Score = Math.min(95, Math.max(40, Math.round(45 + (seed % 40))));
-    strategies.push({
-        stratCode: 'p2',
-        strategyName: 'Pista 2: 🟢 Base Institucional (Ambos)',
-        pez: '🦈 TIBURÓN',
-        score: p2Score,
-        action: p2Score >= 65 ? 'BUY' : 'HOLD',
-        atr,
-        sl: parseFloat((currentPrice - (atr * 1.5)).toFixed(2)),
-        tp: parseFloat((currentPrice + (atr * 3.0)).toFixed(2)),
-        breakevenTrigger: parseFloat((currentPrice + (atr * 1.5)).toFixed(2))
-    });
-
-    // --- PISTA 3: ⏳ TIMEMACHINE PROBABILÍSTICA (ODDS > 65%) ---
-    const p3Score = Math.min(95, Math.max(40, Math.round(48 + ((seed * 3) % 45))));
-    strategies.push({
-        stratCode: 'p3',
-        strategyName: 'Pista 3: ⏳ TimeMachine Probabilística (Odds > 65%)',
-        pez: '🦈 TIBURÓN',
-        score: p3Score,
-        action: p3Score >= 68 ? 'BUY' : 'HOLD',
-        atr,
-        sl: parseFloat((currentPrice - (atr * 1.5)).toFixed(2)),
-        tp: parseFloat((currentPrice + (atr * 2.8)).toFixed(2)),
-        breakevenTrigger: parseFloat((currentPrice + (atr * 1.4)).toFixed(2))
-    });
-
-    // --- PISTA 4: 🌊 VWAP + VOLUME BURST SCALPER (OPCIÓN 1 SELECCIONADA POR PEDRO) ---
-    // Scalping puro de alta velocidad: Rebote al VWAP con ráfaga de volumen
-    const p4Score = Math.min(95, Math.max(45, Math.round(55 + (seed % 38))));
-    const p4Sl = parseFloat((currentPrice - (atr * 1.0)).toFixed(2)); // Stop ceñido
-    const p4Tp = parseFloat((currentPrice + (atr * 1.5)).toFixed(2)); // Salida rápida al VWAP
-    strategies.push({
-        stratCode: 'p4',
-        strategyName: 'Pista 4: 🌊 VWAP + Volume Burst Scalper (Scalping 5m)',
-        pez: '🌊 VWAP',
-        score: p4Score,
-        action: p4Score >= 65 ? 'BUY' : 'HOLD',
-        atr,
-        sl: p4Sl,
-        tp: p4Tp,
-        breakevenTrigger: parseFloat((currentPrice + (atr * 0.75)).toFixed(2))
-    });
-
-    // --- PISTA 5: ⚡ SUPERTREND + EMA RIBBON 9/21 (OPCIÓN 2 SELECCIONADA POR PEDRO) ---
-    // ¡EL GUARDIÁN ANTI-CAÍDAS! (Protege contra cuchillos cayendo como TSLA hoy)
-    // Filtro estricto: Si el activo está en tendencia bajista clara (precio en caída libre), PROHIBIDO COMPRAR.
-    let p5Action = 'HOLD';
-    let p5Reason = '';
-    let p5Score = 40;
-
-    // Condición de tendencia bajista (ej. TSLA hoy cayendo sin soporte):
-    // Si la semilla o el precio está en cuadrante bajista (o es TSLA en caída intradía):
-    const isDowntrendKnife = (ticker === 'TSLA' && (seed % 10 < 7)); // Simula filtro de tendencia bajista severa
-    if (isDowntrendKnife) {
-        p5Action = 'HOLD';
-        p5Reason = '🛡️ FILTRO ANTI-CAÍDAS ACTIVO: EMA 9 < EMA 21 / SuperTrend Rojo (Prohibido comprar en caída libre)';
-        p5Score = 35;
-    } else {
-        p5Score = Math.min(95, Math.max(55, Math.round(60 + (seed % 35))));
-        p5Action = p5Score >= 65 ? 'BUY' : 'HOLD';
+    loadPromotedMatrix();
+    const bars = latestEnrichedBars[ticker] || [];
+    if (bars && bars.length > 0) {
+        return evaluateStrategiesForBar(ticker, bars, -1, promotedMatrix);
     }
-
-    strategies.push({
-        stratCode: 'p5',
-        strategyName: 'Pista 5: ⚡ SuperTrend + EMA Ribbon 9/21 (Anti-Caídas 5m)',
-        pez: '⚡ SUPERTREND',
-        score: p5Score,
-        action: p5Action,
-        blockedReason: p5Reason,
-        atr,
-        sl: parseFloat((currentPrice - (atr * 1.2)).toFixed(2)),
-        tp: parseFloat((currentPrice + (atr * 2.4)).toFixed(2)), // Ratio 2:1
-        breakevenTrigger: parseFloat((currentPrice + (atr * 1.2)).toFixed(2))
-    });
-
-    return strategies;
+    return [];
 }
 
 function calculate26HermanasScore(ticker, currentPrice) {
     const list = evaluateAllStrategies(ticker, currentPrice);
-    // Retorna la mejor estrategia evaluada para compatibilidad con código existente
-    return list.find(s => s.action === 'BUY') || list[0];
+    return list.find(s => s.action === 'BUY') || list[0] || null;
 }
 
 // ------------------------------------------------------------------------------
@@ -505,6 +393,8 @@ async function executeAutonomousOpen(ticker, price, analysis) {
             breakevenTrigger: analysis.breakevenTrigger,
             score: analysis.score,
             pez: analysis.pez,
+            indicators: analysis.indicators || null,
+            signalReason: analysis.signalReason || '',
             status: 'OPEN',
             openedAt: new Date().toISOString(),
             trailingStopMovedToBreakeven: false
@@ -553,6 +443,8 @@ async function executeAutonomousOpen(ticker, price, analysis) {
                 breakevenTrigger: analysis.breakevenTrigger,
                 score: analysis.score,
                 pez: analysis.pez,
+                indicators: analysis.indicators || null,
+                signalReason: analysis.signalReason || '',
                 status: 'OPEN',
                 openedAt: new Date().toISOString(),
                 trailingStopMovedToBreakeven: false
@@ -782,6 +674,9 @@ async function runAutonomousCycle() {
                 price: price,
                 action: analysis.action,
                 strategy: analysis.strategyName,
+                isPromoted: analysis.isPromoted,
+                indicators: analysis.indicators || null,
+                signalReason: analysis.signalReason || '',
                 time: new Date().toISOString()
             };
 
@@ -793,13 +688,21 @@ async function runAutonomousCycle() {
                 continue;
             }
 
+            // REGLA DE PROMOCIÓN DE PEDRO:
+            // Solo las combinaciones con Profit Factor > 1.2 y >= 20 trades en backtest operan en paper.
+            // Las demás quedan en MODO SOMBRA (registran señal pero no ejecutan orden).
+            if (!analysis.isPromoted) {
+                console.log(`⚪ [MODO SOMBRA] Señal ${ticker} en ${analysis.strategyName} (Score ${analysis.score}) - Auditada pero sin ejecución real.`);
+                continue;
+            }
+
             // Cada estrategia compite libremente sin bloquear a las demás (Mandato de Pedro)
             const hasOpenInSameStrategy = engineState.openPositions.some(p => p.symbol === ticker && p.strategy === analysis.strategyName);
             if (hasOpenInSameStrategy) continue;
 
             // Disparo autónomo en ambos brokers si califica
-            if (analysis.score >= 60 && (analysis.pez.includes('DELFÍN') || analysis.pez.includes('TIBURÓN') || analysis.pez.includes('VWAP') || analysis.pez.includes('SUPERTREND') || analysis.pez.includes('BALLENA'))) {
-                if (engineState.openPositions.length < 30) {
+            if (analysis.score >= 65) {
+                if (engineState.openPositions.length < 24) {
                     await executeAutonomousOpen(ticker, price, analysis);
                 }
             }

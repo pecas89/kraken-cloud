@@ -1,0 +1,222 @@
+{
+  "p1_NVDA": {
+    "stratCode": "p1",
+    "strategyName": "Pista 1: 🐬 Delfín Rápido (EMA 9/21 4x4)",
+    "ticker": "NVDA",
+    "totalTrades": 68,
+    "winRate": 25,
+    "profitFactor": 0.56,
+    "netPnl": -11.44,
+    "isPromoted": false,
+    "mode": "MODO SOMBRA (SOLO AUDITORÍA)"
+  },
+  "p2_NVDA": {
+    "stratCode": "p2",
+    "strategyName": "Pista 2: 🦈 Base Institucional (Ambos)",
+    "ticker": "NVDA",
+    "totalTrades": 51,
+    "winRate": 27.8,
+    "profitFactor": 0.55,
+    "netPnl": -8.51,
+    "isPromoted": false,
+    "mode": "MODO SOMBRA (SOLO AUDITORÍA)"
+  },
+  "p3_NVDA": {
+    "stratCode": "p3",
+    "strategyName": "Pista 3: ⏳ TimeMachine Probabilística",
+    "ticker": "NVDA",
+    "totalTrades": 40,
+    "winRate": 12,
+    "profitFactor": 0.16,
+    "netPnl": -13.16,
+    "isPromoted": false,
+    "mode": "MODO SOMBRA (SOLO AUDITORÍA)"
+  },
+  "p4_NVDA": {
+    "stratCode": "p4",
+    "strategyName": "Pista 4: 🌊 VWAP + Volume Burst Scalper",
+    "ticker": "NVDA",
+    "totalTrades": 67,
+    "winRate": 43.2,
+    "profitFactor": 1.07,
+    "netPnl": 0.69,
+    "isPromoted": false,
+    "mode": "MODO SOMBRA (SOLO AUDITORÍA)"
+  },
+  "p5_NVDA": {
+    "stratCode": "p5",
+    "strategyName": "Pista 5: ⚡ SuperTrend + EMA Ribbon (Anti-Caídas)",
+    "ticker": "NVDA",
+    "totalTrades": 79,
+    "winRate": 25.9,
+    "profitFactor": 0.63,
+    "netPnl": -8.6,
+    "isPromoted": false,
+    "mode": "MODO SOMBRA (SOLO AUDITORÍA)"
+  },
+  "p1_TSLA": {
+    "stratCode": "p1",
+    "strategyName": "Pista 1: 🐬 Delfín Rápido (EMA 9/21 4x4)",
+    "ticker": "TSLA",
+    "totalTrades": 82,
+    "winRate": 27.4,
+    "profitFactor": 0.63,
+    "netPnl": -22.92,
+    "isPromoted": false,
+    "mode": "MODO SOMBRA (SOLO AUDITORÍA)"
+  },
+  "p2_TSLA": {
+    "stratCode": "p2",
+    "strategyName": "Pista 2: 🦈 Base Institucional (Ambos)",
+    "ticker": "TSLA",
+    "totalTrades": 65,
+    "winRate": 28.3,
+    "profitFactor": 0.57,
+    "netPnl": -24.57,
+    "isPromoted": false,
+    "mode": "MODO SOMBRA (SOLO AUDITORÍA)"
+  },
+  "p3_TSLA": {
+    "stratCode": "p3",
+    "strategyName": "Pista 3: ⏳ TimeMachine Probabilística",
+    "ticker": "TSLA",
+    "totalTrades": 54,
+    "winRate": 26.8,
+    "profitFactor": 0.79,
+    "netPnl": -7.93,
+    "isPromoted": false,
+    "mode": "MODO SOMBRA (SOLO AUDITORÍA)"
+  },
+  "p4_TSLA": {
+    "stratCode": "p4",
+    "strategyName": "Pista 4: 🌊 VWAP + Volume Burst Scalper",
+    "ticker": "TSLA",
+    "totalTrades": 81,
+    "winRate": 43.4,
+    "profitFactor": 1.21,
+    "netPnl": 5.73,
+    "isPromoted": true,
+    "mode": "OPERACIÓN REAL (PAPER)"
+  },
+  "p5_TSLA": {
+    "stratCode": "p5",
+    "strategyName": "Pista 5: ⚡ SuperTrend + EMA Ribbon (Anti-Caídas)",
+    "ticker": "TSLA",
+    "totalTrades": 88,
+    "winRate": 33.3,
+    "profitFactor": 0.86,
+    "netPnl": -7.13,
+    "isPromoted": false,
+    "mode": "MODO SOMBRA (SOLO AUDITORÍA)"
+  },
+  "p1_GLD": {
+    "stratCode": "p1",
+    "strategyName": "Pista 1: 🐬 Delfín Rápido (EMA 9/21 4x4)",
+    "ticker": "GLD",
+    "totalTrades": 105,
+    "winRate": 18.5,
+    "profitFactor": 0.46,
+    "netPnl": -14.25,
+    "isPromoted": false,
+    "mode": "MODO SOMBRA (SOLO AUDITORÍA)"
+  },
+  "p2_GLD": {
+    "stratCode": "p2",
+    "strategyName": "Pista 2: 🦈 Base Institucional (Ambos)",
+    "ticker": "GLD",
+    "totalTrades": 74,
+    "winRate": 20.8,
+    "profitFactor": 0.61,
+    "netPnl": -7.28,
+    "isPromoted": false,
+    "mode": "MODO SOMBRA (SOLO AUDITORÍA)"
+  },
+  "p3_GLD": {
+    "stratCode": "p3",
+    "strategyName": "Pista 3: ⏳ TimeMachine Probabilística",
+    "ticker": "GLD",
+    "totalTrades": 58,
+    "winRate": 20.9,
+    "profitFactor": 0.54,
+    "netPnl": -6.97,
+    "isPromoted": false,
+    "mode": "MODO SOMBRA (SOLO AUDITORÍA)"
+  },
+  "p4_GLD": {
+    "stratCode": "p4",
+    "strategyName": "Pista 4: 🌊 VWAP + Volume Burst Scalper",
+    "ticker": "GLD",
+    "totalTrades": 129,
+    "winRate": 30.1,
+    "profitFactor": 0.66,
+    "netPnl": -7.45,
+    "isPromoted": false,
+    "mode": "MODO SOMBRA (SOLO AUDITORÍA)"
+  },
+  "p5_GLD": {
+    "stratCode": "p5",
+    "strategyName": "Pista 5: ⚡ SuperTrend + EMA Ribbon (Anti-Caídas)",
+    "ticker": "GLD",
+    "totalTrades": 107,
+    "winRate": 23.6,
+    "profitFactor": 0.52,
+    "netPnl": -12.07,
+    "isPromoted": false,
+    "mode": "MODO SOMBRA (SOLO AUDITORÍA)"
+  },
+  "p1_SOLUSD": {
+    "stratCode": "p1",
+    "strategyName": "Pista 1: 🐬 Delfín Rápido (EMA 9/21 4x4)",
+    "ticker": "SOLUSD",
+    "totalTrades": 87,
+    "winRate": 27,
+    "profitFactor": 0.83,
+    "netPnl": -2.97,
+    "isPromoted": false,
+    "mode": "MODO SOMBRA (SOLO AUDITORÍA)"
+  },
+  "p2_SOLUSD": {
+    "stratCode": "p2",
+    "strategyName": "Pista 2: 🦈 Base Institucional (Ambos)",
+    "ticker": "SOLUSD",
+    "totalTrades": 55,
+    "winRate": 25.7,
+    "profitFactor": 0.81,
+    "netPnl": -1.87,
+    "isPromoted": false,
+    "mode": "MODO SOMBRA (SOLO AUDITORÍA)"
+  },
+  "p3_SOLUSD": {
+    "stratCode": "p3",
+    "strategyName": "Pista 3: ⏳ TimeMachine Probabilística",
+    "ticker": "SOLUSD",
+    "totalTrades": 42,
+    "winRate": 20,
+    "profitFactor": 0.49,
+    "netPnl": -4.86,
+    "isPromoted": false,
+    "mode": "MODO SOMBRA (SOLO AUDITORÍA)"
+  },
+  "p4_SOLUSD": {
+    "stratCode": "p4",
+    "strategyName": "Pista 4: 🌊 VWAP + Volume Burst Scalper",
+    "ticker": "SOLUSD",
+    "totalTrades": 75,
+    "winRate": 24.4,
+    "profitFactor": 0.49,
+    "netPnl": -4.2,
+    "isPromoted": false,
+    "mode": "MODO SOMBRA (SOLO AUDITORÍA)"
+  },
+  "p5_SOLUSD": {
+    "stratCode": "p5",
+    "strategyName": "Pista 5: ⚡ SuperTrend + EMA Ribbon (Anti-Caídas)",
+    "ticker": "SOLUSD",
+    "totalTrades": 91,
+    "winRate": 23.4,
+    "profitFactor": 0.73,
+    "netPnl": -4.07,
+    "isPromoted": false,
+    "mode": "MODO SOMBRA (SOLO AUDITORÍA)"
+  }
+}
