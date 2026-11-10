@@ -227,6 +227,83 @@ function calculateSuperTrend(bars, atr, multiplier = 3) {
 }
 
 /**
+ * Calcula Bandas de Bollinger (SMA 20, 2σ)
+ * @param {Array<number>} closes 
+ * @param {number} period 
+ * @param {number} multiplier 
+ * @returns {Array<{middle: number, upper: number, lower: number}>}
+ */
+function calculateBollingerBands(closes, period = 20, multiplier = 2) {
+    const len = closes.length;
+    const result = new Array(len);
+    const sma = calculateSMA(closes, period);
+
+    for (let i = 0; i < len; i++) {
+        if (i < period - 1) {
+            result[i] = { middle: closes[i], upper: closes[i], lower: closes[i] };
+            continue;
+        }
+        let sumSq = 0;
+        const mean = sma[i];
+        for (let j = i - period + 1; j <= i; j++) {
+            const diff = closes[j] - mean;
+            sumSq += diff * diff;
+        }
+        const stdDev = Math.sqrt(sumSq / period);
+        result[i] = {
+            middle: parseFloat(mean.toFixed(4)),
+            upper: parseFloat((mean + (multiplier * stdDev)).toFixed(4)),
+            lower: parseFloat((mean - (multiplier * stdDev)).toFixed(4))
+        };
+    }
+    return result;
+}
+
+/**
+ * Calcula Canales de Keltner (EMA 20, 1.5 ATR)
+ * @param {Array<{h: number, l: number, c: number}>} bars 
+ * @param {Array<number>} atr 
+ * @param {number} period 
+ * @param {number} multiplier 
+ * @returns {Array<{middle: number, upper: number, lower: number}>}
+ */
+function calculateKeltnerChannels(bars, atr, period = 20, multiplier = 1.5) {
+    const closes = bars.map(b => b.c);
+    const ema = calculateEMA(closes, period);
+    const len = bars.length;
+    const result = new Array(len);
+
+    for (let i = 0; i < len; i++) {
+        const mid = ema[i];
+        const a = atr[i] || (bars[i].h - bars[i].l);
+        result[i] = {
+            middle: parseFloat(mid.toFixed(4)),
+            upper: parseFloat((mid + (multiplier * a)).toFixed(4)),
+            lower: parseFloat((mid - (multiplier * a)).toFixed(4))
+        };
+    }
+    return result;
+}
+
+/**
+ * Calcula MACD (12, 26, 9)
+ * @param {Array<number>} closes 
+ * @returns {Array<{macd: number, signal: number, hist: number}>}
+ */
+function calculateMACD(closes, fast = 12, slow = 26, signalPeriod = 9) {
+    const emaFast = calculateEMA(closes, fast);
+    const emaSlow = calculateEMA(closes, slow);
+    const macdLine = emaFast.map((f, i) => f - emaSlow[i]);
+    const signalLine = calculateEMA(macdLine, signalPeriod);
+
+    return macdLine.map((m, i) => ({
+        macd: parseFloat(m.toFixed(4)),
+        signal: parseFloat(signalLine[i].toFixed(4)),
+        hist: parseFloat((m - signalLine[i]).toFixed(4))
+    }));
+}
+
+/**
  * Enriquece la lista de velas con todos los indicadores institucionales
  * @param {Array<{h: number, l: number, c: number, o: number, v: number, t: string}>} bars 
  * @returns {Array<object>}
@@ -238,42 +315,64 @@ function enrichBarsWithIndicators(bars) {
     const volumes = bars.map(b => b.v || 0);
 
     const ema9 = calculateEMA(closes, 9);
+    const ema20 = calculateEMA(closes, 20);
     const ema21 = calculateEMA(closes, 21);
     const ema50 = calculateEMA(closes, 50);
+    const ema200 = calculateEMA(closes, Math.min(200, Math.max(20, Math.floor(closes.length / 2))));
     const atr14 = calculateATR(bars, 14);
     const vwap = calculateSessionVWAP(bars);
     const rsi14 = calculateRSI(closes, 14);
+    const rsi2 = calculateRSI(closes, 2);
     const volSma20 = calculateSMA(volumes, 20);
     const supertrend = calculateSuperTrend(bars, atr14, 3);
+    const bollinger = calculateBollingerBands(closes, 20, 2);
+    const keltner = calculateKeltnerChannels(bars, atr14, 20, 1.5);
+    const macd = calculateMACD(closes, 12, 26, 9);
 
     return bars.map((b, i) => {
         const prevBar = i > 0 ? bars[i - 1] : null;
         const prevEma9 = i > 0 ? ema9[i - 1] : ema9[i];
         const prevEma21 = i > 0 ? ema21[i - 1] : ema21[i];
         const curEma9 = ema9[i];
+        const curEma20 = ema20[i];
         const curEma21 = ema21[i];
         const curEma50 = ema50[i];
+        const curEma200 = ema200[i];
         const curAtr = atr14[i];
         const curVwap = vwap[i];
         const curRsi = rsi14[i];
+        const curRsi2 = rsi2[i];
         const curVol = b.v || 0;
         const avgVol = volSma20[i] || 1;
         const rvol = avgVol > 0 ? (curVol / avgVol) : 1;
         const st = supertrend[i];
+        const bb = bollinger[i];
+        const kc = keltner[i];
+        const mc = macd[i];
+
+        // Squeeze activo: Bandas de Bollinger totalmente dentro del Canal de Keltner
+        const isSqueezeActive = (bb.lower > kc.lower && bb.upper < kc.upper);
 
         return {
             ...b,
             ema9: parseFloat(curEma9.toFixed(4)),
+            ema20: parseFloat(curEma20.toFixed(4)),
             ema21: parseFloat(curEma21.toFixed(4)),
             ema50: parseFloat(curEma50.toFixed(4)),
+            ema200: parseFloat(curEma200.toFixed(4)),
             prevEma9: parseFloat(prevEma9.toFixed(4)),
             prevEma21: parseFloat(prevEma21.toFixed(4)),
             atr: parseFloat(curAtr.toFixed(4)),
             vwap: parseFloat(curVwap.toFixed(4)),
             rsi: parseFloat(curRsi.toFixed(2)),
+            rsi2: parseFloat(curRsi2.toFixed(2)),
             rvol: parseFloat(rvol.toFixed(2)),
             supertrend: st.trend, // 1 alcista, -1 bajista
             supertrendBand: parseFloat(st.band.toFixed(4)),
+            bollinger: bb,
+            keltner: kc,
+            isSqueezeActive,
+            macd: mc,
             isBullishCross: (prevEma9 <= prevEma21 && curEma9 > curEma21),
             emaSlope: curEma9 - prevEma9
         };
@@ -287,5 +386,8 @@ module.exports = {
     calculateSessionVWAP,
     calculateRSI,
     calculateSuperTrend,
+    calculateBollingerBands,
+    calculateKeltnerChannels,
+    calculateMACD,
     enrichBarsWithIndicators
 };

@@ -604,11 +604,13 @@ async function manageOpenPositions(currentQuotes) {
         }
 
         if (positionClosed) {
-            console.log(`\n🎯 [CIERRE AUTÓNOMO] Posición ${pos.symbol} cerrada: ${closeReason} | PnL: $${profitAmount.toFixed(2)}`);
+            const isSol = (pos.symbol || '').includes('SOL');
+            const pnlDecimals = isSol ? 4 : 2;
+            console.log(`\n🎯 [CIERRE AUTÓNOMO] Posición ${pos.symbol} cerrada: ${closeReason} | PnL: $${profitAmount.toFixed(pnlDecimals)}`);
 
             pos.closedAt = new Date().toISOString();
             pos.exitPrice = currentPrice;
-            pos.pnl = parseFloat(profitAmount.toFixed(2));
+            pos.pnl = parseFloat(profitAmount.toFixed(pnlDecimals));
             pos.closeReason = closeReason;
 
             engineState.closedTradesHistory.unshift(pos);
@@ -627,7 +629,7 @@ async function manageOpenPositions(currentQuotes) {
                 `━━━━━━━━━━━━━━━━━━━━\n` +
                 `📊 <b>Motivo:</b> ${closeReason}\n` +
                 `💵 <b>Entrada:</b> $${pos.entryPrice} | <b>Salida:</b> $${currentPrice}\n` +
-                `📈 <b>Beneficio Neto:</b> ${sign}$${pos.pnl.toFixed(2)} ${config.currency}\n` +
+                `📈 <b>Beneficio Neto:</b> ${sign}$${pos.pnl.toFixed(pnlDecimals)} ${config.currency}\n` +
                 `🏢 <b>Broker:</b> ${pos.broker}\n` +
                 `⏰ <b>Hora:</b> ${new Date().toLocaleTimeString('es-ES', { timeZone: 'Europe/Rome' })}\n` +
                 `━━━━━━━━━━━━━━━━━━━━\n` +
@@ -688,22 +690,25 @@ async function runAutonomousCycle() {
                 continue;
             }
 
-            // REGLA DE PROMOCIÓN DE PEDRO:
-            // Solo las combinaciones con Profit Factor > 1.2 y >= 20 trades en backtest operan en paper.
-            // Las demás quedan en MODO SOMBRA (registran señal pero no ejecutan orden).
-            if (!analysis.isPromoted) {
-                console.log(`⚪ [MODO SOMBRA] Señal ${ticker} en ${analysis.strategyName} (Score ${analysis.score}) - Auditada pero sin ejecución real.`);
-                continue;
-            }
+            // REGLA DE LABORATORIO DE PEDRO:
+            // Todas las 8 pistas ejecutan en Demo (Alpaca Paper y Pepperstone Demo) a tamaño mínimo.
+            // Restricciones de activo por diseño:
+            if (analysis.stratCode === 'p7' && (ticker !== 'TSLA' && ticker !== 'NVDA')) continue;
+            if (analysis.stratCode === 'p6' && (ticker !== 'NVDA' && ticker !== 'TSLA' && ticker !== 'GLD' && ticker !== 'XAUUSD')) continue;
+            if (analysis.stratCode === 'p8' && (ticker !== 'XAUUSD' && ticker !== 'GLD' && !ticker.includes('SOL'))) continue;
 
-            // Cada estrategia compite libremente sin bloquear a las demás (Mandato de Pedro)
+            // Cada estrategia compite libremente sin duplicar posición en el mismo activo
             const hasOpenInSameStrategy = engineState.openPositions.some(p => p.symbol === ticker && p.strategy === analysis.strategyName);
             if (hasOpenInSameStrategy) continue;
 
             // Disparo autónomo en ambos brokers si califica
             if (analysis.score >= 65) {
-                if (engineState.openPositions.length < 24) {
+                // Candado sagrado de máximo 24 posiciones simultáneas en Pepperstone
+                const pepCount = engineState.openPositions.filter(p => !p.broker || p.broker.includes('Pepperstone')).length;
+                if (pepCount < 24) {
                     await executeAutonomousOpen(ticker, price, analysis);
+                } else {
+                    console.log(`🔒 [CANDADO PEPPERSTONE] Máximo 24 posiciones en paralelo alcanzado (${pepCount}/24). Señal ${ticker} (${analysis.strategyName}) en espera.`);
                 }
             }
         }

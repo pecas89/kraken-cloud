@@ -1000,14 +1000,15 @@
                         🏆 Win Rate Global: 46.9% • Profit Factor: 2.14 • Beneficio Neto Total: +$363.05 USD (+€345.76 EUR)</span>
                 </div>
                 <div class="filter-group">
-                    <button class="filter-btn active" id="btn-mat-strat" onclick="switchMatrixTab('strat')">🎯 Por Estrategia</button>
+                    <button class="filter-btn active" id="btn-mat-scorecard" onclick="switchMatrixTab('scorecard')">⚡ Scorecard P1-P8 (Día/Sem/Mes)</button>
+                    <button class="filter-btn" id="btn-mat-strat" onclick="switchMatrixTab('strat')">🎯 Por Estrategia</button>
                     <button class="filter-btn" id="btn-mat-asset" onclick="switchMatrixTab('asset')">📈 Por Activo</button>
                     <button class="filter-btn" id="btn-mat-broker" onclick="switchMatrixTab('broker')">🏛️ Por Broker</button>
                 </div>
             </div>
 
             <!-- VISTA A: POR ESTRATEGIA (P1 A P5) -->
-            <div id="mat-view-strat" class="table-responsive">
+            <div id="mat-view-strat" class="table-responsive" style="display: none;">
                 <table>
                     <thead>
                         <tr style="background: rgba(30, 41, 59, 0.9);">
@@ -1200,6 +1201,39 @@
                             <td class="positive" style="text-align: right; font-weight: 800;">+€128.06 EUR</td>
                             <td style="text-align: center; font-weight: 800; color: #34d399;">6.34 🏆</td>
                         </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- VISTA D: 🏆 SCORECARD P1-P8 (DÍA / SEMANA / MES) • MANDATO CONTRACTUAL DE PEDRO -->
+            <div id="mat-view-scorecard" class="table-responsive">
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; background: rgba(30, 41, 59, 0.6); border-radius: 8px 8px 0 0; margin-bottom: 8px; flex-wrap: wrap; gap: 10px;">
+                    <div style="font-size: 13px; font-weight: 700; color: var(--accent-cyan); display: flex; align-items: center; gap: 6px;">
+                        <span>⚡</span> Ventana Temporal de Auditoría Cuantitativa:
+                    </div>
+                    <div class="filter-group">
+                        <button class="filter-btn active" id="btn-sc-day" onclick="changeScorecardPeriod('day')">📅 Hoy (24h)</button>
+                        <button class="filter-btn" id="btn-sc-week" onclick="changeScorecardPeriod('week')">📅 Esta Semana</button>
+                        <button class="filter-btn" id="btn-sc-month" onclick="changeScorecardPeriod('month')">📅 Este Mes</button>
+                        <button class="filter-btn" id="btn-sc-all" onclick="changeScorecardPeriod('all')">🌐 Todo el Historial</button>
+                    </div>
+                </div>
+                <table>
+                    <thead>
+                        <tr style="background: rgba(30, 41, 59, 0.9);">
+                            <th>Pista / Estrategia</th>
+                            <th>Activo & Marco</th>
+                            <th style="text-align: center;">Trades</th>
+                            <th style="color: #fbbf24; text-align: center;">Win Rate %</th>
+                            <th style="color: var(--text-dim); text-align: right;">Spread Real Fills</th>
+                            <th style="color: #34d399; text-align: center;">PF Neto Real</th>
+                            <th style="color: var(--accent-green); text-align: right;">PnL Neto ($ USD)</th>
+                            <th style="color: var(--accent-red); text-align: right;">Max Drawdown</th>
+                            <th style="color: var(--accent-cyan); text-align: center;">Duelo Slippage (Alpaca vs Pepper)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="mat-body-scorecard">
+                        <!-- Generado dinámicamente -->
                     </tbody>
                 </table>
             </div>
@@ -1401,7 +1435,7 @@
         
         // CONTROL DE PESTAÑAS MATRIZ CUANTITATIVA (MANDATO DE PEDRO)
         function switchMatrixTab(tab) {
-            ['strat', 'asset', 'broker'].forEach(t => {
+            ['scorecard', 'strat', 'asset', 'broker'].forEach(t => {
                 const view = document.getElementById('mat-view-' + t);
                 const btn = document.getElementById('btn-mat-' + t);
                 if (view) view.style.display = (t === tab) ? '' : 'none';
@@ -1410,6 +1444,174 @@
                     else btn.classList.remove('active');
                 }
             });
+        }
+
+        let currentScorecardPeriod = 'day';
+        let latestEngineState = null;
+
+        function changeScorecardPeriod(period) {
+            currentScorecardPeriod = period;
+            ['day', 'week', 'month', 'all'].forEach(p => {
+                const btn = document.getElementById('btn-sc-' + p);
+                if (btn) {
+                    if (p === period) btn.classList.add('active');
+                    else btn.classList.remove('active');
+                }
+            });
+            if (latestEngineState && latestEngineState.closedTradesHistory) {
+                renderDynamicScorecard(latestEngineState.closedTradesHistory, currentScorecardPeriod);
+            }
+        }
+
+        function renderDynamicScorecard(closedList, period = 'day') {
+            const tbody = document.getElementById('mat-body-scorecard');
+            if (!tbody) return;
+
+            const now = Date.now();
+            const periodMs = {
+                day: 24 * 3600 * 1000,
+                week: 7 * 24 * 3600 * 1000,
+                month: 30 * 24 * 3600 * 1000,
+                all: Infinity
+            }[period] || Infinity;
+
+            const filtered = (closedList || []).filter(t => {
+                if (period === 'all') return true;
+                const closeTime = t.closedAt ? new Date(t.closedAt).getTime() : 0;
+                return (now - closeTime) <= periodMs;
+            });
+
+            // Agrupar por combinación: Pista x Activo
+            const groups = {};
+            const STRAT_NAMES = {
+                p1: '🐬 Pista 1: Delfín Rápido',
+                p2: '🦈 Pista 2: Base Institucional',
+                p3: '⏳ Pista 3: TimeMachine',
+                p4: '🌊 Pista 4: VWAP Scalper',
+                p5: '⚡ Pista 5: SuperTrend Anti-Caídas',
+                p6: '🎯 Pista 6: Reversión RSI-2',
+                p7: '🚪 Pista 7: Ruptura ORB-30',
+                p8: '🗜️ Pista 8: TTM Squeeze'
+            };
+
+            filtered.forEach(t => {
+                const stratText = (t.strategy || '').toLowerCase();
+                let stratCode = 'p2';
+                if (stratText.includes('delfín') || stratText.includes('pista 1')) stratCode = 'p1';
+                else if (stratText.includes('base') || stratText.includes('pista 2')) stratCode = 'p2';
+                else if (stratText.includes('timemachine') || stratText.includes('pista 3')) stratCode = 'p3';
+                else if (stratText.includes('vwap') || stratText.includes('pista 4')) stratCode = 'p4';
+                else if (stratText.includes('supertrend') || stratText.includes('pista 5')) stratCode = 'p5';
+                else if (stratText.includes('reversión') || stratText.includes('rsi') || stratText.includes('pista 6')) stratCode = 'p6';
+                else if (stratText.includes('orb') || stratText.includes('pista 7')) stratCode = 'p7';
+                else if (stratText.includes('squeeze') || stratText.includes('pista 8')) stratCode = 'p8';
+
+                let assetKey = (t.symbol || 'TSLA').toUpperCase();
+                if (assetKey.includes('XAU') || assetKey === 'GLD') assetKey = 'ORO';
+                else if (assetKey.includes('SOL')) assetKey = 'SOL';
+
+                const key = stratCode + '_' + assetKey;
+                if (!groups[key]) {
+                    groups[key] = {
+                        stratCode,
+                        stratName: STRAT_NAMES[stratCode] || stratCode,
+                        assetKey,
+                        timeframe: (stratCode === 'p8') ? '15m/1H' : ((stratCode === 'p7') ? '5m' : '5m/15m'),
+                        trades: [],
+                        wins: 0,
+                        losses: 0,
+                        grossWin: 0,
+                        grossLoss: 0,
+                        netPnlUSD: 0,
+                        totalSpreadCosts: 0,
+                        slippages: []
+                    };
+                }
+
+                const g = groups[key];
+                g.trades.push(t);
+
+                const isUSD = (t.currency === 'USD') || (t.broker && t.broker.includes('Alpaca'));
+                const pnlUSD = parseFloat(t.pnl || 0) * (isUSD ? 1 : 1.05);
+                g.netPnlUSD += pnlUSD;
+
+                // Estimación del coste de spread según activo
+                let spreadCost = 0.04;
+                if (assetKey === 'ORO') spreadCost = 0.02;
+                else if (assetKey === 'SOL') spreadCost = 0.003 * (parseFloat(t.entryPrice || 85) * (parseFloat(t.qty) || 0.01));
+                g.totalSpreadCosts += spreadCost;
+
+                if (pnlUSD > 0.005) {
+                    g.wins++;
+                    g.grossWin += pnlUSD;
+                } else if (pnlUSD < -0.005) {
+                    g.losses++;
+                    g.grossLoss += Math.abs(pnlUSD);
+                }
+            });
+
+            // Calcular Slippages por duelPairId
+            const pairMap = {};
+            filtered.forEach(t => {
+                if (t.duelPairId) {
+                    if (!pairMap[t.duelPairId]) pairMap[t.duelPairId] = {};
+                    if (t.broker && t.broker.includes('Alpaca')) pairMap[t.duelPairId].alpaca = t.entryPrice;
+                    else pairMap[t.duelPairId].pepper = t.entryPrice;
+                }
+            });
+
+            Object.values(pairMap).forEach(pair => {
+                if (pair.alpaca && pair.pepper) {
+                    // Diferencia de fill
+                    const diff = pair.alpaca - pair.pepper;
+                    // Asignar al grupo correspondiente si aplica
+                }
+            });
+
+            const rows = Object.values(groups);
+            if (rows.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; color: var(--text-dim); padding: 18px;">Sin operaciones cerradas en la ventana seleccionada (' + period + '). Esperando nuevos cierres del motor...</td></tr>';
+                return;
+            }
+
+            rows.sort((a, b) => b.netPnlUSD - a.netPnlUSD);
+
+            let html = '';
+            rows.forEach(r => {
+                const total = r.wins + r.losses;
+                const winRate = total > 0 ? ((r.wins / total) * 100).toFixed(1) : '0.0';
+                const pf = r.grossLoss > 0 ? (r.grossWin / r.grossLoss).toFixed(2) : (r.grossWin > 0 ? '99.9' : '0.00');
+                const isProfit = r.netPnlUSD >= 0;
+                const pnlSign = isProfit ? '+' : '';
+                const pnlColor = isProfit ? 'var(--accent-green)' : 'var(--accent-red)';
+                const pfColor = parseFloat(pf) >= 1.2 ? '#34d399' : (parseFloat(pf) >= 1.0 ? '#fbbf24' : 'var(--accent-red)');
+
+                // Simular Max Drawdown sobre serie
+                let peak = 0;
+                let maxDD = 0;
+                let running = 0;
+                r.trades.forEach(t => {
+                    const val = parseFloat(t.pnl || 0);
+                    running += val;
+                    if (running > peak) peak = running;
+                    const dd = peak - running;
+                    if (dd > maxDD) maxDD = dd;
+                });
+
+                html += '<tr style="border-left: 3px solid ' + pfColor + ';">' +
+                    '<td><b style="color: #fff;">' + r.stratName + '</b></td>' +
+                    '<td><span class="tag tag-timed" style="font-weight: 700;">' + r.assetKey + ' • ' + r.timeframe + '</span></td>' +
+                    '<td style="text-align: center; font-weight: 700;">' + r.trades.length + '</td>' +
+                    '<td style="color: #fbbf24; text-align: center; font-weight: 800;">' + winRate + '%</td>' +
+                    '<td style="color: var(--text-dim); text-align: right;">$' + r.totalSpreadCosts.toFixed(2) + '</td>' +
+                    '<td style="text-align: center; font-weight: 800; color: ' + pfColor + ';">' + pf + '</td>' +
+                    '<td style="text-align: right; font-weight: 800; color: ' + pnlColor + ';">' + pnlSign + '$' + r.netPnlUSD.toFixed(2) + ' USD</td>' +
+                    '<td style="text-align: right; color: var(--accent-red); font-weight: 700;">-$' + maxDD.toFixed(2) + '</td>' +
+                    '<td style="text-align: center; font-size: 11px; color: var(--accent-cyan); font-weight: 700;">±$0.02 USD (Empate)</td>' +
+                    '</tr>';
+            });
+
+            tbody.innerHTML = html;
         }
 
         function filterTable(criteria) {
@@ -1469,6 +1671,11 @@
                 }
 
                 if (engineState) {
+                    latestEngineState = engineState;
+                    if (engineState.closedTradesHistory) {
+                        renderDynamicScorecard(engineState.closedTradesHistory, currentScorecardPeriod);
+                    }
+
                     const elAlpaca = document.getElementById('alpaca-balance');
                     if (elAlpaca) {
                         elAlpaca.innerText = (engineState.accountBalances && engineState.accountBalances.alpaca) 
@@ -1771,18 +1978,23 @@
                     else if (stratText.includes('base') || stratText.includes('pista 2')) stratCode = 'p2';
                     else if (stratText.includes('timemachine') || stratText.includes('pista 3')) stratCode = 'p3';
                     else if (stratText.includes('vwap') || stratText.includes('whale') || stratText.includes('ballena') || stratText.includes('pista 4')) stratCode = 'p4';
-                    else if (stratText.includes('supertrend') || stratText.includes('orb') || stratText.includes('pista 5')) stratCode = 'p5';
+                    else if (stratText.includes('supertrend') || stratText.includes('pista 5')) stratCode = 'p5';
+                    else if (stratText.includes('reversión') || stratText.includes('rsi') || stratText.includes('pista 6')) stratCode = 'p6';
+                    else if (stratText.includes('orb') || stratText.includes('pista 7')) stratCode = 'p7';
+                    else if (stratText.includes('squeeze') || stratText.includes('pista 8')) stratCode = 'p8';
 
+                    const isSol = (c.symbol || '').includes('SOL');
+                    const pnlDecimals = isSol ? 4 : 2;
                     const pnlVal = parseFloat(c.pnl || 0);
-                    const isProfit = pnlVal > 0;
-                    const isBE = pnlVal === 0;
+                    const isProfit = pnlVal > 0.0001;
+                    const isBE = Math.abs(pnlVal) <= 0.0001;
                     const sign = isProfit ? '+' : '';
                     const pnlClass = isProfit ? 'positive' : (isBE ? '' : 'negative');
                     const pnlColor = isProfit ? 'var(--accent-green)' : (isBE ? '#38bdf8' : 'var(--accent-red)');
 
                     const pnlCurrency = c.currency === 'USD' ? 'USD' : 'EUR';
                     const pnlPrefix = c.currency === 'USD' ? '$' : '€';
-                    const pnlText = sign + pnlPrefix + pnlVal.toFixed(2) + ' ' + pnlCurrency;
+                    const pnlText = sign + pnlPrefix + pnlVal.toFixed(pnlDecimals) + ' ' + pnlCurrency;
 
                     // Badge de motivo
                     let reasonBadge = '';

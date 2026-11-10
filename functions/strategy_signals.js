@@ -308,6 +308,214 @@ function evaluateStrategiesForBar(ticker, enrichedBars, barIndex = -1, promotedM
         }
     });
 
+    // ==============================================================================
+    // PISTA 6: 🎯 REVERSIÓN A LA MEDIA (RSI-2 + BOLLINGER) - LARRY CONNORS 2008
+    // ==============================================================================
+    let p6Action = 'HOLD';
+    let p6Reason = '';
+    let p6Score = 30;
+
+    const isP6Asset = (ticker === 'NVDA' || ticker === 'TSLA' || ticker === 'GLD' || ticker === 'XAUUSD');
+    const isAboveEma200 = cur.c >= (cur.ema200 || cur.ema50);
+    const isRsi2Extreme = (cur.rsi2 < 5);
+    const isBelowBollingerLower = (cur.bollinger && cur.c < cur.bollinger.lower);
+
+    if (isP6Asset) {
+        if (!isAboveEma200) {
+            p6Action = 'HOLD';
+            p6Reason = `🛡️ FILTRO ANTI-CUCHILLOS P6: Precio (${cur.c.toFixed(2)}) < EMA 200 (${(cur.ema200 || cur.ema50).toFixed(2)})`;
+            p6Score = 25;
+        } else if (isRsi2Extreme && isBelowBollingerLower) {
+            p6Score = Math.min(98, Math.max(65, Math.round(60 + (5 - cur.rsi2) * 6 + ((cur.bollinger.lower - cur.c) / atr) * 15)));
+            if (p6Score >= 65) {
+                p6Action = 'BUY';
+                p6Reason = `🎯 PÁNICO EXTREMO: RSI(2) en ${cur.rsi2} (< 5) + Cierre bajo Banda Bollinger Inferior (${cur.bollinger.lower.toFixed(2)}) con Macro Alcista`;
+            }
+        } else {
+            p6Reason = `Esperando pánico: RSI(2)=${cur.rsi2} (req < 5), Bollinger Inf=${cur.bollinger ? cur.bollinger.lower.toFixed(2) : '--'}`;
+            p6Score = 40;
+        }
+    } else {
+        p6Reason = `Activo no optimizado para P6 (solo NVDA, TSLA, GLD)`;
+        p6Score = 20;
+    }
+
+    const p6TpTarget = Math.max(cur.ema20 || cur.ema21, cur.vwap);
+    const p6Tp = parseFloat(p6TpTarget.toFixed(2));
+    const p6Sl = parseFloat((currentPrice - (atr * 1.0)).toFixed(2));
+
+    strategies.push({
+        stratCode: 'p6',
+        strategyName: 'Pista 6: 🎯 Reversión a la Media (RSI-2 + Bollinger)',
+        pez: '🎯 REVERSIÓN',
+        score: p6Score,
+        action: p6Action,
+        blockedReason: p6Action === 'HOLD' ? p6Reason : null,
+        signalReason: p6Reason,
+        isPromoted: isPromoted('p6'),
+        atr,
+        sl: p6Sl,
+        tp: p6Tp > currentPrice ? p6Tp : parseFloat((currentPrice + (atr * 1.5)).toFixed(2)),
+        breakevenTrigger: parseFloat((currentPrice + (atr * 0.7)).toFixed(2)),
+        timeStopBars: 12,
+        indicators: {
+            rsi2: cur.rsi2,
+            bollingerLower: cur.bollinger ? cur.bollinger.lower : null,
+            bollingerUpper: cur.bollinger ? cur.bollinger.upper : null,
+            ema200: cur.ema200,
+            ema20: cur.ema20,
+            vwap: cur.vwap,
+            atr: cur.atr
+        }
+    });
+
+    // ==============================================================================
+    // PISTA 7: 🚪 RUPTURA DE RANGO DE APERTURA (ORB-30) - TOBY CRABEL
+    // ==============================================================================
+    let p7Action = 'HOLD';
+    let p7Reason = '';
+    let p7Score = 30;
+
+    const isOrbAsset = (ticker === 'TSLA' || ticker === 'NVDA');
+    let orbHigh = 0;
+    let orbLow = 999999;
+    let orbEstablished = false;
+
+    if (isOrbAsset && cur.t) {
+        const barDate = new Date(cur.t);
+        const dayStr = cur.t.slice(0, 10);
+        const hour = barDate.getUTCHours();
+        const min = barDate.getUTCMinutes();
+        const timeMin = hour * 60 + min;
+
+        const sessionBars = enrichedBars.slice(Math.max(0, idx - 80), idx + 1).filter(b => (b.t || '').startsWith(dayStr));
+        const orbBars = sessionBars.filter(b => {
+            const bd = new Date(b.t);
+            const tm = bd.getUTCHours() * 60 + bd.getUTCMinutes();
+            return tm >= 870 && tm < 900;
+        });
+
+        if (orbBars.length >= 4) {
+            orbHigh = Math.max(...orbBars.map(b => b.h));
+            orbLow = Math.min(...orbBars.map(b => b.l));
+            orbEstablished = true;
+        }
+
+        const isTradingWindow = timeMin >= 900 && timeMin <= 1230; // 16:00 a 21:30 CET
+        if (isTradingWindow && orbEstablished) {
+            const isBreakout = (cur.c > orbHigh);
+            const isFreshBreakout = (prev.c <= orbHigh && cur.c > orbHigh) || (isBreakout && (cur.c - orbHigh) <= 0.5 * atr);
+            const hasVolBurst = (cur.rvol >= 1.5);
+
+            if (isBreakout) {
+                p7Score = Math.min(98, Math.max(60, Math.round(60 + (cur.rvol * 12) + ((cur.c - orbHigh) / atr) * 10)));
+                if (hasVolBurst && isFreshBreakout && p7Score >= 68) {
+                    p7Action = 'BUY';
+                    p7Reason = `🚪 RUPTURA ORB-30: Cierre (${cur.c.toFixed(2)}) > Rango Máx (${orbHigh.toFixed(2)}) con rVol ${cur.rvol}x (> 1.5x)`;
+                } else if (!hasVolBurst) {
+                    p7Reason = `Ruptura sobre ORB (${orbHigh.toFixed(2)}) pero falta volumen institucional (rVol ${cur.rvol}x < 1.5x)`;
+                } else {
+                    p7Reason = `Sobre ORB pero ruptura ya extendida`;
+                }
+            } else {
+                p7Reason = `Dentro del rango ORB [${orbLow.toFixed(2)} - ${orbHigh.toFixed(2)}]`;
+                p7Score = 40;
+            }
+        } else if (!isTradingWindow) {
+            p7Reason = `Fuera de ventana operativa ORB (activa de 16:00 a 21:30 CET)`;
+            p7Score = 25;
+        }
+    } else {
+        p7Reason = `Activo 24/7 sin campana de apertura (ORB reservado a TSLA/NVDA)`;
+        p7Score = 20;
+    }
+
+    const orbRangeHeight = (orbHigh > orbLow && orbLow > 0) ? (orbHigh - orbLow) : (atr * 2);
+    const p7Sl = orbEstablished ? parseFloat(((orbHigh + orbLow) / 2).toFixed(2)) : parseFloat((currentPrice - (atr * 1.5)).toFixed(2));
+    const p7Tp = parseFloat((currentPrice + (orbRangeHeight * 2.0)).toFixed(2));
+    const p7Be = parseFloat((currentPrice + (orbRangeHeight * 1.0)).toFixed(2));
+
+    strategies.push({
+        stratCode: 'p7',
+        strategyName: 'Pista 7: 🚪 Ruptura del Rango de Apertura (ORB-30)',
+        pez: '🚪 ORB',
+        score: p7Score,
+        action: p7Action,
+        blockedReason: p7Action === 'HOLD' ? p7Reason : null,
+        signalReason: p7Reason,
+        isPromoted: isPromoted('p7'),
+        atr,
+        sl: p7Sl,
+        tp: p7Tp,
+        breakevenTrigger: p7Be,
+        closeAtSessionEnd: true,
+        indicators: {
+            orbHigh: orbEstablished ? orbHigh : null,
+            orbLow: orbEstablished ? orbLow : null,
+            orbRangeHeight,
+            rvol: cur.rvol,
+            atr: cur.atr
+        }
+    });
+
+    // ==============================================================================
+    // PISTA 8: 🗜️ SQUEEZE DE VOLATILIDAD (TTM SQUEEZE) - JOHN CARTER
+    // ==============================================================================
+    let p8Action = 'HOLD';
+    let p8Reason = '';
+    let p8Score = 30;
+
+    const isSqueezeAsset = (ticker === 'GLD' || ticker === 'XAUUSD' || ticker.includes('SOL'));
+    let squeezeCount = 0;
+    for (let k = Math.max(0, idx - 10); k < idx; k++) {
+        if (enrichedBars[k] && enrichedBars[k].isSqueezeActive) squeezeCount++;
+    }
+
+    const hadProlongedCompression = (squeezeCount >= 5);
+    const isSqueezeFiringNow = (prev.isSqueezeActive && !cur.isSqueezeActive);
+    const isMomentumBullish = (cur.macd && cur.macd.hist > 0 && cur.c > cur.ema9);
+    const hasVolumeConfirm = (cur.rvol >= 1.1);
+
+    if (isSqueezeAsset) {
+        if (hadProlongedCompression && isSqueezeFiringNow && isMomentumBullish && hasVolumeConfirm) {
+            p8Score = Math.min(98, Math.max(70, Math.round(70 + (cur.macd.hist > 0 ? 15 : 0) + (cur.rvol * 8))));
+            p8Action = 'BUY';
+            p8Reason = `🗜️ TTM SQUEEZE DISPARADO: Compresión de ${squeezeCount} velas liberada al alza con Momentum MACD (${cur.macd.hist.toFixed(4)}) sobre EMA 9`;
+        } else if (cur.isSqueezeActive) {
+            p8Reason = `🗜️ Squeeze en Compresión activa (${squeezeCount} velas dentro de Keltner). Esperando detonación.`;
+            p8Score = 55;
+        } else {
+            p8Reason = `Sin compresión TTM activa o momentum bajista`;
+            p8Score = 35;
+        }
+    } else {
+        p8Reason = `Activo no asignado a P8 (optimizado para ORO y SOL en 15m/1H)`;
+        p8Score = 20;
+    }
+
+    strategies.push({
+        stratCode: 'p8',
+        strategyName: 'Pista 8: 🗜️ Squeeze de Volatilidad (TTM Squeeze)',
+        pez: '🗜️ SQUEEZE',
+        score: p8Score,
+        action: p8Action,
+        blockedReason: p8Action === 'HOLD' ? p8Reason : null,
+        signalReason: p8Reason,
+        isPromoted: isPromoted('p8'),
+        atr,
+        sl: parseFloat((currentPrice - (atr * 1.5)).toFixed(2)),
+        tp: parseFloat((currentPrice + (atr * 3.0)).toFixed(2)),
+        breakevenTrigger: parseFloat((currentPrice + (atr * 1.5)).toFixed(2)),
+        indicators: {
+            isSqueezeActive: cur.isSqueezeActive,
+            squeezeCount,
+            macdHist: cur.macd ? cur.macd.hist : null,
+            ema9: cur.ema9,
+            rvol: cur.rvol,
+            atr: cur.atr
+        }
+    });
+
     return strategies;
 }
 
