@@ -103,8 +103,9 @@ function autoDeployHosting() {
     isDeploying = true;
 
     const projectRoot = path.join(__dirname, '..');
-    const cmd = `npx firebase deploy --project kraken-trading-cloud --only hosting --non-interactive --token "${process.env.FIREBASE_TOKEN}"`;
+    const cmd = `npx --yes firebase-tools deploy --project kraken-trading-cloud --only hosting --non-interactive --token "${process.env.FIREBASE_TOKEN}"`;
 
+    console.log('[Firebase Auto-Deploy] Iniciando sincronización con Firebase Hosting...');
     exec(cmd, { 
         cwd: projectRoot,
         env: Object.assign({}, process.env, { FIREBASE_TOKEN: process.env.FIREBASE_TOKEN })
@@ -112,9 +113,11 @@ function autoDeployHosting() {
         isDeploying = false;
         const now = new Date().toLocaleTimeString('es-ES', { timeZone: 'Europe/Rome' });
         if (error) {
-            console.warn(`[Firebase Auto-Deploy ${now}] Advertencia:`, error.message);
+            console.error(`[Firebase Auto-Deploy ${now}] ERROR DETALLADO:`, error.message);
+            if (stderr) console.error(`[Firebase Auto-Deploy ${now}] STDERR:`, stderr);
         } else {
-            console.log(`[Firebase Auto-Deploy ${now}] ✅ Web pública sincronizada con éxito en la nube.`);
+            console.log(`[Firebase Auto-Deploy ${now}] ✅ Web pública sincronizada con éxito en Firebase Hosting.`);
+            if (stdout) console.log(`[Firebase Auto-Deploy ${now}] STDOUT:`, stdout.slice(0, 300));
         }
     });
 }
