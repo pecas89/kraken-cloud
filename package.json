@@ -1,0 +1,16 @@
+{
+  "name": "kraken-cloud",
+  "version": "1.0.0",
+  "description": "Kraken Autonomous Cloud Trading Engine - Castillo Imperial Holding S.A.",
+  "main": "functions/autonomous_daemon_runner.js",
+  "scripts": {
+    "start": "node functions/autonomous_daemon_runner.js",
+    "test": "node functions/test_all_strategies.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

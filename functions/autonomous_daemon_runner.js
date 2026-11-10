@@ -7,11 +7,12 @@
  * - Supervisa el motor Anastasia con las 8 Pistas en 5m, 15m, 1H.
  * - Watchdog interno: Captura errores y alerta a Pedro por Telegram.
  * - Auto-Sync a Firebase Hosting cada 5 minutos.
- * - Heartbeat periódico de telemetría a Pedro Castillo.
+ * - Health Check HTTP Server en puerto $PORT (Render / Cloud Web Service).
  */
 
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
 const { exec } = require('child_process');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
@@ -19,6 +20,7 @@ const anastasiaEngine = require('./anastasia_autonomous_engine');
 
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || '';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
+const PORT = process.env.PORT || 10000;
 
 async function sendTelegramAlert(text) {
     if (!TELEGRAM_TOKEN || !TELEGRAM_CHAT_ID) return;
@@ -49,7 +51,47 @@ async function sendTelegramAlert(text) {
 }
 
 // ------------------------------------------------------------------------------
-// AUTO-DEPLOY A FIREBASE HOSTING CADA 5 MINUTOS (WEB PÚBLICA 24/7 VIVA)
+// HTTP HEALTH CHECK & API SERVER (PARA RENDER / SERVIDORES CLOUD)
+// ------------------------------------------------------------------------------
+const server = http.createServer((req, res) => {
+    const url = req.url.split('?')[0];
+
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+
+    if (req.method === 'OPTIONS') {
+        res.writeHead(204);
+        return res.end();
+    }
+
+    if (url === '/trading_state.json') {
+        const statePath = path.join(__dirname, '..', 'public', 'trading_state.json');
+        if (fs.existsSync(statePath)) {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return fs.createReadStream(statePath).pipe(res);
+        }
+    }
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+        status: 'ONLINE',
+        service: 'Kraken Autonomous Cloud Daemon',
+        director: 'Pedro Castillo',
+        holding: 'Castillo Imperial Holding S.A.',
+        serverTimeRome: new Date().toLocaleTimeString('es-ES', { timeZone: 'Europe/Rome' }),
+        strategies: 8,
+        activeAssets: ['TSLA', 'NVDA', 'GLD/XAUUSD', 'SOLUSD'],
+        maxPositions: 24,
+        uptimeSeconds: Math.floor(process.uptime())
+    }, null, 2));
+});
+
+server.listen(PORT, '0.0.0.0', () => {
+    console.log(`🌐 [Cloud Server] Health HTTP Server escuchando en 0.0.0.0:${PORT}`);
+});
+
+// ------------------------------------------------------------------------------
+// AUTO-DEPLOY A FIREBASE HOSTING CADA 5 MINUTOS (SI FIREBASE_TOKEN ESTÁ PRESENTE)
 // ------------------------------------------------------------------------------
 let isDeploying = false;
 function autoDeployHosting() {
@@ -57,7 +99,8 @@ function autoDeployHosting() {
     isDeploying = true;
 
     const projectRoot = path.join(__dirname, '..');
-    const cmd = 'firebase deploy --only hosting --non-interactive';
+    const tokenArg = process.env.FIREBASE_TOKEN ? ` --token "${process.env.FIREBASE_TOKEN}"` : '';
+    const cmd = `npx firebase deploy --only hosting --non-interactive${tokenArg}`;
 
     exec(cmd, { cwd: projectRoot }, (error, stdout, stderr) => {
         isDeploying = false;
@@ -103,13 +146,12 @@ async function startServerDaemon() {
 
     // 2. Programar Auto-Deploy a Firebase Hosting cada 5 minutos (300,000 ms)
     setInterval(autoDeployHosting, 300000);
-    // Primer deploy tras 1 minuto para asentar estado
     setTimeout(autoDeployHosting, 60000);
 
     // 3. Notificación de Arranque a Pedro
     const bootMsg = `👑✨ <b>[KRAKEN CLOUD // LABORATORIO 24/7 EN LÍNEA]</b>\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
-        `Comandante Pedro, el motor cuántico está corriendo en el servidor autónomo.\n\n` +
+        `─────────────────────────\n` +
+        `Comandante Pedro, el motor cuántico está corriendo en el servidor autónomo Render.\n\n` +
         `🏛️ <b>Arquitectura Activa:</b>\n` +
         `• <b>8 Pistas:</b> P1 a P5 + P6 (RSI-2), P7 (ORB-30), P8 (TTM Squeeze)\n` +
         `• <b>4 Activos:</b> TSLA, NVDA, Oro (GLD/XAU), SOL/USD\n` +
@@ -120,7 +162,7 @@ async function startServerDaemon() {
         `<i>Tu PC puede apagarse con total tranquilidad. El Kraken vigila el mercado 24/7.</i>`;
 
     await sendTelegramAlert(bootMsg);
-    console.log('📲 Notificación de inicio enviada a Pedro por Telegram.');
+    console.log('📱 Notificación de inicio enviada a Pedro por Telegram.');
 }
 
 if (require.main === module) {

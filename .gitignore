@@ -9,3 +9,6 @@ firebase-debug.*.log
 scratch/
 *.bak
 .DS_Store
+
+*.log
+*.pid
