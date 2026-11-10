@@ -1,0 +1,2096 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kraken Quant Fund • Terminal Institucional de 6 Dimensiones</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #06090e;
+            --bg-surface: #0b1019;
+            --bg-card: #101726;
+            --bg-card-hover: #162035;
+            --border: #1a253a;
+            --border-focus: #00ffcc;
+            --accent-cyan: #00ffcc;
+            --accent-blue: #38bdf8;
+            --accent-green: #10b981;
+            --accent-red: #ef4444;
+            --accent-gold: #f59e0b;
+            --accent-purple: #a855f7;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --text-dim: #64748b;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            min-height: 100vh;
+            padding: 20px;
+            line-height: 1.5;
+        }
+
+        .container { max-width: 1440px; margin: 0 auto; }
+
+        /* HEADER MINIMALISTA */
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px;
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-logo {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, #00ffcc, #38bdf8);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            color: #040810;
+            font-size: 18px;
+        }
+
+        .brand-text h1 {
+            font-size: 16px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .brand-text p {
+            font-size: 12px;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .header-stats {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .stat-pill {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .stat-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-green);
+            box-shadow: 0 0 8px var(--accent-green);
+        }
+
+        /* BANNER EN VIVO: AUDITORÍA DE DESFASE */
+        .desfase-banner {
+            background: linear-gradient(90deg, rgba(168, 85, 247, 0.12) 0%, rgba(0, 255, 204, 0.08) 100%);
+            border: 1px solid rgba(168, 85, 247, 0.4);
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 14px;
+        }
+
+        .desfase-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .desfase-badge {
+            background: rgba(168, 85, 247, 0.25);
+            color: #d8b4fe;
+            border: 1px solid var(--accent-purple);
+            font-size: 11px;
+            font-weight: 700;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .desfase-metrics {
+            display: flex;
+            gap: 20px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            flex-wrap: wrap;
+        }
+
+        .desfase-metric-item b {
+            color: var(--accent-cyan);
+        }
+
+        /* KPI STRIP (4 TARJETAS) */
+        .kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+
+        .kpi-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px 20px;
+            transition: border-color 0.2s;
+        }
+
+        .kpi-card:hover {
+            border-color: var(--border-focus);
+        }
+
+        .kpi-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-weight: 700;
+            margin-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .kpi-value {
+            font-size: 24px;
+            font-weight: 800;
+            font-family: 'JetBrains Mono', monospace;
+            color: var(--text-main);
+            margin-bottom: 4px;
+        }
+
+        .kpi-sub {
+            font-size: 12px;
+            color: var(--text-dim);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .positive { color: var(--accent-green); }
+        .negative { color: var(--accent-red); }
+        .neutral { color: var(--accent-gold); }
+
+        /* SECCIÓN: LAS 4 JUGADORAS */
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+
+        .section-title {
+            font-size: 15px;
+            font-weight: 800;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* MATRIZ DE LAS 5 ESTRATEGIAS */
+        .strategies-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 14px;
+            margin-bottom: 24px;
+        }
+
+        .strategy-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.2s;
+        }
+
+        .strategy-card:hover {
+            border-color: var(--accent-cyan);
+            transform: translateY(-2px);
+        }
+
+        .strategy-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .strategy-title {
+            font-size: 14px;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .strategy-badge {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 4px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .strategy-metric-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            margin-top: 6px;
+            padding-top: 6px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        .players-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+            gap: 16px;
+            margin-bottom: 28px;
+        }
+
+        .player-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 18px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .player-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+        }
+
+        .player-card.tsla::before { background: #ef4444; }
+        .player-card.nvda::before { background: #10b981; }
+        .player-card.oro::before { background: #f59e0b; }
+        .player-card.sol::before { background: #a855f7; }
+
+        .player-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .player-symbol {
+            font-size: 18px;
+            font-weight: 800;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .player-name {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .player-badge {
+            font-size: 11px;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--accent-cyan);
+        }
+
+        .player-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            padding: 6px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        .player-row span { color: var(--text-muted); }
+        .player-row b { color: var(--text-main); }
+
+        /* PROTOCOLO DE 6 DIMENSIONES (TABLA MAESTRA) */
+        .protocol-box {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .controls-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .filter-group {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        .filter-btn {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            color: var(--text-muted);
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        .filter-btn:hover {
+            color: var(--text-main);
+            border-color: var(--accent-cyan);
+        }
+
+        .filter-btn.active {
+            background: var(--accent-cyan);
+            color: #040810;
+            border-color: var(--accent-cyan);
+            font-weight: 800;
+        }
+
+        .table-responsive {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            font-family: 'JetBrains Mono', monospace;
+            text-align: left;
+        }
+
+        th {
+            background: var(--bg-card);
+            color: var(--text-muted);
+            font-weight: 700;
+            padding: 10px 14px;
+            border-bottom: 1px solid var(--border);
+            text-transform: uppercase;
+            font-size: 11px;
+            letter-spacing: 0.5px;
+        }
+
+        td {
+            padding: 12px 14px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            white-space: nowrap;
+        }
+
+        tr:hover td {
+            background: var(--bg-card-hover);
+        }
+
+        .tag {
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: 700;
+            display: inline-block;
+        }
+
+        .tag-alpaca { background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid #38bdf8; }
+        .tag-pepper { background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid #f59e0b; }
+
+        .tag-tp { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+        .tag-be { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+        .tag-sl { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+        .tag-timed { background: rgba(168, 85, 247, 0.15); color: #a855f7; }
+
+        /* FOOTER */
+        footer {
+            border-top: 1px solid var(--border);
+            padding-top: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 11px;
+            color: var(--text-dim);
+            font-family: 'JetBrains Mono', monospace;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        @media (max-width: 768px) {
+            header, .controls-bar, footer { flex-direction: column; align-items: flex-start; }
+            .kpi-grid, .players-grid { grid-template-columns: 1fr; }
+        }
+    
+        /* TEMAS DINÁMICOS */
+        html[data-theme="neon"] {
+            --bg-base: #080314;
+            --bg-surface: #120726;
+            --bg-card: #1c0c3b;
+            --bg-card-hover: #291254;
+            --border: rgba(255, 0, 127, 0.4);
+            --border-focus: #00f0ff;
+            --accent-cyan: #00f0ff;
+            --accent-blue: #bd00ff;
+            --accent-green: #00ff9f;
+            --accent-red: #ff0055;
+            --accent-gold: #ffe600;
+            --accent-purple: #ff007f;
+            --text-main: #ffffff;
+            --text-muted: #e2d9f3;
+            --text-dim: #a855f7;
+        }
+        html[data-theme="obsidian"] {
+            --bg-base: #000000;
+            --bg-surface: #0a0a0a;
+            --bg-card: #121212;
+            --bg-card-hover: #1e1e1e;
+            --border: #262626;
+            --border-focus: #f59e0b;
+            --accent-cyan: #38bdf8;
+            --accent-blue: #60a5fa;
+            --accent-green: #22c55e;
+            --accent-red: #f43f5e;
+            --accent-gold: #f59e0b;
+            --accent-purple: #c084fc;
+            --text-main: #f5f5f5;
+            --text-muted: #a3a3a3;
+            --text-dim: #737373;
+        }
+        html[data-theme="tradingview"] {
+            --bg-base: #131722;
+            --bg-surface: #1e222d;
+            --bg-card: #2a2e39;
+            --bg-card-hover: #363c4e;
+            --border: #363c4e;
+            --border-focus: #2962ff;
+            --accent-cyan: #00bcd4;
+            --accent-blue: #2962ff;
+            --accent-green: #26a69a;
+            --accent-red: #ef5350;
+            --accent-gold: #ff9800;
+            --accent-purple: #ab47bc;
+            --text-main: #d1d4dc;
+            --text-muted: #787b86;
+            --text-dim: #50535e;
+        }
+
+        body.compact-mode { padding: 10px; font-size: 13px; }
+        body.compact-mode header { padding: 10px 16px; margin-bottom: 12px; }
+        body.compact-mode .desfase-banner { padding: 10px 14px; margin-bottom: 12px; }
+        body.compact-mode .kpi-grid { gap: 10px; margin-bottom: 14px; }
+        body.compact-mode .kpi-card { padding: 10px 14px; }
+
+        /* BOTONES DE CABECERA */
+        .btn-header-action {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid transparent;
+            font-family: inherit;
+        }
+        .btn-header-customizer {
+            background: rgba(168, 85, 247, 0.15);
+            border-color: rgba(168, 85, 247, 0.4);
+            color: #c084fc;
+        }
+        .btn-header-customizer:hover {
+            background: rgba(168, 85, 247, 0.3);
+            transform: translateY(-1px);
+        }
+        .btn-header-gemini {
+            background: linear-gradient(135deg, rgba(66, 133, 244, 0.2), rgba(155, 114, 207, 0.25));
+            border-color: rgba(155, 114, 207, 0.5);
+            color: #ffffff;
+            box-shadow: 0 0 15px rgba(66, 133, 244, 0.2);
+        }
+        .btn-header-gemini:hover {
+            background: linear-gradient(135deg, rgba(66, 133, 244, 0.35), rgba(155, 114, 207, 0.45));
+            transform: translateY(-1px);
+        }
+
+        /* NOTAS DE TRADING */
+        .trading-note-card {
+            background: linear-gradient(90deg, rgba(245, 158, 11, 0.12), rgba(245, 158, 11, 0.04));
+            border: 1px solid rgba(245, 158, 11, 0.4);
+            border-left: 4px solid var(--accent-gold);
+            border-radius: 10px;
+            padding: 12px 18px;
+            margin-bottom: 16px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+        .trading-note-close {
+            background: none;
+            border: none;
+            color: var(--text-dim);
+            font-size: 16px;
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 4px;
+        }
+
+        /* MODAL PERSONALIZADOR */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(8px);
+            z-index: 10000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .modal-overlay.active { display: flex; }
+        .customizer-box {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            box-shadow: 0 25px 60px rgba(0,0,0,0.8);
+            border-radius: 16px;
+            width: 100%; max-width: 560px;
+            max-height: 90vh; overflow-y: auto;
+            padding: 24px;
+        }
+        .theme-buttons-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+        .btn-theme-choice {
+            padding: 12px; border-radius: 10px; border: 1px solid var(--border);
+            background: var(--bg-card); color: var(--text-main); font-weight: 600;
+            font-size: 12px; cursor: pointer; display: flex; align-items: center; gap: 8px;
+        }
+        .btn-theme-choice.active {
+            border-color: var(--accent-cyan); background: rgba(0, 255, 204, 0.1); color: var(--accent-cyan);
+        }
+
+        /* GEMINI CHAT FAB & PANEL */
+        #gemini-chat-fab {
+            position: fixed; bottom: 24px; right: 24px; z-index: 9999;
+            display: flex; align-items: center; gap: 10px; padding: 10px 18px;
+            background: linear-gradient(135deg, #0b1019, #1a1633);
+            border-radius: 50px; cursor: pointer;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.6), 0 0 20px rgba(155, 114, 207, 0.35);
+            border: 2px solid transparent;
+        }
+        #gemini-chat-fab::before {
+            content: ''; position: absolute; top: -2px; left: -2px; right: -2px; bottom: -2px;
+            background: linear-gradient(135deg, #4285f4, #9b72cf, #d96570, #10b981);
+            border-radius: 52px; z-index: -1;
+        }
+        #gemini-chat-panel {
+            position: fixed; bottom: 84px; right: 24px;
+            width: 440px; max-width: calc(100vw - 32px);
+            height: 620px; max-height: calc(100vh - 110px);
+            background: rgba(11, 16, 25, 0.96);
+            backdrop-filter: blur(24px);
+            border: 1px solid rgba(155, 114, 207, 0.4);
+            border-radius: 20px;
+            box-shadow: 0 25px 60px rgba(0,0,0,0.8);
+            z-index: 9998; display: none; flex-direction: column; overflow: hidden;
+        }
+        #gemini-chat-panel.active { display: flex; }
+        .chat-topbar {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 14px 18px; background: linear-gradient(90deg, rgba(66, 133, 244, 0.15), rgba(155, 114, 207, 0.15));
+            border-bottom: 1px solid rgba(155, 114, 207, 0.25);
+        }
+        .chat-chips-scroll { display: flex; gap: 8px; padding: 10px 16px; overflow-x: auto; background: rgba(0,0,0,0.2); }
+        .chat-chip {
+            white-space: nowrap; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #e2e8f0; padding: 5px 12px; border-radius: 16px; font-size: 11px; font-weight: 600; cursor: pointer;
+        }
+        .chat-messages { flex: 1; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+        .msg-bubble { max-width: 88%; padding: 12px 16px; border-radius: 16px; font-size: 13px; line-height: 1.5; word-break: break-word; }
+        .msg-bubble.user { align-self: flex-end; background: #2563eb; color: #fff; border-bottom-right-radius: 4px; }
+        .msg-bubble.assistant { align-self: flex-start; background: rgba(30, 41, 59, 0.7); border: 1px solid rgba(255, 255, 255, 0.08); color: #f1f5f9; border-bottom-left-radius: 4px; }
+        .chat-inputbox { padding: 12px 16px; border-top: 1px solid rgba(255, 255, 255, 0.08); background: rgba(15, 23, 42, 0.6); display: flex; align-items: flex-end; gap: 10px; }
+        .chat-textarea { flex: 1; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 12px; padding: 10px 14px; color: #fff; font-size: 13px; outline: none; font-family: inherit; resize: none; max-height: 90px; }
+        .btn-send-chat { width: 40px; height: 40px; border-radius: 10px; background: linear-gradient(135deg, #4285f4, #9b72cf); border: none; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+
+        /* GRÁFICO INTERACTIVO TRADINGVIEW */
+        .chart-tab-btn {
+            background: var(--bg-card); border: 1px solid var(--border); color: var(--text-muted);
+            padding: 8px 14px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit;
+        }
+        .chart-tab-btn.active {
+            background: rgba(0, 255, 204, 0.15); border-color: var(--accent-cyan); color: var(--accent-cyan);
+            box-shadow: 0 0 12px rgba(0, 255, 204, 0.25);
+        }
+        .hud-stat-item { display: flex; flex-direction: column; gap: 2px; }
+        .hud-stat-label { font-size: 11px; color: var(--text-dim); font-family: 'JetBrains Mono', monospace; text-transform: uppercase; }
+        .hud-stat-value { font-size: 14px; font-weight: 800; font-family: 'JetBrains Mono', monospace; }
+
+    </style>
+    <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- HEADER MINIMALISTA -->
+        <header>
+            <div class="brand">
+                <div class="brand-logo">K</div>
+                <div class="brand-text">
+                    <h1>KRAKEN QUANT FUND <span>• PISO 2</span></h1>
+                    <p>Terminal Autónomo 24/7 • Anastasia CIO</p>
+                </div>
+            </div>
+            <div class="header-stats">
+                <div class="stat-pill">
+                    <div class="stat-dot" style="background: #10b981; animation: pulse 1.5s infinite;"></div>
+                    <span>Auto-Sync: <b id="sync-status" style="color: #34d399;">CONECTANDO CON MOTOR...</b></span>
+                </div>
+                <div class="stat-pill">
+                    <span>🦙 Alpaca: <b id="alpaca-balance">Cargando...</b></span>
+                </div>
+                <div class="stat-pill">
+                    <span>🏛️ Pepperstone: <b id="pepper-balance">Cargando...</b></span>
+                </div>
+                
+                <button class="btn-header-action btn-header-customizer" onclick="toggleCustomizerModal()">
+                    <span>🎨</span> Personalizar Web
+                </button>
+
+                <div class="stat-pill" id="clock-pill">
+                    <span>⏰ Carmagnola: <b id="local-clock">--:--:--</b></span>
+                </div>
+            </div>
+        </header>
+
+        <div id="trading-notes-container" style="display: none; margin-bottom: 16px;"></div>
+        <!-- BANNER EN VIVO: POSICIONES ACTIVAS EN BROKERS REALES (AUTO-REFRESH) -->
+        <div class="desfase-banner" id="live-positions-banner" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(56, 189, 248, 0.08)); border-color: rgba(16, 185, 129, 0.4);">
+            <div class="desfase-title">
+                <span class="desfase-badge" style="background: rgba(16, 185, 129, 0.3); color: #34d399; border-color: #10b981;">🔴 RADAR DE MERCADO EN TIEMPO REAL (AUTO-STREAM)</span>
+                <b style="font-size: 14px;">DUELO REAL: Pepperstone cTrader (Spotware Londres) vs Alpaca Algorithmic (New York)</b>
+            </div>
+            <div class="desfase-metrics" id="live-banner-metrics">
+                <div class="desfase-metric-item">🥇 Oro Spot (cTrader): <b style="color: var(--accent-gold);">Pos #59602259 • 0.01 lot a $4142.22 (TP $4210.10)</b></div>
+                <div class="desfase-metric-item">🚗 TSLA (Alpaca): <b style="color: var(--accent-red);">2 acc a $381.74</b></div>
+                <div class="desfase-metric-item">💚 NVDA (Alpaca): <b style="color: var(--accent-green);">2 acc a $178.15</b></div>
+                <div class="desfase-metric-item">🥇 GLD (Alpaca): <b style="color: var(--accent-gold);">1 acc a $379.34</b></div>
+            </div>
+        </div>
+
+        <!-- KPI STRIP (4 TARJETAS PRINCIPALES) -->
+        <div class="kpi-grid">
+            <div class="kpi-card">
+                <div class="kpi-label">
+                    <span>Beneficio Neto Consolidado</span>
+                    <span class="positive">▲ +100%</span>
+                </div>
+                <div class="kpi-value positive" id="kpi-net-profit">+$12.77 / +€69.29</div>
+                <div class="kpi-sub">Alpaca Paper (USD) + Pepperstone (EUR)</div>
+            </div>
+
+            <div class="kpi-card">
+                <div class="kpi-label">
+                    <span>Tasa de Acierto (Win Rate)</span>
+                    <span class="positive">73.8%</span>
+                </div>
+                <div class="kpi-value">79 / 107</div>
+                <div class="kpi-sub">Sweet Spot Confirmado: Gráficos de 5 Minutos</div>
+            </div>
+
+            <div class="kpi-card">
+                <div class="kpi-label">
+                    <span>Rango de Margen Retenido</span>
+                    <span class="neutral">1:30 vs 4x</span>
+                </div>
+                <div class="kpi-value">€0.85 ➔ $372.55</div>
+                <div class="kpi-sub">Mín: 0.01 micro-lotes SOL | Máx: 1 acción GLD</div>
+            </div>
+
+            <div class="kpi-card">
+                <div class="kpi-label">
+                    <span>Estrategia Líder</span>
+                    <span class="positive">Whales 13F</span>
+                </div>
+                <div class="kpi-value" style="color: var(--accent-cyan);">100% Win</div>
+                <div class="kpi-sub">0 Fallos en TSLA y NVDA (+12.77 USD)</div>
+            </div>
+        </div>
+
+        <!-- LAS 4 JUGADORAS (CARDS MINIMALISTAS) -->
+        <div class="section-header">
+            <div class="section-title">
+                <span>⚔️ Rendimiento Individual de las 4 Jugadoras</span>
+            </div>
+            <span style="font-size: 12px; color: var(--text-dim); font-family: 'JetBrains Mono', monospace;">Sin mezclar resultados</span>
+        </div>
+
+        <div class="players-grid">
+            <!-- TSLA -->
+            <div class="player-card tsla">
+                <div class="player-top">
+                    <div>
+                        <div class="player-symbol">TSLA</div>
+                        <div class="player-name">Tesla Motors Inc.</div>
+                    </div>
+                    <div class="player-badge">Delfín Alta Beta</div>
+                </div>
+                <div class="player-row">
+                    <span>Margen Requerido:</span>
+                    <b>$248.50 (Alpaca) / €7.62 (Pepper)</b>
+                </div>
+                <div class="player-row">
+                    <span>Mejor Estrategia:</span>
+                    <b style="color: var(--accent-cyan);">Pista 4 (Whales 13F)</b>
+                </div>
+                <div class="player-row">
+                    <span>Resultado Neto:</span>
+                    <b class="positive">+$8.42 USD / +€14.20 EUR</b>
+                </div>
+                <div class="player-row">
+                    <span>Retorno s/Margen:</span>
+                    <b class="positive">+18.6% (Pepperstone 1:30)</b>
+                </div>
+            </div>
+
+            <!-- NVDA -->
+            <div class="player-card nvda">
+                <div class="player-top">
+                    <div>
+                        <div class="player-symbol">NVDA</div>
+                        <div class="player-name">Nvidia Corporation</div>
+                    </div>
+                    <div class="player-badge">Motor Impulso IA</div>
+                </div>
+                <div class="player-row">
+                    <span>Margen Requerido:</span>
+                    <b>$138.25 (Alpaca) / €4.24 (Pepper)</b>
+                </div>
+                <div class="player-row">
+                    <span>Mejor Estrategia:</span>
+                    <b style="color: var(--accent-cyan);">Pista 4 (Whales 13F)</b>
+                </div>
+                <div class="player-row">
+                    <span>Resultado Neto:</span>
+                    <b class="positive">+$4.35 USD / +€12.80 EUR</b>
+                </div>
+                <div class="player-row">
+                    <span>Retorno s/Margen:</span>
+                    <b class="positive">+30.2% (Pepperstone 1:30)</b>
+                </div>
+            </div>
+
+            <!-- ORO -->
+            <div class="player-card oro">
+                <div class="player-top">
+                    <div>
+                        <div class="player-symbol">ORO (XAU / GLD)</div>
+                        <div class="player-name">Spot Gold / ETF Trust</div>
+                    </div>
+                    <div class="player-badge">Ballena Refugio</div>
+                </div>
+                <div class="player-row">
+                    <span>Margen Requerido:</span>
+                    <b>$372.55 (GLD) / €12.45 (XAUUSD)</b>
+                </div>
+                <div class="player-row">
+                    <span>Mejor Estrategia:</span>
+                    <b style="color: var(--accent-gold);">Pista 1 (Delfín) + P5 (ORB)</b>
+                </div>
+                <div class="player-row">
+                    <span>Resultado Neto:</span>
+                    <b class="positive">+€42.29 EUR (Pepperstone)</b>
+                </div>
+                <div class="player-row">
+                    <span>Retorno s/Margen:</span>
+                    <b class="positive">+33.9% s/Margen Retenido</b>
+                </div>
+            </div>
+
+            <!-- SOLANA -->
+            <div class="player-card sol">
+                <div class="player-top">
+                    <div>
+                        <div class="player-symbol">SOL (SOL/USD)</div>
+                        <div class="player-name">Solana Cripto 24/7</div>
+                    </div>
+                    <div class="player-badge">Operativa Fin de Semana</div>
+                </div>
+                <div class="player-row">
+                    <span>Margen Requerido:</span>
+                    <b>$89.01 (Alpaca) / €0.85 (Pepper)</b>
+                </div>
+                <div class="player-row">
+                    <span>Entrada Más Chica:</span>
+                    <b style="color: var(--accent-purple);">€0.85 EUR (0.01 micro-lotes)</b>
+                </div>
+                <div class="player-row">
+                    <span>Test en Curso:</span>
+                    <b class="positive">Desfase 5m Pepper / 6m Alpaca</b>
+                </div>
+                <div class="player-row">
+                    <span>Resultado Neto:</span>
+                    <b class="positive">+$0.08 USD / +€0.12 EUR</b>
+                </div>
+            </div>
+        </div>
+
+        
+        <!-- ==============================================================================
+             📈 GRÁFICO INTERACTIVO INSTITUCIONAL (TRADINGVIEW LIGHTWEIGHT CHARTS)
+             Velas 5M en tiempo real con líneas de Entrada (Azul), SL (Rojo) y TP (Verde)
+             ============================================================================== -->
+        <div class="card chart-container" id="sec-interactive-chart" style="margin-bottom: 24px; padding: 20px; background: var(--bg-surface); border: 1px solid var(--border); border-radius: 12px;">
+            <div class="chart-header-row" style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 16px;">
+                <div>
+                    <div style="font-size: 16px; font-weight: 800; display: flex; align-items: center; gap: 10px;">
+                        <span>📈 Visualizador Técnico en Vivo • Velas 5M con Stop Loss y Take Profit</span>
+                        <span class="tag tag-timed" style="background: rgba(56, 189, 248, 0.15); color: var(--accent-blue); border-color: var(--accent-blue);">TradingView Engine</span>
+                    </div>
+                    <p style="font-size: 12px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; margin-top: 4px;">
+                        Tus órdenes de batalla dibujadas directamente sobre el gráfico interactivo
+                    </p>
+                </div>
+                <!-- SELECTOR DE ACTIVOS -->
+                <div class="chart-tabs-bar" style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button class="chart-tab-btn active" id="tab-chart-TSLA" onclick="switchActiveChart('TSLA')">🚗 TSLA</button>
+                    <button class="chart-tab-btn" id="tab-chart-NVDA" onclick="switchActiveChart('NVDA')">💚 NVDA</button>
+                    <button class="chart-tab-btn" id="tab-chart-XAUUSD" onclick="switchActiveChart('XAUUSD')">🥇 ORO SPOT</button>
+                    <button class="chart-tab-btn" id="tab-chart-GLD" onclick="switchActiveChart('GLD')">🥇 GLD ETF</button>
+                    <button class="chart-tab-btn" id="tab-chart-SOLUSD" onclick="switchActiveChart('SOLUSD')">🟣 SOLANA</button>
+                </div>
+            </div>
+
+            <!-- HUD DE BATALLA DEL ACTIVO SELECCIONADO -->
+            <div class="chart-hud-banner" id="chart-hud-banner" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; margin-bottom: 16px;">
+                <!-- Rellenado dinámico por JS -->
+            </div>
+
+            <!-- LIENZO DE TRADINGVIEW -->
+            <div id="tv-chart-canvas" style="width: 100%; height: 420px; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); background: #0b1019;"></div>
+        </div>
+
+        <!-- MATRIZ DE COMBATE: ANÁLISIS POR ESTRATEGIA (LAS 5 PISTAS) -->
+        <div class="section-header" style="margin-top: 10px;">
+            <div class="section-title">
+                <span>📊 Matriz de Batalla Cuantitativa: Análisis por Estrategia</span>
+            </div>
+            <span style="font-size: 12px; color: var(--accent-cyan); font-family: 'JetBrains Mono', monospace;">5 Pistas Independientes en Combate</span>
+        </div>
+
+        <div class="strategies-grid" id="strategies-scorecard-grid">
+            <!-- P1 DELFÍN -->
+            <div class="strategy-card" style="border-left: 3px solid #38bdf8; cursor: pointer;" onclick="filterTable('p1')">
+                <div class="strategy-top">
+                    <span class="strategy-title" style="color: #38bdf8;">🐬 Pista 1: Delfín</span>
+                    <span class="strategy-badge" style="background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid #38bdf8;">Scalp 5M • Escalera 4x4 🚀</span>
+                </div>
+                <div class="strategy-metric-row"><span>Activos:</span> <b>SOL & ORO</b></div>
+                <div class="strategy-metric-row"><span>Abiertas:</span> <b id="strat-p1-count">2 en vivo</b></div>
+                <div class="strategy-metric-row"><span>Flotante:</span> <b id="strat-p1-pnl" class="positive">+€0.46 EUR</b></div>
+                <div class="strategy-metric-row"><span>Protección:</span> <span style="color: var(--accent-green); font-weight: 700;">🟢 Trailing BE</span></div>
+            </div>
+
+            <!-- P2 BASE AMBOS -->
+            <div class="strategy-card" style="border-left: 3px solid #34d399; cursor: pointer;" onclick="filterTable('p2')">
+                <div class="strategy-top">
+                    <span class="strategy-title" style="color: #34d399;">🟢 Pista 2: Base Ambos</span>
+                    <span class="strategy-badge" style="background: rgba(52, 211, 153, 0.15); color: #34d399;">EMA 13</span>
+                </div>
+                <div class="strategy-metric-row"><span>Activos:</span> <b>TSLA, NVDA, ORO, SOL</b></div>
+                <div class="strategy-metric-row"><span>Abiertas:</span> <b id="strat-p2-count">4 en vivo</b></div>
+                <div class="strategy-metric-row"><span>Flotante:</span> <b id="strat-p2-pnl">Calculando...</b></div>
+                <div class="strategy-metric-row"><span>Protección:</span> <span style="color: var(--accent-cyan); font-weight: 700;">🟢 SL -1.5 ATR</span></div>
+            </div>
+
+            <!-- P3 TIMEMACHINE -->
+            <div class="strategy-card" style="border-left: 3px solid #fbbf24; cursor: pointer;" onclick="filterTable('p3')">
+                <div class="strategy-top">
+                    <span class="strategy-title" style="color: #fbbf24;">⏳ Pista 3: TimeMachine</span>
+                    <span class="strategy-badge" style="background: rgba(251, 191, 36, 0.15); color: #fbbf24;">Odds >65%</span>
+                </div>
+                <div class="strategy-metric-row"><span>Activos:</span> <b>ORO & SOL</b></div>
+                <div class="strategy-metric-row"><span>Abiertas:</span> <b id="strat-p3-count">2 en vivo</b></div>
+                <div class="strategy-metric-row"><span>Flotante:</span> <b id="strat-p3-pnl">Calculando...</b></div>
+                <div class="strategy-metric-row"><span>Protección:</span> <span style="color: var(--accent-gold); font-weight: 700;">🟡 SL -1.5 ATR</span></div>
+            </div>
+
+            <!-- P4 VWAP SCALPER (OPCIÓN 1 PEDRO) -->
+            <div class="strategy-card" style="border-left: 3px solid #06b6d4; cursor: pointer;" onclick="filterTable('p4')">
+                <div class="strategy-top">
+                    <span class="strategy-title" style="color: #06b6d4;">🌊 Pista 4: VWAP Scalper</span>
+                    <span class="strategy-badge" style="background: rgba(6, 182, 212, 0.15); color: #06b6d4; border: 1px solid #06b6d4;">Scalp 5M • Burst ⚡</span>
+                </div>
+                <div class="strategy-metric-row"><span>Activos:</span> <b>TSLA, NVDA, ORO, SOL</b></div>
+                <div class="strategy-metric-row"><span>Abiertas:</span> <b id="strat-p4-count">5 en vivo</b></div>
+                <div class="strategy-metric-row"><span>Flotante:</span> <b id="strat-p4-pnl">Calculando...</b></div>
+                <div class="strategy-metric-row"><span>Protección:</span> <span style="color: #06b6d4; font-weight: 700;">🟢 TP +1.5 / SL -1.0 ATR</span></div>
+            </div>
+
+            <!-- P5 SUPERTREND ANTI-CAÍDAS (OPCIÓN 2 PEDRO) -->
+            <div class="strategy-card" style="border-left: 3px solid #ec4899; cursor: pointer;" onclick="filterTable('p5')">
+                <div class="strategy-top">
+                    <span class="strategy-title" style="color: #ec4899;">⚡ Pista 5: SuperTrend</span>
+                    <span class="strategy-badge" style="background: rgba(236, 72, 153, 0.15); color: #ec4899; border: 1px solid #ec4899;">Anti-Caídas 9/21 🛡️</span>
+                </div>
+                <div class="strategy-metric-row"><span>Activos:</span> <b>TSLA, NVDA, ORO, SOL</b></div>
+                <div class="strategy-metric-row"><span>Abiertas:</span> <b id="strat-p5-count">0 en vivo</b></div>
+                <div class="strategy-metric-row"><span>Flotante:</span> <b id="strat-p5-pnl">Calculando...</b></div>
+                <div class="strategy-metric-row"><span>Protección:</span> <span style="color: #ec4899; font-weight: 700;">🛡️ Bloqueo Cuchillo</span></div>
+            </div>
+        </div>
+
+        
+        <!-- 📊 MATRIZ CUANTITATIVA EN VIVO • MANDATO DE PEDRO (WIN RATE & PNL SEGMENTADO) -->
+        <div class="protocol-box" style="margin-bottom: 24px; border: 1px solid rgba(56, 189, 248, 0.35); background: rgba(15, 23, 42, 0.75);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; flex-wrap: wrap; gap: 12px;">
+                <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                    <span style="font-size: 15px; font-weight: 800; color: #38bdf8; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 6px;">
+                        📊 Matriz Cuantitativa Oficial • Win Rate & PnL (189 Trades Auditados)
+                    </span>
+                    <span class="strategy-badge" style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #10b981; font-size: 11px;">
+                        🏆 Win Rate Global: 46.9% • Profit Factor: 2.14 • Beneficio Neto Total: +$363.05 USD (+€345.76 EUR)</span>
+                </div>
+                <div class="filter-group">
+                    <button class="filter-btn active" id="btn-mat-strat" onclick="switchMatrixTab('strat')">🎯 Por Estrategia</button>
+                    <button class="filter-btn" id="btn-mat-asset" onclick="switchMatrixTab('asset')">📈 Por Activo</button>
+                    <button class="filter-btn" id="btn-mat-broker" onclick="switchMatrixTab('broker')">🏛️ Por Broker</button>
+                </div>
+            </div>
+
+            <!-- VISTA A: POR ESTRATEGIA (P1 A P5) -->
+            <div id="mat-view-strat" class="table-responsive">
+                <table>
+                    <thead>
+                        <tr style="background: rgba(30, 41, 59, 0.9);">
+                            <th>Pista / Estrategia</th>
+                            <th>Setup Cuantitativo</th>
+                            <th style="text-align: center;">Trades</th>
+                            <th style="color: var(--accent-green); text-align: center;">Ganadas (W)</th>
+                            <th style="color: var(--accent-red); text-align: center;">Perdidas (L)</th>
+                            <th style="color: var(--accent-cyan); text-align: center;">Breakeven (BE)</th>
+                            <th style="color: #fbbf24; text-align: center;">Win Rate %</th>
+                            <th style="color: var(--accent-green); text-align: right;">PnL Neto ($ USD)</th>
+                            <th style="color: var(--accent-green); text-align: right;">PnL Neto (€ EUR)</th>
+                            <th style="text-align: center;">Profit Factor</th>
+                        </tr>
+                    </thead>
+                    <tbody id="mat-body-strat">
+                        <tr style="border-left: 3px solid #fbbf24;">
+                            <td><b style="color: #fbbf24;">⏳ Pista 3: TimeMachine</b></td>
+                            <td>Reversión Probabilística (Odds > 65%)</td>
+                            <td style="text-align: center; font-weight: 700;">41</td>
+                            <td style="color: var(--accent-green); text-align: center; font-weight: 700;">20</td>
+                            <td style="color: var(--accent-red); text-align: center;">14</td>
+                            <td style="color: var(--accent-cyan); text-align: center;">7</td>
+                            <td style="color: #fbbf24; text-align: center; font-weight: 800;">58.8%</td>
+                            <td class="positive" style="text-align: right; font-weight: 700;">+$149.82 USD</td>
+                            <td class="positive" style="text-align: right; font-weight: 700;">+€142.68 EUR</td>
+                            <td style="text-align: center; font-weight: 800; color: #34d399;">3.90 🟢</td>
+                        </tr>
+                        <tr style="border-left: 3px solid #06b6d4;">
+                            <td><b style="color: #06b6d4;">🌊 Pista 4: VWAP Scalper</b></td>
+                            <td>Scalping Rebote / Burst Institucional</td>
+                            <td style="text-align: center; font-weight: 700;">54</td>
+                            <td style="color: var(--accent-green); text-align: center; font-weight: 700;">20</td>
+                            <td style="color: var(--accent-red); text-align: center;">26</td>
+                            <td style="color: var(--accent-cyan); text-align: center;">8</td>
+                            <td style="color: #06b6d4; text-align: center; font-weight: 800;">43.5%</td>
+                            <td class="positive" style="text-align: right; font-weight: 700;">+$76.44 USD</td>
+                            <td class="positive" style="text-align: right; font-weight: 700;">+€72.80 EUR</td>
+                            <td style="text-align: center; font-weight: 800; color: #34d399;">1.61 🟢</td>
+                        </tr>
+                        <tr style="border-left: 3px solid #34d399;">
+                            <td><b style="color: #34d399;">🟢 Pista 2: Base Ambos</b></td>
+                            <td>Tendencia Sólida + Mecha &lt; 35%</td>
+                            <td style="text-align: center; font-weight: 700;">48</td>
+                            <td style="color: var(--accent-green); text-align: center; font-weight: 700;">14</td>
+                            <td style="color: var(--accent-red); text-align: center;">18</td>
+                            <td style="color: var(--accent-cyan); text-align: center;">16</td>
+                            <td style="color: #34d399; text-align: center; font-weight: 800;">43.8%</td>
+                            <td class="positive" style="text-align: right; font-weight: 700;">+$70.47 USD</td>
+                            <td class="positive" style="text-align: right; font-weight: 700;">+€67.11 EUR</td>
+                            <td style="text-align: center; font-weight: 800; color: #34d399;">2.03 🟢</td>
+                        </tr>
+                        <tr style="border-left: 3px solid #ec4899;">
+                            <td><b style="color: #ec4899;">⚡ Pista 5: SuperTrend Ribbon</b></td>
+                            <td>Anti-Caídas 9/21 • Momentum Estricto</td>
+                            <td style="text-align: center; font-weight: 700;">11</td>
+                            <td style="color: var(--accent-green); text-align: center; font-weight: 700;">3</td>
+                            <td style="color: var(--accent-red); text-align: center;">5</td>
+                            <td style="color: var(--accent-cyan); text-align: center;">3</td>
+                            <td style="color: #ec4899; text-align: center; font-weight: 800;">37.5%</td>
+                            <td class="positive" style="text-align: right; font-weight: 700;">+$53.56 USD</td>
+                            <td class="positive" style="text-align: right; font-weight: 700;">+€51.01 EUR</td>
+                            <td style="text-align: center; font-weight: 800; color: #34d399;">8.11 🏆</td>
+                        </tr>
+                        <tr style="border-left: 3px solid #38bdf8;">
+                            <td><b style="color: #38bdf8;">🐬 Pista 1: Delfín Rápido</b></td>
+                            <td>Scalping 5M • Escalera 4x4 Dinámica</td>
+                            <td style="text-align: center; font-weight: 700;">26</td>
+                            <td style="color: var(--accent-green); text-align: center; font-weight: 700;">10</td>
+                            <td style="color: var(--accent-red); text-align: center;">9</td>
+                            <td style="color: var(--accent-cyan); text-align: center;">7</td>
+                            <td style="color: #38bdf8; text-align: center; font-weight: 800;">52.6%</td>
+                            <td class="positive" style="text-align: right; font-weight: 700;">+$33.57 USD</td>
+                            <td class="positive" style="text-align: right; font-weight: 700;">+€31.97 EUR</td>
+                            <td style="text-align: center; font-weight: 800; color: #34d399;">1.75 🟢</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- VISTA B: POR ACTIVO -->
+            <div id="mat-view-asset" class="table-responsive" style="display: none;">
+                <table>
+                    <thead>
+                        <tr style="background: rgba(30, 41, 59, 0.9);">
+                            <th>Activo</th>
+                            <th>Instrumento</th>
+                            <th style="text-align: center;">Trades</th>
+                            <th style="color: var(--accent-green); text-align: center;">Ganadas (W)</th>
+                            <th style="color: var(--accent-red); text-align: center;">Perdidas (L)</th>
+                            <th style="color: var(--accent-cyan); text-align: center;">Breakeven (BE)</th>
+                            <th style="color: #fbbf24; text-align: center;">Win Rate %</th>
+                            <th style="color: var(--accent-green); text-align: right;">PnL Neto ($ USD)</th>
+                            <th style="color: var(--accent-green); text-align: right;">PnL Neto (€ EUR)</th>
+                            <th style="text-align: center;">Profit Factor</th>
+                        </tr>
+                    </thead>
+                    <tbody id="mat-body-asset">
+                        <tr style="border-left: 3px solid #10b981;">
+                            <td><b style="color: #10b981;">💚 NVDA (Nvidia Corp)</b></td>
+                            <td>Acción Nasdaq / CFD</td>
+                            <td style="text-align: center; font-weight: 700;">71</td>
+                            <td style="color: var(--accent-green); text-align: center; font-weight: 700;">38</td>
+                            <td style="color: var(--accent-red); text-align: center;">21</td>
+                            <td style="color: var(--accent-cyan); text-align: center;">12</td>
+                            <td style="color: #10b981; text-align: center; font-weight: 800;">64.4%</td>
+                            <td class="positive" style="text-align: right; font-weight: 800;">+$328.13 USD</td>
+                            <td class="positive" style="text-align: right; font-weight: 800;">+€312.50 EUR</td>
+                            <td style="text-align: center; font-weight: 800; color: #10b981;">8.47 🏆</td>
+                        </tr>
+                        <tr style="border-left: 3px solid #f59e0b;">
+                            <td><b style="color: #f59e0b;">🪙 ORO (XAUUSD / GLD)</b></td>
+                            <td>Oro Spot CFD / ETF GLD</td>
+                            <td style="text-align: center; font-weight: 700;">25</td>
+                            <td style="color: var(--accent-green); text-align: center; font-weight: 700;">11</td>
+                            <td style="color: var(--accent-red); text-align: center;">8</td>
+                            <td style="color: var(--accent-cyan); text-align: center;">6</td>
+                            <td style="color: #f59e0b; text-align: center; font-weight: 800;">57.9%</td>
+                            <td class="positive" style="text-align: right; font-weight: 800;">+$244.64 USD</td>
+                            <td class="positive" style="text-align: right; font-weight: 800;">+€232.99 EUR</td>
+                            <td style="text-align: center; font-weight: 800; color: #10b981;">105.01 🏆</td>
+                        </tr>
+                        <tr style="border-left: 3px solid #a855f7;">
+                            <td><b style="color: #a855f7;">🟣 SOL (Solana / USD)</b></td>
+                            <td>Crypto Spot / CFD 24/7</td>
+                            <td style="text-align: center; font-weight: 700;">45</td>
+                            <td style="color: var(--accent-green); text-align: center; font-weight: 700;">17</td>
+                            <td style="color: var(--accent-red); text-align: center;">3</td>
+                            <td style="color: var(--accent-cyan); text-align: center;">25</td>
+                            <td style="color: #a855f7; text-align: center; font-weight: 800;">85.0% 🛡️</td>
+                            <td class="positive" style="text-align: right; font-weight: 800;">+$59.76 USD</td>
+                            <td class="positive" style="text-align: right; font-weight: 800;">+€56.91 EUR</td>
+                            <td style="text-align: center; font-weight: 800; color: #a855f7;">21.76 🛡️</td>
+                        </tr>
+                        <tr style="border-left: 3px solid #ef4444;">
+                            <td><b style="color: #ef4444;">🚗 TSLA (Tesla Inc)</b></td>
+                            <td>Acción Nasdaq / CFD</td>
+                            <td style="text-align: center; font-weight: 700;">47</td>
+                            <td style="color: var(--accent-green); text-align: center;">1</td>
+                            <td style="color: var(--accent-red); text-align: center;">44</td>
+                            <td style="color: var(--accent-cyan); text-align: center;">2</td>
+                            <td style="color: #ef4444; text-align: center; font-weight: 800;">2.2%</td>
+                            <td class="negative" style="text-align: right; font-weight: 800;">-$269.47 USD</td>
+                            <td class="negative" style="text-align: right; font-weight: 800;">-€256.64 EUR</td>
+                            <td style="text-align: center; font-weight: 800; color: #ef4444;">Blindado por P5</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- VISTA C: POR BROKER -->
+            <div id="mat-view-broker" class="table-responsive" style="display: none;">
+                <table>
+                    <thead>
+                        <tr style="background: rgba(30, 41, 59, 0.9);">
+                            <th>Broker</th>
+                            <th>Entorno / Conexión</th>
+                            <th style="text-align: center;">Trades</th>
+                            <th style="color: var(--accent-green); text-align: center;">Ganadas (W)</th>
+                            <th style="color: var(--accent-red); text-align: center;">Perdidas (L)</th>
+                            <th style="color: var(--accent-cyan); text-align: center;">Breakeven (BE)</th>
+                            <th style="color: #fbbf24; text-align: center;">Win Rate %</th>
+                            <th style="color: var(--accent-green); text-align: right;">PnL Neto ($ USD)</th>
+                            <th style="color: var(--accent-green); text-align: right;">PnL Neto (€ EUR)</th>
+                            <th style="text-align: center;">Profit Factor</th>
+                        </tr>
+                    </thead>
+                    <tbody id="mat-body-broker">
+                        <tr style="border-left: 3px solid #38bdf8;">
+                            <td><b style="color: #38bdf8;">🦙 Alpaca Markets ($100k)</b></td>
+                            <td>Paper REST API (Nueva York)</td>
+                            <td style="text-align: center; font-weight: 700;">93</td>
+                            <td style="color: var(--accent-green); text-align: center; font-weight: 700;">35</td>
+                            <td style="color: var(--accent-red); text-align: center;">41</td>
+                            <td style="color: var(--accent-cyan); text-align: center;">17</td>
+                            <td style="color: #38bdf8; text-align: center; font-weight: 800;">46.1%</td>
+                            <td class="positive" style="text-align: right; font-weight: 800;">+$228.59 USD</td>
+                            <td class="positive" style="text-align: right; font-weight: 800;">+€217.70 EUR</td>
+                            <td style="text-align: center; font-weight: 800; color: #34d399;">1.78 🟢</td>
+                        </tr>
+                        <tr style="border-left: 3px solid #fbbf24;">
+                            <td><b style="color: #fbbf24;">🏛️ Pepperstone cTrader (€10k)</b></td>
+                            <td>Demo WebSocket Open API (Londres)</td>
+                            <td style="text-align: center; font-weight: 700;">96</td>
+                            <td style="color: var(--accent-green); text-align: center; font-weight: 700;">32</td>
+                            <td style="color: var(--accent-red); text-align: center;">35</td>
+                            <td style="color: var(--accent-cyan); text-align: center;">29</td>
+                            <td style="color: #fbbf24; text-align: center; font-weight: 800;">47.8%</td>
+                            <td class="positive" style="text-align: right; font-weight: 800;">+$134.46 USD</td>
+                            <td class="positive" style="text-align: right; font-weight: 800;">+€128.06 EUR</td>
+                            <td style="text-align: center; font-weight: 800; color: #34d399;">6.34 🏆</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- PROTOCOLO DE ANÁLISIS DE 6 DIMENSIONES -->
+        <div class="protocol-box">
+            <div class="controls-bar">
+                <div class="section-title">
+                    <span>📡 Operaciones en Vivo • Filtro por Estrategia y por Activo</span>
+                </div>
+                <div class="filter-group">
+                    <button class="filter-btn active" onclick="filterTable('all')">Todos</button>
+                    <button class="filter-btn" onclick="filterTable('p1')" style="color: #38bdf8; border-color: rgba(56, 189, 248, 0.4);">🐬 P1 Delfín</button>
+                    <button class="filter-btn" onclick="filterTable('p2')" style="color: #34d399; border-color: rgba(52, 211, 153, 0.4);">🟢 P2 Base</button>
+                    <button class="filter-btn" onclick="filterTable('p3')" style="color: #fbbf24; border-color: rgba(251, 191, 36, 0.4);">⏳ P3 TimeMachine</button>
+                    <button class="filter-btn" onclick="filterTable('p4')" style="color: #06b6d4; border-color: rgba(6, 182, 212, 0.4);">🌊 P4 VWAP</button>
+                    <button class="filter-btn" onclick="filterTable('p5')" style="color: #ec4899; border-color: rgba(236, 72, 153, 0.4);">⚡ P5 SuperTrend</button>
+                    <span style="color: var(--border); display: flex; align-items: center;">|</span>
+                    <button class="filter-btn" onclick="filterTable('TSLA')">🚗 TSLA</button>
+                    <button class="filter-btn" onclick="filterTable('NVDA')">💚 NVDA</button>
+                    <button class="filter-btn" onclick="filterTable('ORO')">🥇 ORO</button>
+                    <button class="filter-btn" onclick="filterTable('SOL')">🟣 SOL</button>
+                    <span style="color: var(--border); display: flex; align-items: center;">|</span>
+                    <button class="filter-btn" onclick="filterTable('alpaca')">🦙 Alpaca</button>
+                    <button class="filter-btn" onclick="filterTable('pepperstone')">🏛️ Pepperstone</button>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table id="trades-table">
+                    <thead>
+                                                <tr>
+                            <th>Estrategia</th>
+                            <th>Broker</th>
+                            <th>Jugadora</th>
+                            <th>Fianza / Inversión</th>
+                            <th>Salida (SL & TP GTC)</th>
+                            <th style="color: var(--accent-red); font-weight: 800;">🛑 Riesgo Máx (SL)</th>
+                            <th style="color: var(--accent-green); font-weight: 800;">🎯 Meta Ganancia (TP)</th>
+                            <th>Flotante Actual</th>
+                            <th>Estado</th>
+                        </tr>
+                    </thead>
+                    <tbody id="trades-body">
+                        <!-- SEPARADOR HISTORIAL DE TRADES CERRADOS -->
+                        <tr class="history-separator-row">
+                            <td colspan="9" style="background: rgba(148, 163, 184, 0.08); font-size: 11px; font-weight: 800; letter-spacing: 1px; color: var(--text-dim); text-transform: uppercase; padding: 12px 18px; border-left: 3px solid var(--text-dim);">
+                                📜 Historial de Operaciones Cerradas (Auditoría Auditada)
+                            </td>
+                        </tr>
+                        <!-- TRADE CERRADO HOY 10/11: STOP LOSS CONTROLADO EN ORO SPOT -->
+                        <tr data-broker="pepperstone" data-asset="ORO" data-strat="p2" style="background: rgba(239, 68, 68, 0.05); border-left: 3px solid var(--accent-red);">
+                            <td><b style="color: var(--accent-gold);">⚔️ Duelo 5M • Tiburón / Ballena ATR</b></td>
+                            <td><span class="tag tag-pepper">🏛️ Pepperstone cTrader</span></td>
+                            <td><b>XAUUSD (Oro Spot CFD)</b></td>
+                            <td>€131.00 EUR (0.01 lot)</td>
+                            <td><span class="tag tag-sl" style="background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid #ef4444;">🛑 SL Ejecutado $4,126.85</span></td>
+                            <td style="color: var(--accent-red); font-weight: 700;">-€13.76 EUR (-$15.37)</td>
+                            <td style="color: var(--accent-green); font-weight: 700;">+€64.64 EUR (+$67.88)</td>
+                            <td class="negative"><b>-€13.76 EUR (SL Cortado)</b></td>
+                            <td>10/11 09:34 (Roma)</td>
+                        </tr>
+                        <!-- FILA REAL DOMINGO: SOLANA TEST 2 (SALIDA DEFENSIVA STOP LOSS CENTINELA) -->
+                        <tr data-broker="pepperstone" data-asset="SOL" data-strat="p1">
+                            <td><b style="color: var(--accent-purple);">Pista 1 • Sniper Pullback</b></td>
+                            <td><span class="tag tag-pepper">🏛️ Pepperstone</span> + <span class="tag tag-alpaca">🦙 Alpaca</span></td>
+                            <td><b>SOLUSD / SOL</b></td>
+                            <td>$89.37 / €40.32</td>
+                            <td><span class="tag tag-sl">🛑 SL Defensivo $89.03</span></td>
+                            <td class="negative">-€0.91 EUR / -$0.71 USD</td>
+                            <td class="negative">-2.25% / -0.79%</td>
+                            <td>08/11 15:22 (Italia)</td>
+                        </tr>
+                        <!-- FILA REAL DOMINGO: TEST 1 REAL SOLANA ALPACA -->
+                        <tr data-broker="alpaca" data-asset="SOL" data-strat="p1">
+                            <td><b style="color: var(--accent-purple);">Pista 1 • Delfín Scalper</b></td>
+                            <td><span class="tag tag-alpaca">🦙 Alpaca</span></td>
+                            <td><b>SOL/USD</b></td>
+                            <td>$89.37 USD (1 SOL)</td>
+                            <td><span class="tag tag-timed">⏱️ 6m Desfase</span></td>
+                            <td class="positive">+$0.10 USD</td>
+                            <td class="positive">+0.11%</td>
+                            <td>08/11 12:22 (Italia)</td>
+                        </tr>
+                        <!-- FILA REAL DOMINGO: TEST 1 REAL SOLANA PEPPERSTONE cTRADER -->
+                        <tr data-broker="pepperstone" data-asset="SOL" data-strat="p1">
+                            <td><b style="color: var(--accent-purple);">Pista 1 • Delfín Scalper</b></td>
+                            <td><span class="tag tag-pepper">🏛️ Pepperstone</span></td>
+                            <td><b>SOLUSD</b></td>
+                            <td>€40.12 EUR (1 SOL)</td>
+                            <td><span class="tag tag-timed">⏱️ 5m Salida</span></td>
+                            <td class="positive">+€0.13 EUR</td>
+                            <td class="positive">+0.32%</td>
+                            <td>08/11 12:21 (Italia)</td>
+                        </tr>
+                        <!-- FILA 3: NVDA WHALE ALPACA -->
+                        <tr data-broker="alpaca" data-asset="NVDA" data-strat="p4">
+                            <td><b style="color: var(--accent-cyan);">Pista 4 • Whales 13F</b></td>
+                            <td><span class="tag tag-alpaca">🦙 Alpaca</span></td>
+                            <td><b>NVDA</b></td>
+                            <td>$138.25 USD (1 acc.)</td>
+                            <td><span class="tag tag-tp">🎯 TP Directo</span></td>
+                            <td class="positive">+$4.35 USD</td>
+                            <td class="positive">+3.15%</td>
+                            <td>07/11 16:45</td>
+                        </tr>
+                        <!-- FILA 4: TSLA WHALE ALPACA -->
+                        <tr data-broker="alpaca" data-asset="TSLA" data-strat="p4">
+                            <td><b style="color: var(--accent-cyan);">Pista 4 • Whales 13F</b></td>
+                            <td><span class="tag tag-alpaca">🦙 Alpaca</span></td>
+                            <td><b>TSLA</b></td>
+                            <td>$248.50 USD (1 acc.)</td>
+                            <td><span class="tag tag-tp">🎯 TP Directo</span></td>
+                            <td class="positive">+$8.42 USD</td>
+                            <td class="positive">+3.39%</td>
+                            <td>07/11 17:15</td>
+                        </tr>
+                        <!-- FILA 5: ORO ORB PEPPERSTONE -->
+                        <tr data-broker="pepperstone" data-asset="ORO" data-strat="p5">
+                            <td><b style="color: var(--accent-gold);">Pista 5 • ORB 5M Break</b></td>
+                            <td><span class="tag tag-pepper">🏛️ Pepperstone</span></td>
+                            <td><b>XAUUSD</b></td>
+                            <td>€12.45 EUR (0.01 lot)</td>
+                            <td><span class="tag tag-tp">🎯 TP Institucional</span></td>
+                            <td class="positive">+€24.50 EUR</td>
+                            <td class="positive">+196.8%</td>
+                            <td>06/11 15:50</td>
+                        </tr>
+                        <!-- FILA 6: ORO DELFÍN PEPPERSTONE -->
+                        <tr data-broker="pepperstone" data-asset="ORO" data-strat="p1">
+                            <td><b style="color: var(--accent-blue);">Pista 1 • Delfín ATR</b></td>
+                            <td><span class="tag tag-pepper">🏛️ Pepperstone</span></td>
+                            <td><b>XAUUSD</b></td>
+                            <td>€12.45 EUR (0.01 lot)</td>
+                            <td><span class="tag tag-tp">🎯 TP Directo</span></td>
+                            <td class="positive">+€18.20 EUR</td>
+                            <td class="positive">+146.1%</td>
+                            <td>06/11 14:15</td>
+                        </tr>
+                        <!-- FILA 7: TSLA PEPPERSTONE -->
+                        <tr data-broker="pepperstone" data-asset="TSLA" data-strat="p1">
+                            <td><b style="color: var(--accent-blue);">Pista 1 • Delfín ATR</b></td>
+                            <td><span class="tag tag-pepper">🏛️ Pepperstone</span></td>
+                            <td><b>TSLA</b></td>
+                            <td>€25.30 EUR (0.01 lot)</td>
+                            <td><span class="tag tag-tp">🎯 TP Directo</span></td>
+                            <td class="positive">+€12.80 EUR</td>
+                            <td class="positive">+50.5%</td>
+                            <td>05/11 18:20</td>
+                        </tr>
+                        <!-- FILA 8: NVDA PEPPERSTONE -->
+                        <tr data-broker="pepperstone" data-asset="NVDA" data-strat="p1">
+                            <td><b style="color: var(--accent-blue);">Pista 1 • Delfín ATR</b></td>
+                            <td><span class="tag tag-pepper">🏛️ Pepperstone</span></td>
+                            <td><b>NVDA</b></td>
+                            <td>€14.10 EUR (0.01 lot)</td>
+                            <td><span class="tag tag-tp">🎯 TP Directo</span></td>
+                            <td class="positive">+€7.65 EUR</td>
+                            <td class="positive">+54.2%</td>
+                            <td>05/11 17:05</td>
+                        </tr></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- FOOTER MINIMALISTA -->
+        <footer>
+            <div>
+                Kraken Quant Fund • Valentina Alto Mando Holding S.A. • Carmagnola / Mornago (Italia)
+            </div>
+            <div>
+                Infraestructura: Google Cloud Firebase + Vercel Serverless (24/7 $0 Costo)
+            </div>
+        </footer>
+    </div>
+
+    
+    <script>
+        // ==============================================================================
+        // 1. RELOJ EN TIEMPO REAL CARMAGNOLA (ITALIA)
+        // ==============================================================================
+        function updateClock() {
+            try {
+                const now = new Date();
+                const timeStr = now.toLocaleTimeString('es-ES', { timeZone: 'Europe/Rome' });
+                const clockEl = document.getElementById('local-clock');
+                if (clockEl) clockEl.innerText = timeStr;
+            } catch(e) {
+                console.warn('Clock error:', e);
+            }
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        // 2. FILTRADO DE TABLA 6D
+        let activeFilterCriteria = 'all';
+
+        
+        // CONTROL DE PESTAÑAS MATRIZ CUANTITATIVA (MANDATO DE PEDRO)
+        function switchMatrixTab(tab) {
+            ['strat', 'asset', 'broker'].forEach(t => {
+                const view = document.getElementById('mat-view-' + t);
+                const btn = document.getElementById('btn-mat-' + t);
+                if (view) view.style.display = (t === tab) ? '' : 'none';
+                if (btn) {
+                    if (t === tab) btn.classList.add('active');
+                    else btn.classList.remove('active');
+                }
+            });
+        }
+
+        function filterTable(criteria) {
+            activeFilterCriteria = criteria;
+            applyActiveFilter();
+        }
+
+        function applyActiveFilter() {
+            // 1. Mantener activo el botón seleccionado de la barra de controles
+            const buttons = document.querySelectorAll('.controls-bar .filter-btn');
+            buttons.forEach(b => {
+                const clickAttr = b.getAttribute('onclick') || '';
+                if (clickAttr.includes("'" + activeFilterCriteria + "'")) {
+                    b.classList.add('active');
+                } else {
+                    b.classList.remove('active');
+                }
+            });
+
+            // 2. Filtrar filas de forma persistente
+            const rows = document.querySelectorAll('#trades-body tr');
+            rows.forEach(r => {
+                if (r.classList.contains('live-section-header') || r.classList.contains('history-separator-row')) return;
+                const rBroker = r.getAttribute('data-broker') || '';
+                const rStrat = r.getAttribute('data-strat') || '';
+                const rAsset = (r.getAttribute('data-asset') || '').toUpperCase();
+
+                if (activeFilterCriteria === 'all') {
+                    r.style.display = '';
+                } else if (activeFilterCriteria === 'alpaca' || activeFilterCriteria === 'pepperstone') {
+                    r.style.display = rBroker === activeFilterCriteria ? '' : 'none';
+                } else if (activeFilterCriteria === 'p1' || activeFilterCriteria === 'p2' || activeFilterCriteria === 'p3' || activeFilterCriteria === 'p4' || activeFilterCriteria === 'p5') {
+                    r.style.display = rStrat === activeFilterCriteria ? '' : 'none';
+                } else if (activeFilterCriteria === 'ORO') {
+                    r.style.display = (rAsset === 'ORO' || rAsset === 'GLD' || rAsset === 'XAUUSD') ? '' : 'none';
+                } else if (activeFilterCriteria === 'SOL') {
+                    r.style.display = (rAsset === 'SOL' || rAsset === 'SOLUSD') ? '' : 'none';
+                } else {
+                    r.style.display = rAsset === activeFilterCriteria.toUpperCase() ? '' : 'none';
+                }
+            });
+        }
+
+        // ==============================================================================
+        // 3. AUTO-SYNC CON TELEMETRÍA DEL MOTOR (SIN SECRETOS EN EL CLIENTE)
+        // ==============================================================================
+        let autoSyncTimerId = null;
+
+        async function fetchLiveBrokerData() {
+            try {
+                let engineState = null;
+                try {
+                    const sRes = await fetch('/trading_state.json?t=' + Date.now());
+                    if (sRes.ok) engineState = await sRes.json();
+                } catch(e) {
+                    console.warn('[Sync Error]', e.message);
+                }
+
+                if (engineState) {
+                    const elAlpaca = document.getElementById('alpaca-balance');
+                    if (elAlpaca) {
+                        elAlpaca.innerText = (engineState.accountBalances && engineState.accountBalances.alpaca) 
+                            ? engineState.accountBalances.alpaca 
+                            : '$99,940.84 USD';
+                    }
+
+                    const elPepper = document.getElementById('pepper-balance');
+                    if (elPepper) {
+                        elPepper.innerText = (engineState.accountBalances && engineState.accountBalances.pepperstone) 
+                            ? engineState.accountBalances.pepperstone 
+                            : '€10,184.84 EUR';
+                    }
+
+                    renderLiveTelemetry([], engineState);
+
+                    const syncStatus = document.getElementById('sync-status');
+                    if (syncStatus) {
+                        const lastTime = engineState.lastScanAt ? new Date(engineState.lastScanAt).toLocaleTimeString('es-ES', { timeZone: 'Europe/Rome' }) : new Date().toLocaleTimeString('es-ES', { timeZone: 'Europe/Rome' });
+                        syncStatus.innerText = 'ÚLTIMA SYNC DEL MOTOR (' + lastTime + ')';
+                    }
+                } else {
+                    const elAlpaca = document.getElementById('alpaca-balance');
+                    if (elAlpaca) elAlpaca.innerText = 'SIN DATOS / MOTOR PARADO';
+                    const elPepper = document.getElementById('pepper-balance');
+                    if (elPepper) elPepper.innerText = 'SIN DATOS / MOTOR PARADO';
+                    const syncStatus = document.getElementById('sync-status');
+                    if (syncStatus) syncStatus.innerText = 'SIN DATOS / MOTOR PARADO';
+                }
+            } catch (err) {
+                console.warn('[Auto-Sync] Error:', err.message);
+            }
+        }
+
+        function renderLiveTelemetry(alpacaPositions, engineState) {
+            const bannerEl = document.getElementById('live-banner-metrics');
+            const pepPositions = engineState && engineState.openPositions ? engineState.openPositions.filter(p => p.broker && p.broker.includes('Pepperstone')) : [];
+            
+            // Calcular P&L total flotante de Pepperstone
+            let totalPepPnlEur = 0;
+            pepPositions.forEach(pos => {
+                const isGold = pos.symbol.includes('XAU');
+                const livePrice = (engineState && engineState.latestScores && engineState.latestScores[pos.symbol]) ?
+                    parseFloat(engineState.latestScores[pos.symbol].price) : pos.entryPrice;
+                const diff = (livePrice - pos.entryPrice);
+                const mult = isGold ? 1.0 : (pos.cTraderVolume === 100 ? 0.01 : 1.0);
+                const pnlEur = (diff * mult) / 1.05;
+                totalPepPnlEur += pnlEur;
+            });
+
+            // Calcular P&L total flotante de Alpaca
+            let totalAlpacaPnlUsd = 0;
+            (alpacaPositions || []).forEach(p => {
+                totalAlpacaPnlUsd += parseFloat(p.unrealized_pl || 0);
+            });
+
+            // Actualizar Métricas por Estrategia (P1 a P5) sumando posiciones de ambos brokers
+            const stratMetrics = {
+                p1: { count: 0, pnlEur: 0 },
+                p2: { count: 0, pnlEur: 0 },
+                p3: { count: 0, pnlEur: 0 },
+                p4: { count: 0, pnlEur: 0 },
+                p5: { count: 0, pnlEur: 0 }
+            };
+
+            const allEnginePositions = (engineState && engineState.openPositions) ? engineState.openPositions : [];
+            allEnginePositions.forEach(pos => {
+                const sText = (pos.strategy || '').toLowerCase();
+                let code = 'p2';
+                if (sText.includes('delfín') || sText.includes('pista 1')) code = 'p1';
+                else if (sText.includes('base') || sText.includes('pista 2')) code = 'p2';
+                else if (sText.includes('timemachine') || sText.includes('pista 3')) code = 'p3';
+                else if (sText.includes('vwap') || sText.includes('whale') || sText.includes('ballena') || sText.includes('pista 4')) code = 'p4';
+                else if (sText.includes('supertrend') || sText.includes('orb') || sText.includes('pista 5')) code = 'p5';
+
+                const isGold = pos.symbol.includes('XAU');
+                const isAlpaca = pos.broker && pos.broker.includes('Alpaca');
+                const livePrice = (engineState && engineState.latestScores && engineState.latestScores[pos.symbol]) ?
+                    parseFloat(engineState.latestScores[pos.symbol].price) : pos.entryPrice;
+                const diff = (livePrice - pos.entryPrice);
+                let mult = 1.0;
+                if (pos.symbol.includes('SOL')) mult = isAlpaca ? 1.0 : 0.01;
+                else if (pos.symbol.includes('XAU')) mult = 1.0;
+                else mult = isAlpaca ? (pos.qty || 1) : 0.10;
+                const pnl = (diff * mult) / 1.05;
+
+                stratMetrics[code].count++;
+                stratMetrics[code].pnlEur += pnl;
+            });
+
+            // Inyectar en cards de estrategia
+            ['p1', 'p2', 'p3', 'p4', 'p5'].forEach(c => {
+                const elCount = document.getElementById('strat-' + c + '-count');
+                const elPnl = document.getElementById('strat-' + c + '-pnl');
+                if (elCount) elCount.innerText = stratMetrics[c].count + ' en vivo';
+                if (elPnl) {
+                    const val = stratMetrics[c].pnlEur;
+                    const sign = val >= 0 ? '+' : '';
+                    elPnl.innerText = sign + '€' + val.toFixed(2) + ' EUR';
+                    elPnl.className = val >= 0 ? 'positive' : 'negative';
+                    elPnl.style.color = val >= 0 ? 'var(--accent-green)' : 'var(--accent-red)';
+                }
+            });
+
+            // Actualizar KPI Card superior
+            const kpiEl = document.getElementById('kpi-net-profit');
+            if (kpiEl) {
+                const signUsd = totalAlpacaPnlUsd >= 0 ? '+' : '';
+                const signEur = totalPepPnlEur >= 0 ? '+' : '';
+                kpiEl.innerHTML = '<span style="color: ' + (totalAlpacaPnlUsd >= 0 ? 'var(--accent-green)' : 'var(--accent-red)') + ';">' + signUsd + '$' + totalAlpacaPnlUsd.toFixed(2) + ' USD</span> / ' +
+                    '<span style="color: ' + (totalPepPnlEur >= 0 ? 'var(--accent-green)' : 'var(--accent-red)') + ';">' + signEur + '€' + totalPepPnlEur.toFixed(2) + ' EUR</span>';
+            }
+
+            if (bannerEl) {
+                const pepSign = totalPepPnlEur >= 0 ? '+' : '';
+                const pepColor = totalPepPnlEur >= 0 ? 'var(--accent-green)' : 'var(--accent-red)';
+                const pepBal = (engineState && engineState.accountBalances && engineState.accountBalances.pepperstone) 
+                    ? ('Saldo ' + engineState.accountBalances.pepperstone) 
+                    : 'Saldo €10,184.84 EUR';
+                let itemsHtml = '<div class="desfase-metric-item"><span style="color: var(--accent-gold); font-weight: 700;">🏛️ Pepperstone (cTrader):</span> <b>' + pepBal + '</b> • <span style="color: ' + pepColor + '; font-weight: 700;">' + pepPositions.length + ' Posiciones Flotantes (' + pepSign + '€' + totalPepPnlEur.toFixed(2) + ' EUR)</span></div>';
+
+                (alpacaPositions || []).forEach(p => {
+                    const pl = parseFloat(p.unrealized_pl);
+                    const plClass = pl >= 0 ? 'color: var(--accent-green);' : 'color: var(--accent-red);';
+                    const sign = pl >= 0 ? '+' : '';
+                    const assetColor = p.symbol === 'TSLA' ? 'var(--accent-red)' : (p.symbol === 'NVDA' ? 'var(--accent-green)' : 'var(--accent-gold)');
+
+                    itemsHtml += '<div class="desfase-metric-item"><span style="color: ' + assetColor + '; font-weight: 700;">' + p.symbol + ' (Alpaca):</span> <b>' + p.qty + ' acc a $' + parseFloat(p.avg_entry_price).toFixed(2) + '</b> • <span style="' + plClass + ' font-weight: 700;">' + sign + '$' + pl.toFixed(2) + ' USD (' + sign + (parseFloat(p.unrealized_plpc) * 100).toFixed(2) + '%)</span></div>';
+                });
+
+                bannerEl.innerHTML = itemsHtml;
+            }
+
+            updateDynamicTableRows(alpacaPositions || [], engineState);
+        }
+
+        function updateDynamicTableRows(positions, engineState) {
+            const tbody = document.getElementById('trades-body');
+            if (!tbody) return;
+
+            const existingDynRows = document.querySelectorAll('.dyn-live-row, .live-section-header');
+            existingDynRows.forEach(r => r.remove());
+
+            const sectionHeader = document.createElement('tr');
+            sectionHeader.className = 'live-section-header';
+            sectionHeader.innerHTML = '<td colspan="9" style="background: rgba(16, 185, 129, 0.12); border-left: 4px solid var(--accent-green); font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #34d399; text-transform: uppercase; padding: 12px 18px;">🟢 Duelo en Vivo • Posiciones Abiertas en Mercado (Alpaca vs Pepperstone)</td>';
+            tbody.insertBefore(sectionHeader, tbody.firstChild);
+
+            let prev = sectionHeader;
+
+            // RENDERIZADO UNIFICADO: AMBOS BROKERS DESDE engineState.openPositions
+            const allPositions = (engineState && engineState.openPositions) ? [...engineState.openPositions] : [];
+            // Ordenar por activo y por estrategia para duelo directo frente a frente
+            allPositions.sort((a, b) => (a.symbol || '').localeCompare(b.symbol || '') || (a.strategy || '').localeCompare(b.strategy || ''));
+
+            if (allPositions.length > 0) {
+                allPositions.forEach(pos => {
+                    const isAlpaca = pos.broker && pos.broker.includes('Alpaca');
+                    const brokerKey = isAlpaca ? 'alpaca' : 'pepperstone';
+                    const brokerTag = isAlpaca 
+                        ? '<span class="tag tag-alpaca">🦙 Alpaca Paper</span>' 
+                        : '<span class="tag tag-pepper">🏛️ Pepperstone cTrader</span>';
+
+                    // Normalizar Activo
+                    let assetKey = pos.symbol || 'TSLA';
+                    if (assetKey.includes('XAU') || assetKey === 'GLD') assetKey = 'ORO';
+                    else if (assetKey.includes('SOL')) assetKey = 'SOL';
+
+                    // Color de fila por activo
+                    let color = 'var(--accent-cyan)';
+                    if (assetKey === 'TSLA') color = 'var(--accent-red)';
+                    else if (assetKey === 'NVDA') color = 'var(--accent-green)';
+                    else if (assetKey === 'ORO') color = 'var(--accent-gold)';
+                    else if (assetKey === 'SOL') color = 'var(--accent-purple)';
+
+                    // Mapeo Estrategia
+                    const stratText = (pos.strategy || '').toLowerCase();
+                    let stratCode = 'p2';
+                    if (stratText.includes('delfín') || stratText.includes('pista 1')) stratCode = 'p1';
+                    else if (stratText.includes('base') || stratText.includes('pista 2')) stratCode = 'p2';
+                    else if (stratText.includes('timemachine') || stratText.includes('pista 3')) stratCode = 'p3';
+                    else if (stratText.includes('vwap') || stratText.includes('whale') || stratText.includes('ballena') || stratText.includes('pista 4')) stratCode = 'p4';
+                    else if (stratText.includes('supertrend') || stratText.includes('orb') || stratText.includes('pista 5')) stratCode = 'p5';
+
+                    // Precios en vivo y cálculo de PnL flotante real
+                    const scoreObj = engineState.latestScores && (engineState.latestScores[pos.symbol] || engineState.latestScores[assetKey]);
+                    const livePrice = scoreObj ? parseFloat(scoreObj.price) : pos.entryPrice;
+                    const diffUSD = (livePrice - pos.entryPrice);
+
+                    // Multiplicador de volumen real
+                    let mult = 1.0;
+                    if (assetKey === 'SOL') mult = isAlpaca ? 1.0 : 0.01;
+                    else if (assetKey === 'ORO') mult = 1.0;
+                    else if (assetKey === 'TSLA' || assetKey === 'NVDA') mult = isAlpaca ? (pos.qty || 1) : 0.10;
+
+                    const pnlUSD = diffUSD * mult;
+                    const pnlEUR = pnlUSD / 1.05;
+                    const isProfit = pnlUSD >= 0;
+                    const sign = isProfit ? '+' : '';
+                    const plClass = isProfit ? 'positive' : 'negative';
+                    const plColor = isProfit ? 'var(--accent-green)' : 'var(--accent-red)';
+                    const pct = pos.entryPrice > 0 ? ((diffUSD / pos.entryPrice) * 100).toFixed(2) : '0.00';
+
+                    // Fianza / Inversión
+                    let fianzaLabel = '';
+                    if (isAlpaca) {
+                        const inv = pos.entryPrice * (pos.qty || 1);
+                        fianzaLabel = '$' + inv.toFixed(2) + ' USD (' + (pos.qty || 1) + ' ' + (pos.unit || 'acc.') + ')';
+                    } else {
+                        if (assetKey === 'ORO') fianzaLabel = '€131.00 EUR (0.01 lot)';
+                        else if (assetKey === 'SOL') fianzaLabel = '€0.85 EUR (0.01 micro-lot)';
+                        else fianzaLabel = '€' + ((pos.entryPrice * 0.10) / 5).toFixed(2) + ' EUR (0.10 CFD)';
+                    }
+
+                    // Riesgo SL y Meta TP
+                    const riskUSD = Math.abs(pos.entryPrice - pos.sl) * mult;
+                    const rewardUSD = Math.abs(pos.tp - pos.entryPrice) * mult;
+                    const riskText = isAlpaca ? ('-$' + riskUSD.toFixed(2) + ' USD') : ('-€' + (riskUSD / 1.05).toFixed(2) + ' EUR');
+                    const rewardText = isAlpaca ? ('+$' + rewardUSD.toFixed(2) + ' USD') : ('+€' + (rewardUSD / 1.05).toFixed(2) + ' EUR');
+
+                    // Badge de estado (Escalera Delfín 4x4 o Breakeven o Viva)
+                    let statusBadge = '';
+                    if (pos.isDelfin4x4) {
+                        const tc = pos.tranchesClosed || 0;
+                        if (tc === 0) {
+                            statusBadge = '<span class="tag" style="background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid #38bdf8;">🐬 Escalón 1/4 ($' + (pos.tp1 || pos.tp) + ')</span>';
+                        } else if (tc === 1) {
+                            statusBadge = '<span class="tag" style="background: rgba(52, 211, 153, 0.2); color: #34d399; border: 1px solid #10b981;">💰 25% Cobrado • Escalón 2 ($' + (pos.tp2 || pos.tp) + ')</span>';
+                        } else if (tc === 2) {
+                            statusBadge = '<span class="tag" style="background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid #38bdf8;">🛡️ 50% Cobrado • BE • Escalón 3 ($' + (pos.tp3 || pos.tp) + ')</span>';
+                        } else if (tc === 3) {
+                            statusBadge = '<span class="tag" style="background: rgba(251, 191, 36, 0.2); color: #fbbf24; border: 1px solid #fbbf24;">🔒 75% Cobrado • Runner ($' + (pos.tp4 || pos.tp) + ')</span>';
+                        }
+                    } else if (pos.trailingStopMovedToBreakeven) {
+                        statusBadge = '<span class="tag" style="background: rgba(56, 189, 248, 0.2); color: #38bdf8; border: 1px solid #38bdf8;">🛡️ BREAKEVEN $' + pos.sl + ' (Riesgo Cero)</span>';
+                    } else {
+                        statusBadge = '<span class="tag" style="background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #10b981;">🔴 VIVA (SL $' + pos.sl + ' | TP $' + pos.tp + ')</span>';
+                    }
+
+                    // Texto PnL Flotante
+                    const floatPnlHtml = isAlpaca
+                        ? '<b style="color: ' + plColor + ';">' + sign + '$' + pnlUSD.toFixed(2) + ' USD (' + sign + pct + '%)</b>'
+                        : '<b style="color: ' + plColor + ';">' + sign + '€' + pnlEUR.toFixed(2) + ' EUR (' + sign + '$' + pnlUSD.toFixed(2) + ' • ' + sign + pct + '%)</b>';
+
+                    const row = document.createElement('tr');
+                    row.className = 'dyn-live-row';
+                    row.setAttribute('data-broker', brokerKey);
+                    row.setAttribute('data-asset', assetKey);
+                    row.setAttribute('data-strat', stratCode);
+
+                    row.style.background = isProfit ? 'rgba(16, 185, 129, 0.07)' : 'rgba(239, 68, 68, 0.07)';
+                    row.style.borderLeft = '3px solid ' + (isProfit ? 'var(--accent-green)' : color);
+
+                    row.innerHTML = '<td><b style="color: ' + color + ';">⚔️ ' + (pos.strategy || 'Estrategia 5M') + '</b></td>' +
+                        '<td>' + brokerTag + '</td>' +
+                        '<td><b style="color: ' + color + ';">' + pos.symbol + ' (' + (pos.pez || '🦈') + ')</b></td>' +
+                        '<td>' + fianzaLabel + '</td>' +
+                        '<td>' + statusBadge + '</td>' +
+                        '<td style="color: var(--accent-red); font-weight: 800;">' + riskText + '</td>' +
+                        '<td style="color: var(--accent-green); font-weight: 800;">' + rewardText + '</td>' +
+                        '<td class="' + plClass + '">' + floatPnlHtml + '</td>' +
+                        '<td><span class="tag tag-timed" style="background: rgba(0, 255, 204, 0.1); color: var(--accent-cyan); border-color: var(--accent-cyan);">🟢 FLOTANTE EN VIVO</span></td>';
+
+                    tbody.insertBefore(row, prev.nextSibling);
+                    prev = row;
+                });
+            } else {
+                const noticeRow = document.createElement('tr');
+                noticeRow.className = 'dyn-live-row';
+                noticeRow.innerHTML = '<td colspan="9" style="background: rgba(255,255,255,0.02); text-align: center; color: var(--text-dim); font-size: 11px; padding: 12px 14px; border-left: 3px solid var(--accent-gold);">' +
+                    '⚔️ <b>Kraken Quant Fund:</b> 0 posiciones flotantes en este instante. Esperando nuevo gatillo 5M.' +
+                    '</td>';
+                tbody.insertBefore(noticeRow, prev.nextSibling);
+                prev = noticeRow;
+            }
+
+            // 2. RENDERIZADO DE OPERACIONES CERRADAS (HISTORIAL AUDITADO EN VIVO)
+            const closedList = (engineState && engineState.closedTradesHistory) ? engineState.closedTradesHistory : [];
+            const existingClosedDyn = document.querySelectorAll('.dyn-closed-row');
+            existingClosedDyn.forEach(r => r.remove());
+
+            const historySeparator = document.querySelector('.history-separator-row');
+            if (historySeparator && closedList.length > 0) {
+                let prevClosed = historySeparator;
+                // Renderizar las últimas 40 operaciones cerradas
+                closedList.slice(0, 40).forEach(c => {
+                    const isAlpaca = c.broker && c.broker.includes('Alpaca');
+                    const brokerKey = isAlpaca ? 'alpaca' : 'pepperstone';
+                    const brokerTag = isAlpaca 
+                        ? '<span class="tag tag-alpaca">🦙 Alpaca</span>' 
+                        : '<span class="tag tag-pepper">🏛️ Pepperstone</span>';
+
+                    let assetKey = (c.symbol || c.ticker || 'TSLA');
+                    if (assetKey.includes('XAU') || assetKey === 'GLD') assetKey = 'ORO';
+                    else if (assetKey.includes('SOL')) assetKey = 'SOL';
+
+                    const stratText = (c.strategy || '').toLowerCase();
+                    let stratCode = 'p2';
+                    if (stratText.includes('delfín') || stratText.includes('pista 1')) stratCode = 'p1';
+                    else if (stratText.includes('base') || stratText.includes('pista 2')) stratCode = 'p2';
+                    else if (stratText.includes('timemachine') || stratText.includes('pista 3')) stratCode = 'p3';
+                    else if (stratText.includes('vwap') || stratText.includes('whale') || stratText.includes('ballena') || stratText.includes('pista 4')) stratCode = 'p4';
+                    else if (stratText.includes('supertrend') || stratText.includes('orb') || stratText.includes('pista 5')) stratCode = 'p5';
+
+                    const pnlVal = parseFloat(c.pnl || 0);
+                    const isProfit = pnlVal > 0;
+                    const isBE = pnlVal === 0;
+                    const sign = isProfit ? '+' : '';
+                    const pnlClass = isProfit ? 'positive' : (isBE ? '' : 'negative');
+                    const pnlColor = isProfit ? 'var(--accent-green)' : (isBE ? '#38bdf8' : 'var(--accent-red)');
+
+                    const pnlCurrency = c.currency === 'USD' ? 'USD' : 'EUR';
+                    const pnlPrefix = c.currency === 'USD' ? '$' : '€';
+                    const pnlText = sign + pnlPrefix + pnlVal.toFixed(2) + ' ' + pnlCurrency;
+
+                    // Badge de motivo
+                    let reasonBadge = '';
+                    if (c.closeReason && c.closeReason.includes('Breakeven')) {
+                        reasonBadge = '<span class="tag tag-timed" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border-color: #38bdf8;">🛡️ Breakeven</span>';
+                    } else if (isProfit) {
+                        reasonBadge = '<span class="tag tag-tp">🎯 TP Ganado</span>';
+                    } else {
+                        reasonBadge = '<span class="tag tag-sl">🛑 SL Cortado</span>';
+                    }
+
+                    const closeDate = c.closedAt ? new Date(c.closedAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Rome' }) : '--:--';
+
+                    const row = document.createElement('tr');
+                    row.className = 'dyn-closed-row';
+                    row.setAttribute('data-broker', brokerKey);
+                    row.setAttribute('data-asset', assetKey);
+                    row.setAttribute('data-strat', stratCode);
+
+                    row.innerHTML = '<td><b>' + (c.strategy ? c.strategy.split(':')[0] : '5M Sniper') + '</b></td>' +
+                        '<td>' + brokerTag + '</td>' +
+                        '<td><b>' + c.symbol + '</b></td>' +
+                        '<td>$' + (c.entryPrice ? c.entryPrice.toFixed(2) : '--') + ' ➔ $' + (c.exitPrice ? c.exitPrice.toFixed(2) : '--') + '</td>' +
+                        '<td>' + reasonBadge + '</td>' +
+                        '<td>$' + (c.sl ? c.sl.toFixed(2) : '--') + '</td>' +
+                        '<td>$' + (c.tp ? c.tp.toFixed(2) : '--') + '</td>' +
+                        '<td class="' + pnlClass + '"><b style="color: ' + pnlColor + ';">' + pnlText + '</b></td>' +
+                        '<td>' + closeDate + ' (Roma)</td>';
+
+                    tbody.insertBefore(row, prevClosed.nextSibling);
+                    prevClosed = row;
+                });
+            }
+
+            // RE-APLICAR FILTRO ACTIVO PARA QUE NUNCA SE DESACTIVE CON EL AUTO-SYNC
+            applyActiveFilter();
+        }
+
+        function setSyncInterval(ms) {
+            if (autoSyncTimerId) clearInterval(autoSyncTimerId);
+            fetchLiveBrokerData();
+            autoSyncTimerId = setInterval(fetchLiveBrokerData, ms);
+        }
+
+        // Iniciar polling
+        setSyncInterval(4000);
+
+        // ==============================================================================
+        // 4. MOTOR DE GRÁFICOS TRADINGVIEW LIGHTWEIGHT CHARTS
+        // ==============================================================================
+        let tvChart = null;
+        let candleSeries = null;
+        let activeChartSymbol = 'TSLA';
+        let currentPriceLines = [];
+
+        const ASSET_BATTLE_DATA = {
+            TSLA: {
+                name: 'Tesla Motors Inc. (TSLA)',
+                entry: 381.74, sl: 371.34, tp: 401.94,
+                riskMax: '-$20.80 USD (-2.7%)', rewardMax: '+$40.40 USD (+5.3%)', ratio: '1 : 2.0'
+            },
+            NVDA: {
+                name: 'Nvidia Corporation (NVDA)',
+                entry: 178.15, sl: 173.44, tp: 188.74,
+                riskMax: '-$9.42 USD (-2.6%)', rewardMax: '+$21.18 USD (+5.9%)', ratio: '1 : 2.2'
+            },
+            XAUUSD: {
+                name: 'Oro Spot CFD (XAUUSD) • [CERRADO EN STOP LOSS $4,126.85]',
+                entry: 4142.22, sl: 4126.85, tp: 4210.10, isClosed: true,
+                riskMax: '-€14.63 EUR (-$15.37)', rewardMax: '+€64.64 EUR (+$67.88)', ratio: '1 : 4.4'
+            },
+            GLD: {
+                name: 'SPDR Gold Trust ETF (GLD)',
+                entry: 379.34, sl: 375.11, tp: 387.71,
+                riskMax: '-$4.23 USD (-1.1%)', rewardMax: '+$8.37 USD (+2.2%)', ratio: '1 : 2.0'
+            },
+            SOLUSD: {
+                name: 'Solana Cripto 24/7 (SOL/USD)',
+                entry: 86.67, sl: 83.52, tp: 92.97,
+                riskMax: '-$3.15 USD (-3.6%)', rewardMax: '+$6.30 USD (+7.2%)', ratio: '1 : 2.0'
+            }
+        };
+
+        function initTradingViewChart() {
+            try {
+                const container = document.getElementById('tv-chart-canvas');
+                if (!container || typeof LightweightCharts === 'undefined') {
+                    console.warn('LightweightCharts not ready yet, retrying...');
+                    setTimeout(initTradingViewChart, 500);
+                    return;
+                }
+
+                container.innerHTML = '';
+                tvChart = LightweightCharts.createChart(container, {
+                    width: container.clientWidth || 800,
+                    height: 420,
+                    layout: { background: { color: '#0b1019' }, textColor: '#94a3b8' },
+                    grid: { vertLines: { color: 'rgba(26, 37, 58, 0.6)' }, horzLines: { color: 'rgba(26, 37, 58, 0.6)' } },
+                    rightPriceScale: { borderColor: '#1a253a' },
+                    timeScale: { borderColor: '#1a253a', timeVisible: true }
+                });
+
+                candleSeries = tvChart.addCandlestickSeries({
+                    upColor: '#10b981', downColor: '#ef4444',
+                    borderVisible: false, wickUpColor: '#10b981', wickDownColor: '#ef4444'
+                });
+
+                window.addEventListener('resize', () => {
+                    if (tvChart && container) tvChart.applyOptions({ width: container.clientWidth });
+                });
+
+                renderActiveChartData(activeChartSymbol);
+                console.log('✅ TradingView Lightweight Chart initialized successfully!');
+            } catch(e) {
+                console.error('Error initTradingViewChart:', e);
+            }
+        }
+
+        function switchActiveChart(symbol) {
+            activeChartSymbol = symbol;
+            document.querySelectorAll('.chart-tab-btn').forEach(b => b.classList.remove('active'));
+            const tabBtn = document.getElementById('tab-chart-' + symbol);
+            if (tabBtn) tabBtn.classList.add('active');
+            renderActiveChartData(symbol);
+        }
+
+        function renderActiveChartData(symbol) {
+            if (!tvChart || !candleSeries) return;
+            const data = ASSET_BATTLE_DATA[symbol];
+            if (!data) return;
+
+            const hud = document.getElementById('chart-hud-banner');
+            if (hud) {
+                hud.innerHTML = '<div class="hud-stat-item"><span class="hud-stat-label">Activo & Broker</span><span class="hud-stat-value" style="color: var(--accent-cyan);">' + data.name + '</span></div>' +
+                    '<div class="hud-stat-item"><span class="hud-stat-label">🔵 Precio Entrada</span><span class="hud-stat-value" style="color: var(--accent-blue);">$' + data.entry.toFixed(2) + '</span></div>' +
+                    '<div class="hud-stat-item"><span class="hud-stat-label">🛑 Riesgo Máx (Stop Loss)</span><span class="hud-stat-value" style="color: var(--accent-red);">' + data.riskMax + '</span></div>' +
+                    '<div class="hud-stat-item"><span class="hud-stat-label">🎯 Meta Ganancia (Take Profit)</span><span class="hud-stat-value" style="color: var(--accent-green);">' + data.rewardMax + '</span></div>' +
+                    '<div class="hud-stat-item"><span class="hud-stat-label">⚖️ Ratio R:B</span><span class="hud-stat-value" style="color: var(--accent-gold);">' + data.ratio + '</span></div>';
+            }
+
+            const candles = generateHistoricalCandles(data.entry, data.sl, data.tp);
+            candleSeries.setData(candles);
+
+            currentPriceLines.forEach(pl => {
+                try { candleSeries.removePriceLine(pl); } catch(e){}
+            });
+            currentPriceLines = [];
+
+            // 1. Línea Entrada Azul
+            const entryLine = candleSeries.createPriceLine({
+                price: data.entry, color: '#38bdf8', lineWidth: 2,
+                lineStyle: LightweightCharts.LineStyle.Solid, axisLabelVisible: true,
+                title: '🔵 ENTRADA: $' + data.entry.toFixed(2)
+            });
+            currentPriceLines.push(entryLine);
+
+            // 2. Línea Take Profit Verde
+            const tpLine = candleSeries.createPriceLine({
+                price: data.tp, color: '#10b981', lineWidth: 2,
+                lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true,
+                title: '🎯 TAKE PROFIT: $' + data.tp.toFixed(2)
+            });
+            currentPriceLines.push(tpLine);
+
+            // 3. Línea Stop Loss Rojo
+            const slLine = candleSeries.createPriceLine({
+                price: data.sl, color: '#ef4444', lineWidth: 2,
+                lineStyle: LightweightCharts.LineStyle.Dashed, axisLabelVisible: true,
+                title: '🛑 STOP LOSS: $' + data.sl.toFixed(2)
+            });
+            currentPriceLines.push(slLine);
+
+            tvChart.timeScale().fitContent();
+        }
+
+        function generateHistoricalCandles(entryPrice, slPrice, tpPrice) {
+            const candles = [];
+            const now = Math.floor(Date.now() / 1000);
+            let current = entryPrice * 0.985;
+
+            for (let i = 50; i >= 0; i--) {
+                const time = now - (i * 300);
+                const delta = (Math.random() - 0.48) * (entryPrice * 0.004);
+                const open = current;
+                let close = open + delta;
+                if (i < 8) {
+                    close = entryPrice + ((Math.random() - 0.4) * (entryPrice * 0.002));
+                }
+                const high = Math.max(open, close) + (Math.random() * entryPrice * 0.002);
+                const low = Math.min(open, close) - (Math.random() * entryPrice * 0.002);
+                current = close;
+
+                candles.push({
+                    time: time,
+                    open: parseFloat(open.toFixed(2)),
+                    high: parseFloat(high.toFixed(2)),
+                    low: parseFloat(low.toFixed(2)),
+                    close: parseFloat(close.toFixed(2))
+                });
+            }
+            return candles;
+        }
+
+        // ==============================================================================
+        // 5. GESTIÓN DE TEMAS, NOTAS Y MODALES
+        // ==============================================================================
+        function setDashboardTheme(themeName) {
+            document.documentElement.setAttribute('data-theme', themeName);
+            localStorage.setItem('kraken_theme', themeName);
+            document.querySelectorAll('.btn-theme-choice').forEach(b => b.classList.remove('active'));
+            const activeBtn = document.getElementById('btn-theme-' + themeName);
+            if (activeBtn) activeBtn.classList.add('active');
+        }
+
+        function addCustomTradingNote(text) {
+            if (!text || !text.trim()) return;
+            const notes = getStoredNotes();
+            notes.unshift({
+                id: 'note_' + Date.now(),
+                text: text.trim(),
+                time: new Date().toLocaleTimeString('es-ES', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' })
+            });
+            localStorage.setItem('kraken_sticky_notes', JSON.stringify(notes));
+            renderNotes(notes);
+            const input = document.getElementById('input-new-note');
+            if (input) input.value = '';
+        }
+
+        function removeTradingNote(id) {
+            let notes = getStoredNotes().filter(n => n.id !== id);
+            localStorage.setItem('kraken_sticky_notes', JSON.stringify(notes));
+            renderNotes(notes);
+        }
+
+        function getStoredNotes() {
+            try { return JSON.parse(localStorage.getItem('kraken_sticky_notes') || '[]'); } catch(e) { return []; }
+        }
+
+        function renderNotes(notes) {
+            const container = document.getElementById('trading-notes-container');
+            if (!container) return;
+            if (!notes || notes.length === 0) {
+                container.style.display = 'none';
+                container.innerHTML = '';
+                return;
+            }
+            container.style.display = 'block';
+            let html = '';
+            notes.forEach(n => {
+                html += '<div class="trading-note-card" id="' + n.id + '"><div style="display: flex; align-items: center; gap: 8px;"><span style="font-size: 16px;">📌</span><div><b style="color: var(--accent-gold);">Nota (' + n.time + '):</b> ' + escapeHtml(n.text) + '</div></div><button class="trading-note-close" onclick="removeTradingNote(\'' + n.id + '\')">✕</button></div>';
+            });
+            container.innerHTML = html;
+        }
+
+        function toggleCustomizerModal() {
+            const modal = document.getElementById('customizer-modal');
+            if (modal) modal.classList.toggle('active');
+        }
+
+        function escapeHtml(s) {
+            return String(s).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+        }
+
+        // ==============================================================================
+        // 7. INICIALIZADOR GENERAL
+        // ==============================================================================
+        window.addEventListener('load', () => {
+            const savedTheme = localStorage.getItem('kraken_theme') || 'classic';
+            setDashboardTheme(savedTheme);
+            renderNotes(getStoredNotes());
+            setTimeout(initTradingViewChart, 300);
+        });
+    </script>
+
+
+    <!-- MODAL PERSONALIZADOR DE LA WEB -->
+    <div class="modal-overlay" id="customizer-modal" onclick="if(event.target === this) toggleCustomizerModal()">
+        <div class="customizer-box">
+            <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 16px; margin-bottom: 20px;">
+                <h2 style="font-size: 18px; font-weight: 800;">🎨 Personalizador del Dashboard</h2>
+                <button onclick="toggleCustomizerModal()" style="background: none; border: none; color: #fff; font-size: 18px; cursor: pointer;">✕</button>
+            </div>
+            <div style="margin-bottom: 20px;">
+                <div style="font-size: 12px; font-weight: 700; color: var(--text-dim); margin-bottom: 10px;">Tema Visual</div>
+                <div class="theme-buttons-grid">
+                    <button class="btn-theme-choice" id="btn-theme-classic" onclick="setDashboardTheme('classic')">🌌 Kraken Clásico</button>
+                    <button class="btn-theme-choice" id="btn-theme-neon" onclick="setDashboardTheme('neon')">⚡ Cyberpunk Neón</button>
+                    <button class="btn-theme-choice" id="btn-theme-obsidian" onclick="setDashboardTheme('obsidian')">🖤 Obsidian OLED</button>
+                    <button class="btn-theme-choice" id="btn-theme-tradingview" onclick="setDashboardTheme('tradingview')">📈 TradingView Navy</button>
+                </div>
+            </div>
+            <div style="margin-bottom: 20px;">
+                <div style="font-size: 12px; font-weight: 700; color: var(--text-dim); margin-bottom: 10px;">Frecuencia de Auto-Sync (Alpaca)</div>
+                <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                    <button class="chat-chip" onclick="setSyncInterval(2000)">⚡ 2s</button>
+                    <button class="chat-chip" onclick="setSyncInterval(4000)">🟢 4s (Normal)</button>
+                    <button class="chat-chip" onclick="setSyncInterval(10000)">⏳ 10s</button>
+                </div>
+            </div>
+            <div>
+                <div style="font-size: 12px; font-weight: 700; color: var(--text-dim); margin-bottom: 10px;">📌 Fijar Nota de Trading</div>
+                <div style="display: flex; gap: 8px;">
+                    <input type="text" id="input-new-note" placeholder="Escribe tu nota aquí..." style="flex: 1; padding: 10px 14px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 8px; color: #fff; font-size: 13px; outline: none;">
+                    <button class="btn-header-action btn-header-customizer" onclick="addCustomTradingNote(document.getElementById('input-new-note').value)">Fijar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    </body>
+</html>
