@@ -1663,11 +1663,22 @@
         async function fetchLiveBrokerData() {
             try {
                 let engineState = null;
+                // Intento 1: Servidor Render en vivo (directo al daemon en Frankfurt)
                 try {
-                    const sRes = await fetch('/trading_state.json?t=' + Date.now());
-                    if (sRes.ok) engineState = await sRes.json();
+                    const rRes = await fetch('https://kraken-cloud.onrender.com/trading_state.json?t=' + Date.now());
+                    if (rRes.ok) engineState = await rRes.json();
                 } catch(e) {
-                    console.warn('[Sync Error]', e.message);
+                    console.warn('[Render Direct Fetch Error]', e.message);
+                }
+
+                // Intento 2: Fallback local / Firebase Hosting
+                if (!engineState) {
+                    try {
+                        const sRes = await fetch('/trading_state.json?t=' + Date.now());
+                        if (sRes.ok) engineState = await sRes.json();
+                    } catch(e) {
+                        console.warn('[Hosting Sync Error]', e.message);
+                    }
                 }
 
                 if (engineState) {

@@ -8,7 +8,8 @@
     "test": "node functions/test_all_strategies.js"
   },
   "dependencies": {
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "firebase-tools": "^13.0.0"
   },
   "engines": {
     "node": ">=18.0.0"

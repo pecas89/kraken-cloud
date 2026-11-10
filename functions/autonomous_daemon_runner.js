@@ -96,13 +96,19 @@ server.listen(PORT, '0.0.0.0', () => {
 let isDeploying = false;
 function autoDeployHosting() {
     if (isDeploying) return;
+    if (!process.env.FIREBASE_TOKEN) {
+        console.log('[Firebase Auto-Deploy] Nota: FIREBASE_TOKEN no configurado aún en Render. Omitiendo deploy a Hosting.');
+        return;
+    }
     isDeploying = true;
 
     const projectRoot = path.join(__dirname, '..');
-    const tokenArg = process.env.FIREBASE_TOKEN ? ` --token "${process.env.FIREBASE_TOKEN}"` : '';
-    const cmd = `npx firebase deploy --only hosting --non-interactive${tokenArg}`;
+    const cmd = `npx firebase deploy --project kraken-trading-cloud --only hosting --non-interactive --token "${process.env.FIREBASE_TOKEN}"`;
 
-    exec(cmd, { cwd: projectRoot }, (error, stdout, stderr) => {
+    exec(cmd, { 
+        cwd: projectRoot,
+        env: Object.assign({}, process.env, { FIREBASE_TOKEN: process.env.FIREBASE_TOKEN })
+    }, (error, stdout, stderr) => {
         isDeploying = false;
         const now = new Date().toLocaleTimeString('es-ES', { timeZone: 'Europe/Rome' });
         if (error) {
@@ -111,6 +117,21 @@ function autoDeployHosting() {
             console.log(`[Firebase Auto-Deploy ${now}] ✅ Web pública sincronizada con éxito en la nube.`);
         }
     });
+}
+
+// ------------------------------------------------------------------------------
+// KEEP-ALIVE ANTI-SLEEP (RENDER FREE TIER PREVENT 15-MIN INACTIVITY)
+// ------------------------------------------------------------------------------
+function startInternalKeepAlive() {
+    setInterval(() => {
+        const keepAliveUrl = 'https://kraken-cloud.onrender.com/health';
+        const httpsClient = require('https');
+        httpsClient.get(keepAliveUrl, (res) => {
+            console.log(`💓 [Keep-Alive Ping] Status: ${res.statusCode} (Render container despierto)`);
+        }).on('error', (err) => {
+            console.warn('💓 [Keep-Alive Ping Error]:', err.message);
+        });
+    }, 240000); // Cada 4 minutos (240,000 ms) para nunca llegar a los 15 min de inactividad
 }
 
 // ------------------------------------------------------------------------------
@@ -144,7 +165,10 @@ async function startServerDaemon() {
     // 1. Iniciar motor autónomo (escaneo cada 30 segundos)
     anastasiaEngine.startAutonomousDaemon(30000);
 
-    // 2. Programar Auto-Deploy a Firebase Hosting cada 5 minutos (300,000 ms)
+    // 2. Iniciar Keep-Alive interno anti-sleep (cada 4 min)
+    startInternalKeepAlive();
+
+    // 3. Programar Auto-Deploy a Firebase Hosting cada 5 minutos (300,000 ms)
     setInterval(autoDeployHosting, 300000);
     setTimeout(autoDeployHosting, 60000);
 
