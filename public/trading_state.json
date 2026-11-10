@@ -1,8 +1,8 @@
 {
   "running": true,
   "startedAt": "2026-11-07T09:19:07.548Z",
-  "lastScanAt": "2026-11-10T20:36:24.616Z",
-  "totalScans": 1293,
+  "lastScanAt": "2026-11-10T20:37:54.626Z",
+  "totalScans": 1296,
   "openPositions": [
     {
       "id": "ddefeaa4-40d1-47ae-803f-d4f1f9644834",
@@ -6445,36 +6445,36 @@
   "dailyRealizedPnlEUR": 115.89999999999999,
   "latestScores": {
     "NVDA": {
-      "score": 79,
+      "score": 62,
       "pez": "⚡ SUPERTREND",
-      "price": 168.19,
-      "action": "BUY",
+      "price": 168.37,
+      "action": "HOLD",
       "strategy": "Pista 5: ⚡ SuperTrend + EMA Ribbon 9/21 (Anti-Caídas 5m)",
-      "time": "2026-11-10T20:36:25.493Z"
+      "time": "2026-11-10T20:37:55.420Z"
     },
     "TSLA": {
-      "score": 84,
+      "score": 35,
       "pez": "⚡ SUPERTREND",
-      "price": 377.59,
-      "action": "BUY",
+      "price": 377.755,
+      "action": "HOLD",
       "strategy": "Pista 5: ⚡ SuperTrend + EMA Ribbon 9/21 (Anti-Caídas 5m)",
-      "time": "2026-11-10T20:36:25.493Z"
+      "time": "2026-11-10T20:37:55.420Z"
     },
     "XAUUSD": {
-      "score": 65,
+      "score": 70,
       "pez": "⚡ SUPERTREND",
-      "price": 4042.4,
+      "price": 4042.8,
       "action": "BUY",
       "strategy": "Pista 5: ⚡ SuperTrend + EMA Ribbon 9/21 (Anti-Caídas 5m)",
-      "time": "2026-11-10T20:36:25.493Z"
+      "time": "2026-11-10T20:37:55.421Z"
     },
     "SOLUSD": {
-      "score": 89,
+      "score": 65,
       "pez": "⚡ SUPERTREND",
-      "price": 82.9879,
+      "price": 83.0545,
       "action": "BUY",
       "strategy": "Pista 5: ⚡ SuperTrend + EMA Ribbon 9/21 (Anti-Caídas 5m)",
-      "time": "2026-11-10T20:36:25.493Z"
+      "time": "2026-11-10T20:37:55.421Z"
     }
   },
   "performanceStats": {
@@ -6628,7 +6628,7 @@
         "profitFactor": 8.11
       }
     },
-    "updatedAt": "2026-11-10T20:36:25.498Z"
+    "updatedAt": "2026-11-10T20:37:55.426Z"
   },
   "emergencyStop": false
 }
