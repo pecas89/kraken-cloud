@@ -95,6 +95,15 @@ server.listen(PORT, '0.0.0.0', () => {
 // ------------------------------------------------------------------------------
 let isDeploying = false;
 function autoDeployHosting() {
+    // DESACTIVADO POR DEFECTO (fix crash-loop 11-nov): la web pública ya lee
+    // trading_state.json directamente de Render (/trading_state.json), por lo
+    // que este deploy es redundante. Ejecutar `npx --yes firebase-tools deploy`
+    // cada 5 min descargaba ~100MB en la instancia gratuita de 512MB de Render
+    // y provocaba OOM -> reinicios constantes -> 502. Solo se reactiva si se
+    // define ENABLE_FIREBASE_AUTODEPLOY=true en el entorno.
+    if (process.env.ENABLE_FIREBASE_AUTODEPLOY !== 'true') {
+        return;
+    }
     if (isDeploying) return;
     if (!process.env.FIREBASE_TOKEN) {
         console.log('[Firebase Auto-Deploy] Nota: FIREBASE_TOKEN no configurado aún en Render. Omitiendo deploy a Hosting.');
