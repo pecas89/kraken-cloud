@@ -481,6 +481,94 @@ async function executeAutonomousOpen(ticker, price, analysis) {
 }
 
 // ------------------------------------------------------------------------------
+// 🔧 CIERRE REAL EN EL BROKER (KIMI FIX 11-NOV): la libreta ya no miente.
+// Antes de este fix el motor anotaba cierres en su JSON pero NUNCA vendía en
+// Alpaca ni cerraba en cTrader. Ahora cada cierre interno ejecuta la salida real.
+// ------------------------------------------------------------------------------
+async function executeRealBrokerClose(pos) {
+    const isAlpaca = pos.broker && pos.broker.includes('Alpaca');
+    if (isAlpaca) {
+        // Vendemos exactamente la qty de ESTA posición (nunca closePosition(symbol),
+        // que liquidaría toda la posición neteada del símbolo, incluidas otras pistas).
+        const order = await alpacaService.placeMarketOrder({
+            symbol: pos.orderSymbol,
+            qty: pos.qty,
+            side: 'sell'
+        });
+        return { broker: 'Alpaca', orderId: order && order.id ? order.id : null };
+    }
+    // Pepperstone cTrader: cierre por positionId con su volumen original en centésimas.
+    const pid = pos.positionId || pos.id;
+    const vol = pos.cTraderVolume || 100;
+    const res = await pepperstoneService.closeOrderViaOpenAPI(pid, vol);
+    if (!res) throw new Error('Sin respuesta de cTrader');
+    if (res.errorCode) throw new Error(`${res.errorCode} - ${res.description || 'Error cTrader'}`);
+    if (res.error) throw new Error(res.error);
+    if (res.timeout) throw new Error('Timeout cerrando posición en cTrader (10s)');
+    return { broker: 'Pepperstone', positionId: pid };
+}
+
+// ------------------------------------------------------------------------------
+// 🔍 RECONCILIACIÓN LIBRETA vs BROKER (señal de verdad para Pedro)
+// Compara lo que el motor cree tener abierto en Alpaca contra lo que Alpaca
+// reporta de verdad, y publica divergencias en el estado. No vende nada solo.
+// ------------------------------------------------------------------------------
+async function syncBrokerReality() {
+    try {
+        const [acc, alpPositions] = await Promise.all([
+            alpacaService.getAccount().catch(() => null),
+            alpacaService.getPositions().catch(() => [])
+        ]);
+        if (acc && isFinite(acc.portfolioValue)) {
+            engineState.accountBalances.alpaca = `$${acc.portfolioValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`;
+        }
+        try {
+            const pepAcc = await pepperstoneService.getLiveAccountData();
+            if (pepAcc && isFinite(pepAcc.balance)) {
+                engineState.accountBalances.pepperstone = `€${pepAcc.balance.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EUR`;
+            }
+        } catch(e) { /* Pepperstone offline: conservar último saldo conocido */ }
+
+        const engineAlpaca = {};
+        engineState.openPositions
+            .filter(p => p.broker && p.broker.includes('Alpaca'))
+            .forEach(p => { engineAlpaca[p.orderSymbol] = (engineAlpaca[p.orderSymbol] || 0) + (p.qty || 0); });
+
+        const realAlpaca = {};
+        (alpPositions || []).forEach(p => { realAlpaca[p.symbol] = p.qty; });
+
+        const divergences = [];
+        const norm = s => (s || '').replace('/', '').toUpperCase();
+        const allSyms = new Set([...Object.keys(engineAlpaca), ...Object.keys(realAlpaca)].map(norm));
+        allSyms.forEach(sym => {
+            const engKey = Object.keys(engineAlpaca).find(k => norm(k) === sym);
+            const realKey = Object.keys(realAlpaca).find(k => norm(k) === sym);
+            const eng = engKey ? engineAlpaca[engKey] : 0;
+            const real = realKey ? realAlpaca[realKey] : 0;
+            if (Math.abs(eng - real) > 0.0001) {
+                divergences.push({ symbol: sym, engineQty: eng, brokerQty: real });
+            }
+        });
+
+        engineState.brokerReconciliation = {
+            checkedAt: new Date().toISOString(),
+            alpacaPositions: (alpPositions || []).map(p => ({
+                symbol: p.symbol, qty: p.qty, side: p.side,
+                avgEntryPrice: p.avgEntryPrice, unrealizedPnl: p.unrealizedPnl,
+                unrealizedPnlPct: p.unrealizedPnlPct
+            })),
+            engineAlpacaQty: engineAlpaca,
+            divergences
+        };
+        if (divergences.length > 0) {
+            console.warn(`⚠️ [RECONCILE] Divergencias libreta vs Alpaca: ${JSON.stringify(divergences)}`);
+        }
+    } catch(e) {
+        console.warn('[RECONCILE] Error:', e.message);
+    }
+}
+
+// ------------------------------------------------------------------------------
 // 🛡️ GESTIÓN AUTÓNOMA DE SALIDAS (STOP LOSS, TAKE PROFIT & TRAILING BE)
 // ------------------------------------------------------------------------------
 async function manageOpenPositions(currentQuotes) {
@@ -606,6 +694,19 @@ async function manageOpenPositions(currentQuotes) {
         if (positionClosed) {
             const isSol = (pos.symbol || '').includes('SOL');
             const pnlDecimals = isSol ? 4 : 2;
+
+            // 🔧 KIMI FIX: ejecutar el cierre REAL en el broker antes de anotarlo.
+            pos.brokerCloseExecuted = false;
+            try {
+                const closeRes = await executeRealBrokerClose(pos);
+                pos.brokerCloseExecuted = true;
+                pos.brokerCloseInfo = closeRes;
+                console.log(`✅ [CIERRE REAL EN BROKER] ${pos.symbol} (${pos.broker}): ${JSON.stringify(closeRes)}`);
+            } catch(closeErr) {
+                pos.closeError = closeErr.message;
+                console.error(`❌ [CIERRE REAL FALLÓ] ${pos.symbol} (${pos.broker}): ${closeErr.message} — se anota en libreta pero el broker puede seguir abierto.`);
+            }
+
             console.log(`\n🎯 [CIERRE AUTÓNOMO] Posición ${pos.symbol} cerrada: ${closeReason} | PnL: $${profitAmount.toFixed(pnlDecimals)}`);
 
             pos.closedAt = new Date().toISOString();
@@ -631,6 +732,7 @@ async function manageOpenPositions(currentQuotes) {
                 `💵 <b>Entrada:</b> $${pos.entryPrice} | <b>Salida:</b> $${currentPrice}\n` +
                 `📈 <b>Beneficio Neto:</b> ${sign}$${pos.pnl.toFixed(pnlDecimals)} ${config.currency}\n` +
                 `🏢 <b>Broker:</b> ${pos.broker}\n` +
+                `🔧 <b>Cierre real en broker:</b> ${pos.brokerCloseExecuted ? '✅ Ejecutado' : '❌ FALLÓ: ' + (pos.closeError || 'desconocido')}\n` +
                 `⏰ <b>Hora:</b> ${new Date().toLocaleTimeString('es-ES', { timeZone: 'Europe/Rome' })}\n` +
                 `━━━━━━━━━━━━━━━━━━━━\n` +
                 `<i>Capital protegido y acumulado con frialdad cuantitativa.</i>`;
@@ -660,6 +762,11 @@ async function runAutonomousCycle() {
     engineState.lastScanAt = new Date().toISOString();
 
     const quotes = await fetchMarketQuotes();
+
+    // 0. Cada 10 escaneos (~5 min): reconciliar libreta vs broker real y refrescar saldos
+    if (engineState.totalScans % 10 === 1) {
+        await syncBrokerReality();
+    }
 
     // 1. Gestionar posiciones abiertas existentes (Trailing BE, TP, SL)
     await manageOpenPositions(quotes);
@@ -761,5 +868,7 @@ module.exports = {
     computePerformanceStats,
     executeAutonomousOpen,
     manageOpenPositions,
+    executeRealBrokerClose,
+    syncBrokerReality,
     notifyPedro
 };

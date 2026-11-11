@@ -1311,13 +1311,14 @@
                             <th style="color: var(--accent-red); font-weight: 800;">🛑 Riesgo Máx (SL)</th>
                             <th style="color: var(--accent-green); font-weight: 800;">🎯 Meta Ganancia (TP)</th>
                             <th>Flotante Actual</th>
+                            <th>⏰ Apertura → Cierre</th>
                             <th>Estado</th>
                         </tr>
                     </thead>
                     <tbody id="trades-body">
                         <!-- SEPARADOR HISTORIAL DE TRADES CERRADOS -->
                         <tr class="history-separator-row">
-                            <td colspan="9" style="background: rgba(148, 163, 184, 0.08); font-size: 11px; font-weight: 800; letter-spacing: 1px; color: var(--text-dim); text-transform: uppercase; padding: 12px 18px; border-left: 3px solid var(--text-dim);">
+                            <td colspan="10" style="background: rgba(148, 163, 184, 0.08); font-size: 11px; font-weight: 800; letter-spacing: 1px; color: var(--text-dim); text-transform: uppercase; padding: 12px 18px; border-left: 3px solid var(--text-dim);">
                                 📜 Historial de Operaciones Cerradas (Auditoría Auditada)
                             </td>
                         </tr>
@@ -1758,6 +1759,17 @@
         }
 
         function renderLiveTelemetry(alpacaPositions, engineState) {
+            // 🔧 KIMI FIX: si no llegan posiciones de Alpaca por parámetro, usar las reales
+            // que el motor reconcilió contra la API de Alpaca (brokerReconciliation).
+            if ((!alpacaPositions || alpacaPositions.length === 0) && engineState && engineState.brokerReconciliation && engineState.brokerReconciliation.alpacaPositions) {
+                alpacaPositions = engineState.brokerReconciliation.alpacaPositions.map(p => ({
+                    symbol: p.symbol,
+                    qty: p.qty,
+                    avg_entry_price: p.avgEntryPrice,
+                    unrealized_pl: p.unrealizedPnl,
+                    unrealized_plpc: (p.unrealizedPnlPct || 0) / 100
+                }));
+            }
             const bannerEl = document.getElementById('live-banner-metrics');
             const pepPositions = engineState && engineState.openPositions ? engineState.openPositions.filter(p => p.broker && p.broker.includes('Pepperstone')) : [];
             
@@ -1858,6 +1870,15 @@
                     itemsHtml += '<div class="desfase-metric-item"><span style="color: ' + assetColor + '; font-weight: 700;">' + p.symbol + ' (Alpaca):</span> <b>' + p.qty + ' acc a $' + parseFloat(p.avg_entry_price).toFixed(2) + '</b> • <span style="' + plClass + ' font-weight: 700;">' + sign + '$' + pl.toFixed(2) + ' USD (' + sign + (parseFloat(p.unrealized_plpc) * 100).toFixed(2) + '%)</span></div>';
                 });
 
+                // 🔍 KIMI FIX: aviso de divergencia libreta del motor vs Alpaca real
+                const recon = engineState && engineState.brokerReconciliation;
+                if (recon && recon.divergences && recon.divergences.length > 0) {
+                    const divText = recon.divergences.map(d => d.symbol + ': motor ' + d.engineQty + ' vs broker ' + d.brokerQty).join(' | ');
+                    itemsHtml += '<div class="desfase-metric-item" style="border: 1px solid var(--accent-red); background: rgba(239,68,68,0.08); border-radius: 6px; padding: 6px 10px;"><span style="color: var(--accent-red); font-weight: 800;">⚠️ DIVERGENCIA LIBRETA vs ALPACA REAL:</span> ' + divText + ' (verificado ' + new Date(recon.checkedAt).toLocaleTimeString('es-ES', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }) + ' Roma)</div>';
+                } else if (recon) {
+                    itemsHtml += '<div class="desfase-metric-item"><span style="color: var(--accent-green); font-weight: 700;">✅ Libreta del motor reconciliada con Alpaca real (sin divergencias)</span></div>';
+                }
+
                 bannerEl.innerHTML = itemsHtml;
             }
 
@@ -1868,12 +1889,20 @@
             const tbody = document.getElementById('trades-body');
             if (!tbody) return;
 
+            // ⏰ Formato fecha+hora Roma (KIMI FIX 11-NOV): dd/mm hh:mm
+            const fmtRoma = ts => {
+                if (!ts) return '--';
+                const d = new Date(ts);
+                if (isNaN(d.getTime())) return '--';
+                return d.toLocaleString('es-ES', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+            };
+
             const existingDynRows = document.querySelectorAll('.dyn-live-row, .live-section-header');
             existingDynRows.forEach(r => r.remove());
 
             const sectionHeader = document.createElement('tr');
             sectionHeader.className = 'live-section-header';
-            sectionHeader.innerHTML = '<td colspan="9" style="background: rgba(16, 185, 129, 0.12); border-left: 4px solid var(--accent-green); font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #34d399; text-transform: uppercase; padding: 12px 18px;">🟢 Duelo en Vivo • Posiciones Abiertas en Mercado (Alpaca vs Pepperstone)</td>';
+            sectionHeader.innerHTML = '<td colspan="10" style="background: rgba(16, 185, 129, 0.12); border-left: 4px solid var(--accent-green); font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #34d399; text-transform: uppercase; padding: 12px 18px;">🟢 Duelo en Vivo • Posiciones Abiertas en Mercado (Alpaca vs Pepperstone)</td>';
             tbody.insertBefore(sectionHeader, tbody.firstChild);
 
             let prev = sectionHeader;
@@ -1991,6 +2020,7 @@
                         '<td style="color: var(--accent-red); font-weight: 800;">' + riskText + '</td>' +
                         '<td style="color: var(--accent-green); font-weight: 800;">' + rewardText + '</td>' +
                         '<td class="' + plClass + '">' + floatPnlHtml + '</td>' +
+                        '<td style="font-size: 11px; color: var(--text-dim); white-space: nowrap;">🟢 ' + fmtRoma(pos.openedAt) + '</td>' +
                         '<td><span class="tag tag-timed" style="background: rgba(0, 255, 204, 0.1); color: var(--accent-cyan); border-color: var(--accent-cyan);">🟢 FLOTANTE EN VIVO</span></td>';
 
                     tbody.insertBefore(row, prev.nextSibling);
@@ -1999,7 +2029,7 @@
             } else {
                 const noticeRow = document.createElement('tr');
                 noticeRow.className = 'dyn-live-row';
-                noticeRow.innerHTML = '<td colspan="9" style="background: rgba(255,255,255,0.02); text-align: center; color: var(--text-dim); font-size: 11px; padding: 12px 14px; border-left: 3px solid var(--accent-gold);">' +
+                noticeRow.innerHTML = '<td colspan="10" style="background: rgba(255,255,255,0.02); text-align: center; color: var(--text-dim); font-size: 11px; padding: 12px 14px; border-left: 3px solid var(--accent-gold);">' +
                     '⚔️ <b>Kraken Quant Fund:</b> 0 posiciones flotantes en este instante. Esperando nuevo gatillo 5M.' +
                     '</td>';
                 tbody.insertBefore(noticeRow, prev.nextSibling);
@@ -2076,7 +2106,8 @@
                         '<td>$' + (c.sl ? c.sl.toFixed(2) : '--') + '</td>' +
                         '<td>$' + (c.tp ? c.tp.toFixed(2) : '--') + '</td>' +
                         '<td class="' + pnlClass + '"><b style="color: ' + pnlColor + ';">' + pnlText + '</b></td>' +
-                        '<td>' + closeDate + ' (Roma)</td>';
+                        '<td style="font-size: 11px; color: var(--text-dim); white-space: nowrap;">' + fmtRoma(c.openedAt) + ' → ' + fmtRoma(c.closedAt) + '</td>' +
+                        '<td>' + (c.brokerCloseExecuted === true ? '✅' : (c.brokerCloseExecuted === false ? '<span class="tag tag-sl" title="' + (c.closeError || '') + '">⚠️ Falló cierre real</span>' : '<span style="color: var(--text-dim);" title="Cerrado antes del fix de cierres reales: solo constaba en la libreta del motor">📝 libreta</span>')) + '</td>';
 
                     tbody.insertBefore(row, prevClosed.nextSibling);
                     prevClosed = row;
