@@ -497,9 +497,16 @@ async function executeRealBrokerClose(pos) {
         });
         return { broker: 'Alpaca', orderId: order && order.id ? order.id : null };
     }
-    // Pepperstone cTrader: cierre por positionId con su volumen original en centésimas.
+    // Pepperstone cTrader: cierre por positionId. El volumen se deriva del símbolo
+    // con el mismo mapa que la apertura (los registros antiguos no guardan cTraderVolume):
+    // SOL=100 (1 SOL), NVDA/TSLA=10 (0.10 lotes), XAUUSD=100 (0.01 lotes = 1 onza).
     const pid = pos.positionId || pos.id;
-    const vol = pos.cTraderVolume || 100;
+    let vol = pos.cTraderVolume;
+    if (!vol) {
+        const sym = (pos.symbol || pos.orderSymbol || '').toUpperCase();
+        if (sym === 'NVDA' || sym === 'TSLA') vol = 10;
+        else vol = 100; // SOL y XAUUSD
+    }
     const res = await pepperstoneService.closeOrderViaOpenAPI(pid, vol);
     if (!res) throw new Error('Sin respuesta de cTrader');
     if (res.errorCode) throw new Error(`${res.errorCode} - ${res.description || 'Error cTrader'}`);
