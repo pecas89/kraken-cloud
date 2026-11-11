@@ -986,6 +986,42 @@
                 <div class="strategy-metric-row"><span>Flotante:</span> <b id="strat-p5-pnl">Calculando...</b></div>
                 <div class="strategy-metric-row"><span>Protección:</span> <span style="color: #ec4899; font-weight: 700;">🛡️ Bloqueo Cuchillo</span></div>
             </div>
+
+            <!-- P6 REVERSIÓN A LA MEDIA (KIMI) -->
+            <div class="strategy-card" style="border-left: 3px solid #f59e0b; cursor: pointer;" onclick="filterTable('p6')">
+                <div class="strategy-top">
+                    <span class="strategy-title" style="color: #f59e0b;">🎯 Pista 6: Reversión RSI-2</span>
+                    <span class="strategy-badge" style="background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid #f59e0b;">Connors • Anti-Pánico 🧲</span>
+                </div>
+                <div class="strategy-metric-row"><span>Activos:</span> <b>TSLA, NVDA, GLD</b></div>
+                <div class="strategy-metric-row"><span>Abiertas:</span> <b id="strat-p6-count">0 en vivo</b></div>
+                <div class="strategy-metric-row"><span>Flotante:</span> <b id="strat-p6-pnl">Calculando...</b></div>
+                <div class="strategy-metric-row"><span>Protección:</span> <span style="color: #f59e0b; font-weight: 700;">🛡️ Solo sobre EMA 200</span></div>
+            </div>
+
+            <!-- P7 ORB-30 (KIMI) -->
+            <div class="strategy-card" style="border-left: 3px solid #a78bfa; cursor: pointer;" onclick="filterTable('p7')">
+                <div class="strategy-top">
+                    <span class="strategy-title" style="color: #a78bfa;">🚪 Pista 7: ORB-30</span>
+                    <span class="strategy-badge" style="background: rgba(167, 139, 250, 0.15); color: #a78bfa; border: 1px solid #a78bfa;">Apertura Wall St 🔔</span>
+                </div>
+                <div class="strategy-metric-row"><span>Activos:</span> <b>TSLA & NVDA</b></div>
+                <div class="strategy-metric-row"><span>Abiertas:</span> <b id="strat-p7-count">0 en vivo</b></div>
+                <div class="strategy-metric-row"><span>Flotante:</span> <b id="strat-p7-pnl">Calculando...</b></div>
+                <div class="strategy-metric-row"><span>Protección:</span> <span style="color: #a78bfa; font-weight: 700;">⏱️ Cierre fin de sesión</span></div>
+            </div>
+
+            <!-- P8 TTM SQUEEZE (KIMI) -->
+            <div class="strategy-card" style="border-left: 3px solid #34d399; cursor: pointer;" onclick="filterTable('p8')">
+                <div class="strategy-top">
+                    <span class="strategy-title" style="color: #34d399;">🗜️ Pista 8: TTM Squeeze</span>
+                    <span class="strategy-badge" style="background: rgba(52, 211, 153, 0.15); color: #34d399; border: 1px solid #34d399;">Volatilidad Comprimida 💥</span>
+                </div>
+                <div class="strategy-metric-row"><span>Activos:</span> <b>ORO & SOL</b></div>
+                <div class="strategy-metric-row"><span>Abiertas:</span> <b id="strat-p8-count">0 en vivo</b></div>
+                <div class="strategy-metric-row"><span>Flotante:</span> <b id="strat-p8-pnl">Calculando...</b></div>
+                <div class="strategy-metric-row"><span>Protección:</span> <span style="color: #34d399; font-weight: 700;">🎯 SL -1.5 / TP +3 ATR</span></div>
+            </div>
         </div>
 
         
@@ -1643,7 +1679,7 @@
                     r.style.display = '';
                 } else if (activeFilterCriteria === 'alpaca' || activeFilterCriteria === 'pepperstone') {
                     r.style.display = rBroker === activeFilterCriteria ? '' : 'none';
-                } else if (activeFilterCriteria === 'p1' || activeFilterCriteria === 'p2' || activeFilterCriteria === 'p3' || activeFilterCriteria === 'p4' || activeFilterCriteria === 'p5') {
+                } else if (['p1','p2','p3','p4','p5','p6','p7','p8'].includes(activeFilterCriteria)) {
                     r.style.display = rStrat === activeFilterCriteria ? '' : 'none';
                 } else if (activeFilterCriteria === 'ORO') {
                     r.style.display = (rAsset === 'ORO' || rAsset === 'GLD' || rAsset === 'XAUUSD') ? '' : 'none';
@@ -1743,13 +1779,16 @@
                 totalAlpacaPnlUsd += parseFloat(p.unrealized_pl || 0);
             });
 
-            // Actualizar Métricas por Estrategia (P1 a P5) sumando posiciones de ambos brokers
+            // Actualizar Métricas por Estrategia (P1 a P8) sumando posiciones de ambos brokers
             const stratMetrics = {
                 p1: { count: 0, pnlEur: 0 },
                 p2: { count: 0, pnlEur: 0 },
                 p3: { count: 0, pnlEur: 0 },
                 p4: { count: 0, pnlEur: 0 },
-                p5: { count: 0, pnlEur: 0 }
+                p5: { count: 0, pnlEur: 0 },
+                p6: { count: 0, pnlEur: 0 },
+                p7: { count: 0, pnlEur: 0 },
+                p8: { count: 0, pnlEur: 0 }
             };
 
             const allEnginePositions = (engineState && engineState.openPositions) ? engineState.openPositions : [];
@@ -1757,10 +1796,12 @@
                 const sText = (pos.strategy || '').toLowerCase();
                 let code = 'p2';
                 if (sText.includes('delfín') || sText.includes('pista 1')) code = 'p1';
-                else if (sText.includes('base') || sText.includes('pista 2')) code = 'p2';
+                else if (sText.includes('reversión') || sText.includes('reversion') || sText.includes('pista 6')) code = 'p6';
+                else if (sText.includes('orb') || sText.includes('rango de apertura') || sText.includes('pista 7')) code = 'p7';
+                else if (sText.includes('squeeze') || sText.includes('pista 8')) code = 'p8';
                 else if (sText.includes('timemachine') || sText.includes('pista 3')) code = 'p3';
                 else if (sText.includes('vwap') || sText.includes('whale') || sText.includes('ballena') || sText.includes('pista 4')) code = 'p4';
-                else if (sText.includes('supertrend') || sText.includes('orb') || sText.includes('pista 5')) code = 'p5';
+                else if (sText.includes('supertrend') || sText.includes('pista 5')) code = 'p5';
 
                 const isGold = pos.symbol.includes('XAU');
                 const isAlpaca = pos.broker && pos.broker.includes('Alpaca');
@@ -1778,7 +1819,7 @@
             });
 
             // Inyectar en cards de estrategia
-            ['p1', 'p2', 'p3', 'p4', 'p5'].forEach(c => {
+            ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8'].forEach(c => {
                 const elCount = document.getElementById('strat-' + c + '-count');
                 const elPnl = document.getElementById('strat-' + c + '-pnl');
                 if (elCount) elCount.innerText = stratMetrics[c].count + ' en vivo';
@@ -1866,10 +1907,12 @@
                     const stratText = (pos.strategy || '').toLowerCase();
                     let stratCode = 'p2';
                     if (stratText.includes('delfín') || stratText.includes('pista 1')) stratCode = 'p1';
-                    else if (stratText.includes('base') || stratText.includes('pista 2')) stratCode = 'p2';
+                    else if (stratText.includes('reversión') || stratText.includes('reversion') || stratText.includes('pista 6')) stratCode = 'p6';
+                    else if (stratText.includes('orb') || stratText.includes('rango de apertura') || stratText.includes('pista 7')) stratCode = 'p7';
+                    else if (stratText.includes('squeeze') || stratText.includes('pista 8')) stratCode = 'p8';
                     else if (stratText.includes('timemachine') || stratText.includes('pista 3')) stratCode = 'p3';
                     else if (stratText.includes('vwap') || stratText.includes('whale') || stratText.includes('ballena') || stratText.includes('pista 4')) stratCode = 'p4';
-                    else if (stratText.includes('supertrend') || stratText.includes('orb') || stratText.includes('pista 5')) stratCode = 'p5';
+                    else if (stratText.includes('supertrend') || stratText.includes('pista 5')) stratCode = 'p5';
 
                     // Precios en vivo y cálculo de PnL flotante real
                     const scoreObj = engineState.latestScores && (engineState.latestScores[pos.symbol] || engineState.latestScores[assetKey]);
