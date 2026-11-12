@@ -536,6 +536,37 @@ async function syncBrokerReality() {
             }
         } catch(e) { /* Pepperstone offline: conservar último saldo conocido */ }
 
+        // Reconcile REAL de cTrader (posiciones abiertas de verdad en el broker)
+        let pepRealPositions = [];
+        try {
+            const pepRecon = await pepperstoneService.getOpenPositionsViaOpenAPI();
+            if (pepRecon && pepRecon.positions) pepRealPositions = pepRecon.positions;
+        } catch(e) { console.warn('[RECONCILE cTrader] Error:', e.message); }
+
+        // 🧹 PURGA AUTORIZADA POR PEDRO (12-NOV): cerrar TODAS las posiciones reales
+        // de cTrader en cuanto el mercado abra (los CFDs de acciones US estaban
+        // MARKET_CLOSED a la 01:00). Reintenta cada 5 min hasta dejarlo en cero.
+        if (engineState.pendingBrokerPurge && pepRealPositions.length > 0) {
+            let purged = 0, failed = 0;
+            for (const p of pepRealPositions) {
+                try {
+                    const vol = (p.tradeData && p.tradeData.volume) || 10;
+                    const res = await pepperstoneService.closeOrderViaOpenAPI(p.positionId, vol);
+                    if (res && res.errorCode) { failed++; console.warn(`[PURGA] ${p.positionId}: ${res.errorCode}`); }
+                    else if (res && (res.error || res.timeout)) { failed++; }
+                    else purged++;
+                } catch(e) { failed++; }
+            }
+            console.log(`🧹 [PURGA cTRADER] ${purged} cerradas, ${failed} pendientes (mercado cerrado o error). Reintento en 5 min.`);
+            if (failed === 0) {
+                engineState.pendingBrokerPurge = false;
+                await notifyPedro('🧹👑 <b>[LABORATORIO RESETEADO]</b>\nTodas las posiciones reales de cTrader han sido cerradas a mercado.\nEl duelo Alpaca vs Pepperstone empieza limpio: libreta = broker en cero.\nDesde ahora, cada cierre es 100% real. 🇵🇪✨');
+            }
+        } else if (engineState.pendingBrokerPurge && pepRealPositions.length === 0) {
+            engineState.pendingBrokerPurge = false;
+            await notifyPedro('🧹👑 <b>[LABORATORIO RESETEADO]</b>\ncTrader ya está en cero. Duelo limpio activado.');
+        }
+
         const engineAlpaca = {};
         engineState.openPositions
             .filter(p => p.broker && p.broker.includes('Alpaca'))
@@ -557,6 +588,11 @@ async function syncBrokerReality() {
             }
         });
 
+        const pepLibreta = engineState.openPositions.filter(p => p.broker && p.broker.includes('Pepperstone')).length;
+        if (Math.abs(pepRealPositions.length - pepLibreta) > 0) {
+            divergences.push({ symbol: 'cTrader', engineQty: pepLibreta, brokerQty: pepRealPositions.length });
+        }
+
         engineState.brokerReconciliation = {
             checkedAt: new Date().toISOString(),
             alpacaPositions: (alpPositions || []).map(p => ({
@@ -564,6 +600,8 @@ async function syncBrokerReality() {
                 avgEntryPrice: p.avgEntryPrice, unrealizedPnl: p.unrealizedPnl,
                 unrealizedPnlPct: p.unrealizedPnlPct
             })),
+            ctraderRealCount: pepRealPositions.length,
+            ctraderLibretaCount: pepLibreta,
             engineAlpacaQty: engineAlpaca,
             divergences
         };

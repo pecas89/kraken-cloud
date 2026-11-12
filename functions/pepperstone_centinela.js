@@ -321,6 +321,41 @@ function syncOpenPositions(openPos) {
     centinelaState.openPositions = openPos || [];
 }
 
+// KIMI 12-NOV: reconcile real de posiciones abiertas en cTrader (ProtoOAReconcileReq)
+function getOpenPositionsViaOpenAPI() {
+    return new Promise((resolve) => {
+        let isDone = false;
+        let ws = null;
+        const finish = (result) => {
+            if (isDone) return;
+            isDone = true;
+            if (ws) { try { ws.onerror = null; ws.onclose = null; ws.onmessage = null; if (ws.readyState === 1 || ws.readyState === 0) ws.close(); } catch(e) {} }
+            resolve(result);
+        };
+        try { ws = new WebSocket('wss://demo.ctraderapi.com:5036'); } catch(e) { return resolve({ error: e.message }); }
+        ws.onopen = () => {
+            try { ws.send(JSON.stringify({ clientMsgId: 'auth_app', payloadType: 2100, payload: { clientId: PEPPERSTONE_CONFIG.clientId, clientSecret: PEPPERSTONE_CONFIG.clientSecret } })); } catch(e) { finish({ error: e.message }); }
+        };
+        ws.onmessage = (event) => {
+            if (isDone) return;
+            try {
+                const res = JSON.parse(event.data);
+                if (res.clientMsgId === 'auth_app') {
+                    ws.send(JSON.stringify({ clientMsgId: 'auth_acc', payloadType: 2102, payload: { ctidTraderAccountId: PEPPERSTONE_CONFIG.accountId, accessToken: PEPPERSTONE_CONFIG.accessToken } }));
+                } else if (res.clientMsgId === 'auth_acc') {
+                    ws.send(JSON.stringify({ clientMsgId: 'recon', payloadType: 2124, payload: { ctidTraderAccountId: PEPPERSTONE_CONFIG.accountId } }));
+                } else if (res.clientMsgId === 'recon') {
+                    if (res.payload && res.payload.errorCode) return finish({ error: res.payload.errorCode });
+                    finish({ positions: (res.payload && res.payload.position) || [] });
+                }
+            } catch(e) { finish({ error: e.message }); }
+        };
+        ws.onerror = (err) => finish({ error: err ? err.message : 'WS Error' });
+        ws.onclose = () => finish({ error: 'WS closed' });
+        setTimeout(() => finish({ error: 'timeout' }), 10000);
+    });
+}
+
 module.exports = {
     syncOpenPositions,
     PEPPERSTONE_CONFIG,
@@ -328,5 +363,6 @@ module.exports = {
     getLiveAccountData,
     processIncomingSignal,
     executeOrderViaOpenAPI,
+    getOpenPositionsViaOpenAPI,
     closeOrderViaOpenAPI
 };
