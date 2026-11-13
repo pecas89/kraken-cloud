@@ -765,6 +765,32 @@
             </div>
         </div>
 
+        <!-- ==============================================================================
+             🏆 MARCADOR DEL DUELO (KIMI 13-NOV): QUIÉN VA GANANDO CON DATOS REALES
+             Se alimenta de closedTradesHistory (solo era post-reseteo = cierres reales)
+             ============================================================================== -->
+        <div class="section-header">
+            <div class="section-title">
+                <span>🏆 Marcador del Duelo • ¿Quién va ganando?</span>
+            </div>
+            <span id="duelo-updated" style="font-size: 12px; color: var(--text-dim); font-family: 'JetBrains Mono', monospace;">esperando datos del motor...</span>
+        </div>
+
+        <div id="duelo-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 16px; margin-bottom: 28px;">
+            <div class="duelo-card" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 18px;">
+                <div style="font-size: 13px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: var(--accent-gold); margin-bottom: 12px;">🏦 Duelo de Brokers</div>
+                <div id="duelo-brokers"><span style="color: var(--text-dim); font-size: 12px;">Sin trades cerrados todavía en la nueva era.</span></div>
+            </div>
+            <div class="duelo-card" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 18px;">
+                <div style="font-size: 13px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: var(--accent-cyan); margin-bottom: 12px;">🎯 Duelo de Estrategias</div>
+                <div id="duelo-strategies"><span style="color: var(--text-dim); font-size: 12px;">Sin trades cerrados todavía en la nueva era.</span></div>
+            </div>
+            <div class="duelo-card" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 18px;">
+                <div style="font-size: 13px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: var(--accent-purple); margin-bottom: 12px;">⚔️ Duelo de Activos</div>
+                <div id="duelo-assets"><span style="color: var(--text-dim); font-size: 12px;">Sin trades cerrados todavía en la nueva era.</span></div>
+            </div>
+        </div>
+
         <!-- LAS 4 JUGADORAS (CARDS MINIMALISTAS) -->
         <div class="section-header">
             <div class="section-title">
@@ -1693,6 +1719,80 @@
         }
 
         // ==============================================================================
+        // 🏆 MARCADOR DEL DUELO (KIMI 13-NOV): rankings sobre trades cerrados de la era
+        // real (post-reseteo). PnL normalizado a EUR aprox (1 USD = 0.952 EUR) para
+        // poder comparar brokers y estrategias en la misma unidad.
+        // ==============================================================================
+        function computeDuelStats(list, keyFn) {
+            const groups = {};
+            list.forEach(t => {
+                const k = keyFn(t) || 'Desconocido';
+                (groups[k] = groups[k] || []).push(t);
+            });
+            return Object.entries(groups).map(([name, tr]) => {
+                let w = 0, l = 0, pnlEur = 0, gp = 0, gl = 0, real = 0;
+                tr.forEach(t => {
+                    let p = parseFloat(t.pnl) || 0;
+                    if (t.currency === 'USD') p = p / 1.05; // normalizar a EUR
+                    pnlEur += p;
+                    if (p > 0.05) { w++; gp += p; } else if (p < -0.05) { l++; gl += Math.abs(p); }
+                    if (t.brokerCloseExecuted) real++;
+                });
+                return {
+                    name, n: tr.length, w, l,
+                    wr: (w + l) ? (w / (w + l) * 100) : 0,
+                    pnl: pnlEur,
+                    pf: gl > 0 ? (gp / gl) : (gp > 0 ? 99.9 : 0),
+                    real
+                };
+            }).sort((a, b) => b.pnl - a.pnl);
+        }
+
+        function duelRowHtml(s, rank) {
+            const medal = rank === 0 ? '🥇' : (rank === 1 ? '🥈' : (rank === 2 ? '🥉' : (rank + 1) + 'º'));
+            const isLeader = rank === 0 && s.pnl > 0;
+            const pnlColor = s.pnl >= 0 ? 'var(--accent-green)' : 'var(--accent-red)';
+            const sign = s.pnl >= 0 ? '+' : '';
+            return '<div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; margin-bottom: 6px; border-radius: 8px; ' +
+                (isLeader ? 'background: rgba(251,191,36,0.10); border: 1px solid rgba(251,191,36,0.35);' : 'background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);') + '">' +
+                '<div style="font-size: 13px;"><span style="margin-right: 6px;">' + medal + '</span><b>' + s.name + '</b></div>' +
+                '<div style="text-align: right; font-size: 11px; font-family: \'JetBrains Mono\', monospace;">' +
+                '<div style="color: ' + pnlColor + '; font-weight: 800; font-size: 13px;">' + sign + '€' + s.pnl.toFixed(2) + '</div>' +
+                '<div style="color: var(--text-dim);">' + s.n + ' trades • WR ' + s.wr.toFixed(0) + '% • PF ' + s.pf.toFixed(2) + '</div>' +
+                '</div></div>';
+        }
+
+        function renderDuelScoreboard(engineState) {
+            if (!engineState) return;
+            const list = engineState.closedTradesHistory || [];
+
+            const brokers = computeDuelStats(list, t => (t.broker || '').includes('Alpaca') ? '🦙 Alpaca Paper' : '🏛️ Pepperstone');
+            const strats = computeDuelStats(list, t => (t.strategy || 'Desconocida').split(':')[0].replace(/^Pista /, 'P'));
+            const assets = computeDuelStats(list, t => {
+                const s = (t.symbol || '?');
+                if (s.includes('XAU') || s === 'GLD') return '🥇 Oro';
+                if (s.includes('SOL')) return '🟣 SOL';
+                if (s === 'NVDA') return '💚 NVDA';
+                if (s === 'TSLA') return '🚗 TSLA';
+                return s;
+            });
+
+            const empty = '<span style="color: var(--text-dim); font-size: 12px;">Sin trades cerrados todavía en la nueva era.</span>';
+            const elB = document.getElementById('duelo-brokers');
+            const elS = document.getElementById('duelo-strategies');
+            const elA = document.getElementById('duelo-assets');
+            if (elB) elB.innerHTML = brokers.length ? brokers.map(duelRowHtml).join('') : empty;
+            if (elS) elS.innerHTML = strats.length ? strats.map(duelRowHtml).join('') : empty;
+            if (elA) elA.innerHTML = assets.length ? assets.map(duelRowHtml).join('') : empty;
+
+            const upd = document.getElementById('duelo-updated');
+            if (upd) {
+                const totalReal = list.filter(t => t.brokerCloseExecuted).length;
+                upd.innerText = list.length + ' trades reales cerrados (' + totalReal + ' con cierre confirmado en broker) • PnL en ≈ EUR';
+            }
+        }
+
+        // ==============================================================================
         // 3. AUTO-SYNC CON TELEMETRÍA DEL MOTOR (SIN SECRETOS EN EL CLIENTE)
         // ==============================================================================
         let autoSyncTimerId = null;
@@ -1720,6 +1820,7 @@
 
                 if (engineState) {
                     latestEngineState = engineState;
+                    renderDuelScoreboard(engineState);
                     if (engineState.closedTradesHistory) {
                         renderDynamicScorecard(engineState.closedTradesHistory, currentScorecardPeriod);
                     }
