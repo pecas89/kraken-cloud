@@ -676,6 +676,165 @@
         .hud-stat-value { font-size: 14px; font-weight: 800; font-family: 'JetBrains Mono', monospace; }
 
     </style>
+
+    <!-- ==============================================================================
+         🐙 KRAKEN ABYSS THEME (KIMI 13-NOV) — Reskin visual sin tocar la lógica.
+         Deep ocean + bioluminiscencia + glassmorphism. Los overrides ganan por cascada.
+         ============================================================================== -->
+    <style id="kraken-abyss-theme">
+        :root {
+            --bg-base: #02060b;
+            --bg-surface: rgba(8, 16, 28, 0.72);
+            --bg-card: rgba(13, 24, 40, 0.62);
+            --bg-card-hover: rgba(20, 36, 58, 0.75);
+            --border: rgba(56, 189, 248, 0.14);
+            --abyss-teal: #00ffcc;
+            --abyss-violet: #8b5cf6;
+        }
+
+        body {
+            background:
+                radial-gradient(1200px 600px at 8% -10%, rgba(0, 255, 204, 0.10), transparent 60%),
+                radial-gradient(1000px 700px at 105% 15%, rgba(139, 92, 246, 0.12), transparent 60%),
+                radial-gradient(900px 500px at 50% 115%, rgba(56, 189, 248, 0.07), transparent 60%),
+                linear-gradient(180deg, #02060b 0%, #030a14 50%, #02060b 100%);
+            background-attachment: fixed;
+        }
+
+        /* Ola de luz que recorre el fondo (bioluminiscencia lenta) */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: -50%;
+            background:
+                radial-gradient(600px 300px at 30% 40%, rgba(0, 255, 204, 0.045), transparent 65%),
+                radial-gradient(700px 350px at 70% 60%, rgba(139, 92, 246, 0.05), transparent 65%);
+            animation: abyssDrift 26s ease-in-out infinite alternate;
+            pointer-events: none;
+            z-index: 0;
+        }
+        @keyframes abyssDrift {
+            0%   { transform: translate(-4%, -3%) scale(1); }
+            50%  { transform: translate(3%, 4%) scale(1.06); }
+            100% { transform: translate(-2%, 2%) scale(1.02); }
+        }
+        .container { position: relative; z-index: 1; }
+
+        /* HEADER: cristal abisal con logo pulsante */
+        header {
+            background: var(--bg-surface);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(0, 255, 204, 0.18);
+            border-radius: 16px;
+            box-shadow: 0 8px 40px rgba(0, 0, 0, 0.45), 0 0 24px rgba(0, 255, 204, 0.06), inset 0 1px 0 rgba(255,255,255,0.04);
+        }
+        .brand-logo {
+            background: linear-gradient(135deg, #00ffcc, #0ea5e9 55%, #8b5cf6);
+            box-shadow: 0 0 18px rgba(0, 255, 204, 0.55), 0 0 42px rgba(139, 92, 246, 0.25);
+            animation: logoPulse 3.2s ease-in-out infinite;
+            font-size: 20px;
+        }
+        @keyframes logoPulse {
+            0%, 100% { box-shadow: 0 0 14px rgba(0,255,204,0.45), 0 0 34px rgba(139,92,246,0.18); }
+            50%      { box-shadow: 0 0 26px rgba(0,255,204,0.85), 0 0 60px rgba(139,92,246,0.35); }
+        }
+        .brand-text h1 {
+            background: linear-gradient(90deg, #e2fdf5, #7dd3fc 60%, #c4b5fd);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: 1px;
+        }
+
+        .stat-pill {
+            background: rgba(10, 20, 34, 0.7);
+            border: 1px solid rgba(56, 189, 248, 0.18);
+            backdrop-filter: blur(8px);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+            transition: box-shadow .25s ease, transform .25s ease;
+        }
+        .stat-pill:hover { box-shadow: 0 0 16px rgba(0,255,204,0.18); transform: translateY(-1px); }
+        .stat-dot { animation: dotBreath 2s ease-in-out infinite; }
+        @keyframes dotBreath { 0%,100% { opacity: 1; } 50% { opacity: 0.45; } }
+
+        /* CARDS: cristal con brillo de borde */
+        .player-card, .kpi-card, .strat-card, .duelo-card, .desfase-banner, .chart-container, .table-responsive {
+            background: var(--bg-card) !important;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border) !important;
+            border-radius: 16px !important;
+            box-shadow: 0 10px 34px rgba(0, 0, 0, 0.40), inset 0 1px 0 rgba(255,255,255,0.04);
+            transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease;
+        }
+        .player-card:hover, .kpi-card:hover, .strat-card:hover, .duelo-card:hover {
+            transform: translateY(-3px);
+            border-color: rgba(0, 255, 204, 0.35) !important;
+            box-shadow: 0 16px 44px rgba(0,0,0,0.5), 0 0 22px rgba(0,255,204,0.10);
+        }
+
+        /* Acentos por jugadora: aura de color alrededor de la card */
+        .player-card.tsla { box-shadow: 0 10px 34px rgba(0,0,0,.4), 0 0 20px rgba(239,68,68,0.10); }
+        .player-card.nvda { box-shadow: 0 10px 34px rgba(0,0,0,.4), 0 0 20px rgba(16,185,129,0.10); }
+        .player-card { position: relative; overflow: hidden; }
+        .player-card::after {
+            content: '';
+            position: absolute; top: 0; left: 0; right: 0; height: 2px;
+            background: linear-gradient(90deg, transparent, rgba(0,255,204,0.6), transparent);
+            opacity: .55;
+        }
+
+        /* Secciones */
+        .section-title span {
+            background: linear-gradient(90deg, #f0fdfa, #99f6e4);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-weight: 800;
+            letter-spacing: 0.6px;
+        }
+
+        /* Tabla: filas con brillo al pasar el ratón */
+        #trades-table thead th {
+            background: rgba(6, 14, 24, 0.9) !important;
+            color: #7dd3fc !important;
+            border-bottom: 1px solid rgba(0,255,204,0.22) !important;
+            letter-spacing: 1px;
+        }
+        #trades-table tbody tr { transition: background .2s ease, box-shadow .2s ease; }
+        #trades-table tbody tr:hover { background: rgba(0, 255, 204, 0.05) !important; box-shadow: inset 3px 0 0 rgba(0,255,204,0.5); }
+
+        /* Tags y badges con glow */
+        .tag { backdrop-filter: blur(6px); }
+        .tag-alpaca { box-shadow: 0 0 10px rgba(251,191,36,0.18); }
+        .tag-pepper { box-shadow: 0 0 10px rgba(56,189,248,0.18); }
+
+        /* KPI values: números con vida */
+        .kpi-value {
+            text-shadow: 0 0 24px rgba(0,255,204,0.25);
+            font-variant-numeric: tabular-nums;
+        }
+
+        /* Scrollbar abisal */
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: #03070d; }
+        ::-webkit-scrollbar-thumb { background: linear-gradient(180deg, rgba(0,255,204,0.35), rgba(139,92,246,0.35)); border-radius: 8px; }
+        ::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg, rgba(0,255,204,0.6), rgba(139,92,246,0.6)); }
+
+        /* Podios del Marcador del Duelo: el líder respira dorado */
+        .duelo-card { position: relative; overflow: hidden; }
+        .duelo-card::before {
+            content: '';
+            position: absolute; top: -60%; left: -60%; width: 60%; height: 220%;
+            background: linear-gradient(100deg, transparent, rgba(0,255,204,0.05), transparent);
+            transform: rotate(12deg);
+            animation: cardShimmer 7s linear infinite;
+            pointer-events: none;
+        }
+        @keyframes cardShimmer { 0% { left: -60%; } 100% { left: 160%; } }
+    </style>
+
     <script src="https://unpkg.com/lightweight-charts@4.1.3/dist/lightweight-charts.standalone.production.js"></script>
 </head>
 <body>
@@ -683,7 +842,7 @@
         <!-- HEADER MINIMALISTA -->
         <header>
             <div class="brand">
-                <div class="brand-logo">K</div>
+                <div class="brand-logo">🐙</div>
                 <div class="brand-text">
                     <h1>KRAKEN QUANT FUND <span>• PISO 2</span></h1>
                     <p>Terminal Autónomo 24/7 • Anastasia CIO</p>
