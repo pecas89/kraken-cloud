@@ -725,6 +725,109 @@ async function syncBrokerReality() {
 }
 
 // ------------------------------------------------------------------------------
+// 📬 PARTE DIARIO POR TELEGRAM (KIMI 13-NOV) — Anastasia reporta sola desde
+// Render, sin PC y sin Kimi: 09:00 Roma = latido "estoy viva", 22:05 Roma =
+// parte de guerra completo tras el cierre de Wall Street.
+// ------------------------------------------------------------------------------
+function romeDateStr(d = new Date()) {
+    return new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome' }).format(d);
+}
+
+function duelStatsFor(list, keyFn) {
+    const groups = {};
+    list.forEach(t => { const k = keyFn(t) || '¿?'; (groups[k] = groups[k] || []).push(t); });
+    return Object.entries(groups).map(([name, tr]) => {
+        let w = 0, l = 0, pnl = 0;
+        tr.forEach(t => {
+            let p = parseFloat(t.pnl) || 0;
+            if (t.currency === 'USD') p = p / 1.05;
+            pnl += p;
+            if (p > 0.05) w++; else if (p < -0.05) l++;
+        });
+        return { name, n: tr.length, w, l, pnl };
+    }).sort((a, b) => b.pnl - a.pnl);
+}
+
+function medalRow(s, i) {
+    const medal = i === 0 ? '🥇' : (i === 1 ? '🥈' : (i === 2 ? '🥉' : '▫️'));
+    const sign = s.pnl >= 0 ? '+' : '';
+    return `${medal} ${s.name}: <b>${sign}€${s.pnl.toFixed(2)}</b> (${s.n} trades, ${s.w}W/${s.l}L)`;
+}
+
+function buildDailyReportText() {
+    const today = romeDateStr();
+    const hist = engineState.closedTradesHistory || [];
+    const todayTrades = hist.filter(t => t.closedAt && romeDateStr(new Date(t.closedAt)) === today);
+    let w = 0, l = 0, pnl = 0, real = 0;
+    todayTrades.forEach(t => {
+        let p = parseFloat(t.pnl) || 0;
+        if (t.currency === 'USD') p = p / 1.05;
+        pnl += p;
+        if (p > 0.05) w++; else if (p < -0.05) l++;
+        if (t.brokerCloseExecuted) real++;
+    });
+    const sign = pnl >= 0 ? '+' : '';
+    const recon = engineState.brokerReconciliation || {};
+    const divs = recon.divergences || [];
+
+    let msg = `🇷🇺👑 <b>[ANASTASIA CIO • PARTE DE GUERRA ${today}]</b>\n`;
+    msg += `━━━━━━━━━━━━━━━━━━━━\n`;
+    msg += `📊 <b>Hoy:</b> ${todayTrades.length} trades cerrados (${real} con cierre confirmado en broker)\n`;
+    msg += `💰 <b>Resultado del día:</b> ${sign}€${pnl.toFixed(2)} ≈ (${w}W / ${l}L)\n`;
+    msg += `📈 <b>Acumulado era real:</b> ${hist.length} trades\n`;
+    msg += `🔓 <b>Posiciones abiertas ahora:</b> ${(engineState.openPositions || []).length}\n`;
+    msg += `━━━━━━━━━━━━━━━━━━━━\n`;
+    msg += `🏦 <b>DUELO BROKERS (hoy):</b>\n`;
+    const byBroker = duelStatsFor(todayTrades, t => (t.broker || '').includes('Alpaca') ? '🦙 Alpaca' : '🏛️ Pepperstone');
+    msg += byBroker.length ? byBroker.map(medalRow).join('\n') + '\n' : '▫️ Sin cierres hoy\n';
+    msg += `⚔️ <b>DUELO ACTIVOS (hoy):</b>\n`;
+    const byAsset = duelStatsFor(todayTrades, t => {
+        const s = t.symbol || '?';
+        if (s.includes('XAU') || s === 'GLD') return '🥇 Oro';
+        if (s.includes('SOL')) return '🟣 SOL';
+        return s === 'NVDA' ? '💚 NVDA' : (s === 'TSLA' ? '🚗 TSLA' : s);
+    });
+    msg += byAsset.length ? byAsset.map(medalRow).join('\n') + '\n' : '▫️ Sin cierres hoy\n';
+    msg += `🎯 <b>DUELO ESTRATEGIAS (hoy):</b>\n`;
+    const byStrat = duelStatsFor(todayTrades, t => (t.strategy || '?').split(':')[0]);
+    msg += byStrat.length ? byStrat.map(medalRow).join('\n') + '\n' : '▫️ Sin cierres hoy\n';
+    msg += `━━━━━━━━━━━━━━━━━━━━\n`;
+    msg += `💼 <b>Saldos reales:</b> Alpaca ${engineState.accountBalances.alpaca} · Pepperstone ${engineState.accountBalances.pepperstone}\n`;
+    if (divs.length > 0) {
+        msg += `⚠️ <b>ALARMA DIVERGENCIA:</b> ${divs.map(d => `${d.symbol}: motor ${d.engineQty} vs broker ${d.brokerQty}`).join(' | ')}\n`;
+    } else {
+        msg += `✅ Libreta reconciliada con los brokers (sin divergencias)\n`;
+    }
+    msg += `━━━━━━━━━━━━━━━━━━━━\n`;
+    msg += `<i>Mañana seguimos cazando. Web: kraken-trading-cloud.web.app</i>`;
+    return msg;
+}
+
+async function sendDailyReport() {
+    const today = romeDateStr();
+    engineState.lastDailyReportDate = today;
+    await notifyPedro(buildDailyReportText());
+    saveState();
+    console.log('📬 [PARTE DIARIO] Enviado a Pedro por Telegram.');
+}
+
+async function maybeSendScheduledReports() {
+    const d = romeNow();
+    const mins = d.getHours() * 60 + d.getMinutes();
+    const today = romeDateStr();
+    // 09:00 Roma: latido de vida
+    if (mins >= 9 * 60 && mins < 9 * 60 + 2 && engineState.lastHeartbeatDate !== today) {
+        engineState.lastHeartbeatDate = today;
+        await notifyPedro(`🐙💓 <b>[Kraken despierto]</b> Motor online en Frankfurt. ${(engineState.openPositions || []).length} posiciones vivas, ${(engineState.closedTradesHistory || []).length} trades en la era real. Escaneando cada 30s.`);
+        saveState();
+    }
+    // 22:05 Roma: parte de guerra tras cierre de Wall Street
+    if (mins >= 22 * 60 + 5 && engineState.lastDailyReportDate !== today) {
+        await sendDailyReport();
+    }
+}
+
+// ------------------------------------------------------------------------------
 // 🛡️ GESTIÓN AUTÓNOMA DE SALIDAS (STOP LOSS, TAKE PROFIT & TRAILING BE)
 // ------------------------------------------------------------------------------
 async function manageOpenPositions(currentQuotes) {
@@ -993,6 +1096,9 @@ async function runAutonomousCycle() {
     // 3. Recalcular Matriz Cuantitativa en Vivo (Win Rate & PnL)
     computePerformanceStats();
 
+    // 4. Partes programados a Pedro (latido 09:00 y parte de guerra 22:05 Roma)
+    await maybeSendScheduledReports();
+
     saveState();
 }
 
@@ -1050,5 +1156,7 @@ module.exports = {
     manageOpenPositions,
     executeRealBrokerClose,
     syncBrokerReality,
+    buildDailyReportText,
+    maybeSendScheduledReports,
     notifyPedro
 };
