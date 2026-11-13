@@ -481,6 +481,31 @@ async function executeAutonomousOpen(ticker, price, analysis) {
 }
 
 // ------------------------------------------------------------------------------
+// ⏰ HORARIOS DE MERCADO (MANDATO PEDRO 13-NOV): TSLA/NVDA/Oro solo operan en
+// sesión de Wall Street (15:30-22:00 Roma, lunes-viernes). No se abren posiciones
+// en los últimos 30 minutos (21:30+) ni fuera de horario. SOL es 24/7 libre.
+// ------------------------------------------------------------------------------
+function romeNow() {
+    return new Date(new Date().toLocaleString('en-US', { timeZone: 'Europe/Rome' }));
+}
+function isSessionOpenForAsset(symbol) {
+    if ((symbol || '').includes('SOL')) return true; // cripto 24/7
+    const d = romeNow();
+    const day = d.getDay();
+    if (day === 0 || day === 6) return false;
+    const mins = d.getHours() * 60 + d.getMinutes();
+    return mins >= 15 * 60 + 30 && mins < 22 * 60; // 15:30 - 22:00 Roma
+}
+function isEntryWindowForAsset(symbol) {
+    if ((symbol || '').includes('SOL')) return true;
+    const d = romeNow();
+    const day = d.getDay();
+    if (day === 0 || day === 6) return false;
+    const mins = d.getHours() * 60 + d.getMinutes();
+    return mins >= 15 * 60 + 30 && mins < 21 * 60 + 30; // no abrir desde 21:30 (últimos 30 min)
+}
+
+// ------------------------------------------------------------------------------
 // 🔧 CIERRE REAL EN EL BROKER (KIMI FIX 11-NOV): la libreta ya no miente.
 // Antes de este fix el motor anotaba cierres en su JSON pero NUNCA vendía en
 // Alpaca ni cerraba en cTrader. Ahora cada cierre interno ejecuta la salida real.
@@ -622,6 +647,14 @@ async function manageOpenPositions(currentQuotes) {
     const remainingPositions = [];
 
     for (const pos of engineState.openPositions) {
+        // Fuera de sesión (acciones US / oro): no gestionar. Las velas llegan congeladas
+        // y comparar precios viejos contra SL/TP genera cierres fantasma que el broker
+        // rechaza con MARKET_CLOSED. La posición espera viva a la próxima sesión.
+        if (!isSessionOpenForAsset(pos.symbol)) {
+            remainingPositions.push(pos);
+            continue;
+        }
+
         const currentPrice = currentQuotes[pos.symbol] || pos.entryPrice;
         const config = ASSETS_CONFIG[pos.symbol];
         let positionClosed = false;
@@ -855,6 +888,11 @@ async function runAutonomousCycle() {
 
             // Disparo autónomo en ambos brokers si califica
             if (analysis.score >= 65) {
+                // ⏰ MANDATO PEDRO: no abrir fuera de sesión ni en los últimos 30 min
+                if (!isEntryWindowForAsset(ticker)) {
+                    console.log(`⏰ [HORARIO] Señal ${ticker} (${analysis.strategyName}) ignorada: fuera de ventana de entrada (15:30-21:30 Roma, L-V).`);
+                    continue;
+                }
                 // Candado sagrado de máximo 24 posiciones simultáneas en Pepperstone
                 const pepCount = engineState.openPositions.filter(p => !p.broker || p.broker.includes('Pepperstone')).length;
                 if (pepCount < 24) {
