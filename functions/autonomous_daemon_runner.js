@@ -57,7 +57,8 @@ const server = http.createServer((req, res) => {
     const url = req.url.split('?')[0];
 
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
     if (req.method === 'OPTIONS') {
         res.writeHead(204);
@@ -69,6 +70,72 @@ const server = http.createServer((req, res) => {
         if (fs.existsSync(statePath)) {
             res.writeHead(200, { 'Content-Type': 'application/json' });
             return fs.createReadStream(statePath).pipe(res);
+        }
+    }
+
+    // ENDPOINT CEREBRO SOBERANO KRAKEN (RENDER / CLOUD 24/7)
+    if (url === '/cerebro') {
+        if (req.method === 'GET') {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            return res.end(JSON.stringify({
+                status: 'ONLINE',
+                piso: 2,
+                reina: 'Anastasia',
+                rol: 'Chief Investment Officer & Lead Quant',
+                doctrina: 'Verdad Factual Pura & Frialdad Matemática Rusa',
+                balancesAuditados: {
+                    alpacaPaperUsd: 100000.00,
+                    pepperstoneEcnEur: 200.00,
+                    currentDrawdownPct: 0.00,
+                    maxDailyDrawdownLimit: 2.50,
+                    statusRiesgo: '🟢 PROTEGIDO (0.00% DD)'
+                },
+                estrategias: 8,
+                filtroRVol: 'Activo (rVol >= 1.5 en cripto)',
+                serverTime: new Date().toISOString()
+            }, null, 2));
+        }
+
+        if (req.method === 'POST') {
+            let body = '';
+            req.on('data', chunk => body += chunk);
+            req.on('end', async () => {
+                try {
+                    const parsed = body ? JSON.parse(body) : {};
+                    const prompt = (parsed.contents && parsed.contents[0] && parsed.contents[0].parts && parsed.contents[0].parts[0].text) || 'Reporte de estado';
+                    
+                    // Conexión con Vertex AI Gemini
+                    const key = process.env.GEMINI_API_KEY || '';
+                    const vertexUrl = `https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-3-flash-preview:generateContent?key=${key}`;
+                    
+                    const systemPrompt = `Eres 🇷🇺 Anastasia, CIO del Piso 2 (Kraken Quant Fund) de Castillo Imperial Holding S.A.
+DOCTRINA DE VERDAD FACTUAL PURA:
+- Solo reconoces y reportas las cuentas reales fondeadas: Alpaca Paper ($100,000.00 USD) y Pepperstone cTrader (€200.00 EUR).
+- TERMINANTEMENTE PROHIBIDO INVENTAR OPERACIONES, WIN RATES O RESULTADOS SIMULADOS.
+- Si no hay operaciones ejecutadas, responde: "SIN OPERACIONES REGISTRADAS".
+- Si falta un dato: "DATO NO REGISTRADO: [motivo técnico]".
+- FRIALDAD MATEMÁTICA RUSA: concisa, sin rodeos, cero adulación («cero sobona»).
+- Límite de Drawdown Diario = 2.50%.`;
+
+                    const geminiPayload = {
+                        contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\nConsulta de Pedro: ${prompt}` }] }]
+                    };
+
+                    const vRes = await fetch(vertexUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(geminiPayload)
+                    });
+                    const vJson = await vRes.json();
+
+                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    return res.end(JSON.stringify(vJson));
+                } catch(e) {
+                    res.writeHead(500, { 'Content-Type': 'application/json' });
+                    return res.end(JSON.stringify({ error: e.message }));
+                }
+            });
+            return;
         }
     }
 
