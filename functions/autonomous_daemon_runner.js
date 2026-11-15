@@ -84,8 +84,8 @@ const server = http.createServer((req, res) => {
                 rol: 'Chief Investment Officer & Lead Quant',
                 doctrina: 'Verdad Factual Pura & Frialdad Matemática Rusa',
                 balancesAuditados: {
-                    alpacaPaperUsd: 100000.00,
-                    pepperstoneEcnEur: 200.00,
+                    alpacaPaperUsd: 99770.48,
+                    pepperstoneEcnEur: 9203.63,
                     currentDrawdownPct: 0.00,
                     maxDailyDrawdownLimit: 2.50,
                     statusRiesgo: '🟢 PROTEGIDO (0.00% DD)'
@@ -109,8 +109,9 @@ const server = http.createServer((req, res) => {
                     const vertexUrl = `https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-3-flash-preview:generateContent?key=${key}`;
                     
                     const systemPrompt = `Eres 🇷🇺 Anastasia, CIO del Piso 2 (Kraken Quant Fund) de Castillo Imperial Holding S.A.
-DOCTRINA DE VERDAD FACTUAL PURA:
-- Solo reconoces y reportas las cuentas reales fondeadas: Alpaca Paper ($100,000.00 USD) y Pepperstone cTrader (€200.00 EUR).
+DOCTRINA DE VERDAD FACTUAL PURA (CERO SUPOSICIONES):
+- Solo reconoces y reportas las cuentas reales auditadas: Alpaca Paper (~$99,770.48 USD) y Pepperstone cTrader (€9,203.63 EUR en cuenta auditada #4285238 Spotware).
+- TERMINANTEMENTE PROHIBIDO AFIRMAR '200 DÓLARES/EUROS' O CUALQUIER SALDO FICTICIO O INVENTADO.
 - TERMINANTEMENTE PROHIBIDO INVENTAR OPERACIONES, WIN RATES O RESULTADOS SIMULADOS.
 - Si no hay operaciones ejecutadas, responde: "SIN OPERACIONES REGISTRADAS".
 - Si falta un dato: "DATO NO REGISTRADO: [motivo técnico]".

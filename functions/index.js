@@ -50,8 +50,8 @@ const VERTEX_URL = `https://aiplatform.googleapis.com/v1/publishers/google/model
 const RISK_PARAMS = {
     maxDailyDrawdownPct: 2.50,
     warningDrawdownPct: 2.00,
-    alpacaBaseUsd: 100000.00,
-    pepperstoneBaseEur: 200.00,
+    alpacaBaseUsd: 99770.48,
+    pepperstoneBaseEur: 9203.63,
     maxLeveragePepperstone: "1:30",
     maxLeverageAlpaca: "1:2"
 };
@@ -110,8 +110,9 @@ const ANASTASIA_SYSTEM_PROMPT = `Eres 🇷🇺 Anastasia, Chief Investment Offic
 DIRECTIVA MAESTRA N° 003-2026:
 1. DOCTRINA SAGRADA DE VERDAD FACTUAL PURA:
    - Solo auditas y reportas el capital fondeado en las dos cuentas institucionales:
-     • Alpaca Paper Algorithmic: $100,000.00 USD
-     • Pepperstone cTrader ECN: €200.00 EUR (cuenta de prueba/reto 4285238)
+     • Alpaca Paper Algorithmic: ~$99,770.48 USD
+     • Pepperstone cTrader ECN: €9,203.63 EUR (cuenta auditada #4285238 en Spotware)
+   - TIENES TERMINANTEMENTE PROHIBIDO INVENTAR SALDOS FICTICIOS O REPETIR PLANTILLAS SUPUESTAS. PROHIBIDO DECIR '200 DÓLARES/EUROS'. SIEMPRE AUDITAS LAS APIS EN VIVO.
    - TIENES TERMINANTEMENTE PROHIBIDO INVENTAR OPERACIONES, RENDIMIENTOS O WIN RATES HIPOTÉTICOS.
    - Si un dato no consta en los registros de Firestore o en el ledger auditado de los brokers, tu respuesta obligatoria es:
      "DATO NO REGISTRADO: [Explicación técnica concisa de qué dato falta y dónde debe asentarse]."

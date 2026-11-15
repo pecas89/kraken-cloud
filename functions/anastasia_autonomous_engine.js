@@ -4,9 +4,9 @@
  * ==============================================================================
  * Mandato Supremo: 100% Autónomo. Cero intervención manual de Pedro ("franc").
  * Anastasia abre, gestiona (Trailing BE) y cierra posiciones sola en los 4 activos:
- * 1. 🚗 TSLA (Tesla)      -> Alpaca Markets Paper ($100,000 USD)
- * 2. 💚 NVDA (Nvidia)     -> Alpaca Markets Paper ($100,000 USD)
- * 3. 🥇 XAUUSD (Oro)      -> Pepperstone cTrader ECN Razor (€200.00 EUR)
+ * 1. 🚗 TSLA (Tesla)      -> Alpaca Markets Paper (Wall Street)
+ * 2. 💚 NVDA (Nvidia)     -> Alpaca Markets Paper (Wall Street)
+ * 3. 🥇 XAUUSD (Oro)      -> Pepperstone cTrader ECN Razor (Spotware Londres)
  * 4. 🟣 SOLUSD (Solana)   -> Pepperstone / Alpaca Crypto 24/7
  * 
  * Regla Cuantitativa Ágil:
@@ -184,7 +184,7 @@ async function rebuildHistoryFromAlpacaFills(sinceIso) {
                     const pnl = (price - lot.price) * take;
                     rebuilt.push({
                         id: 'REBUILT-' + f.id,
-                        broker: 'Alpaca Markets Paper ($100k)',
+                        broker: 'Alpaca Markets Paper Algorithmic',
                         strategy: '(reconstruido Alpaca)',
                         symbol: alpacaSymbolToTicker[sym] || sym,
                         orderSymbol: sym === 'SOLUSD' ? 'SOL/USD' : sym,
@@ -412,7 +412,7 @@ async function executeAutonomousOpen(ticker, price, analysis) {
     const duelPairId = 'DUEL-' + Date.now();
     const executedOrders = [];
 
-    // 1. DISPARO A ALPACA MARKETS ($100k) - Mínimo capital (1 acción / 1 SOL / 1 GLD)
+    // 1. DISPARO A ALPACA MARKETS - Mínimo capital (1 acción / 1 SOL / 1 GLD)
     try {
         const isCrypto = config.alpacaSymbol.includes('/');
         let alpacaTp = analysis.tp;
@@ -456,10 +456,13 @@ async function executeAutonomousOpen(ticker, price, analysis) {
                 });
             }
         }
+        if (!alpacaOrder || !alpacaOrder.id) {
+            throw new Error(`Alpaca no devolvió ID de orden válido para ${config.alpacaSymbol}. Orden no ejecutada.`);
+        }
         const alpacaRecord = {
-            id: alpacaOrder.id || 'ALP-' + Date.now(),
+            id: alpacaOrder.id,
             duelPairId: duelPairId,
-            broker: 'Alpaca Markets Paper ($100k)',
+            broker: 'Alpaca Markets Paper Algorithmic',
             strategy: analysis.strategyName,
             account: 'PA35UQ22S',
             symbol: ticker,
@@ -494,7 +497,7 @@ async function executeAutonomousOpen(ticker, price, analysis) {
         console.error(`❌ [ALPACA ERROR] No se pudo enviar orden en ${ticker} (${config.alpacaSymbol}):`, err.message);
     }
 
-    // 2. DISPARO A PEPPERSTONE cTRADER (€200) - Mínimo volumen (0.01 micro-lotes)
+    // 2. DISPARO A PEPPERSTONE cTRADER - Mínimo volumen (0.01 micro-lotes)
     try {
         const pepRes = await pepperstoneService.processIncomingSignal({
             action: 'BUY',
@@ -505,11 +508,11 @@ async function executeAutonomousOpen(ticker, price, analysis) {
             sl: analysis.sl,
             tp: analysis.tp
         });
-        if (pepRes && pepRes.executed) {
+        if (pepRes && pepRes.executed && pepRes.order && pepRes.order.id) {
             const pepRecord = {
                 id: pepRes.order.id,
                 duelPairId: duelPairId,
-                broker: 'Pepperstone cTrader ECN Razor (€10,199)',
+                broker: 'Pepperstone cTrader ECN Razor',
                 strategy: analysis.strategyName,
                 account: 4285238,
                 symbol: ticker,
@@ -1123,7 +1126,7 @@ function startAutonomousDaemon(intervalMs = 30000) {
     console.log('===========================================================');
     console.log('🇷🇺👑 KRAKEN CLOUD // ANASTASIA AGENTE AUTÓNOMO INICIADO 24/7');
     console.log('   Activos: TSLA, NVDA, XAUUSD (Oro), SOLUSD (Solana)');
-    console.log('   Brokers: Alpaca ($100k) & Pepperstone cTrader (€200)');
+    console.log('   Brokers: Alpaca Algorithmic & Pepperstone cTrader (Auditados Live por API)');
     console.log('   Modo: 100% Independiente y Manos Libres para Pedro');
     console.log('===========================================================');
 
