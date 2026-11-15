@@ -1074,6 +1074,12 @@ async function runAutonomousCycle() {
             if (analysis.stratCode === 'p6' && (ticker !== 'NVDA' && ticker !== 'TSLA' && ticker !== 'GLD' && ticker !== 'XAUUSD')) continue;
             if (analysis.stratCode === 'p8' && (ticker !== 'XAUUSD' && ticker !== 'GLD' && !ticker.includes('SOL'))) continue;
 
+            // 🛑 MANDATO DE ORO DE PEDRO: Cero entradas en SOL en rango seco (volumen muerto de noche)
+            if (ticker.includes('SOL') && (analysis.indicators?.rvol || 0) < 1.5) {
+                console.log(`🛑 [CHOP FILTER] SOL ignorado: rVol insuficiente (${analysis.indicators?.rvol || 0} < 1.5x).`);
+                continue;
+            }
+
             // Cada estrategia compite libremente sin duplicar posición en el mismo activo
             const hasOpenInSameStrategy = engineState.openPositions.some(p => p.symbol === ticker && p.strategy === analysis.strategyName);
             if (hasOpenInSameStrategy) continue;
