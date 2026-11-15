@@ -369,7 +369,10 @@ function computePerformanceStats() {
             p2: calc(history.filter(t => (t.strategy || '').toLowerCase().includes('base') || (t.strategy || '').toLowerCase().includes('pista 2'))),
             p3: calc(history.filter(t => (t.strategy || '').toLowerCase().includes('timemachine') || (t.strategy || '').toLowerCase().includes('pista 3'))),
             p4: calc(history.filter(t => (t.strategy || '').toLowerCase().includes('vwap') || (t.strategy || '').toLowerCase().includes('whale') || (t.strategy || '').toLowerCase().includes('pista 4'))),
-            p5: calc(history.filter(t => (t.strategy || '').toLowerCase().includes('supertrend') || (t.strategy || '').toLowerCase().includes('orb') || (t.strategy || '').toLowerCase().includes('pista 5')))
+            p5: calc(history.filter(t => (t.strategy || '').toLowerCase().includes('supertrend') || (t.strategy || '').toLowerCase().includes('pista 5'))),
+            p6: calc(history.filter(t => (t.strategy || '').toLowerCase().includes('reversión') || (t.strategy || '').toLowerCase().includes('bollinger') || (t.strategy || '').toLowerCase().includes('pista 6'))),
+            p7: calc(history.filter(t => (t.strategy || '').toLowerCase().includes('orb-30') || (t.strategy || '').toLowerCase().includes('apertura') || (t.strategy || '').toLowerCase().includes('pista 7'))),
+            p8: calc(history.filter(t => (t.strategy || '').toLowerCase().includes('squeeze') || (t.strategy || '').toLowerCase().includes('ttm') || (t.strategy || '').toLowerCase().includes('pista 8')))
         },
         updatedAt: new Date().toISOString()
     };
