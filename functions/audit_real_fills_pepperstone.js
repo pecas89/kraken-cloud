@@ -15,7 +15,7 @@ const CFG = {
     accountId: parseInt(process.env.PEPPERSTONE_ACCOUNT_ID || '49442058')
 };
 
-const SYMBOL_NAMES = { 41: 'XAUUSD', 1614: 'SOLUSD', 7250: 'NVDA.US', 340: 'TSLA.US' };
+const SYMBOL_NAMES = { 41: 'XAUUSD', 1614: 'SOLUSD', 338: 'NVDA', 339: 'TSLA', 340: 'T.US (legacy)' };
 
 function fetchDeals(fromTs, toTs) {
     return new Promise((resolve) => {

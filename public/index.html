@@ -2806,9 +2806,8 @@
             const attachedMime = chatAttachedType;
             clearChatAttachment();
 
-            // Cerebro Endpoint Principal: Render Frankfurt (tiene la telemetría viva del motor en tiempo real)
+            // Cerebro Endpoint Autónomo Piso 2 (sin dependencia de otros pisos)
             const primaryEndpoint = RENDER_API_BASE + '/cerebro';
-            const secondaryEndpoint = 'https://cerebro-z4rcwssu7q-ew.a.run.app?reina=anastasia';
 
             const st = latestEngineState || {};
             const recon = st.brokerReconciliation || {};
@@ -2846,27 +2845,7 @@
                     }
                 }
             } catch(e) {
-                console.warn('Primary cerebro call fallback:', e.message);
-            }
-
-            if (!responseText) {
-                try {
-                    const res2 = await fetch(secondaryEndpoint, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(requestPayload)
-                    });
-                    if (res2.ok) {
-                        const data2 = await res2.json();
-                        if (data2.candidates && data2.candidates[0] && data2.candidates[0].content) {
-                            responseText = data2.candidates[0].content.parts.map(p => p.text).join('\n');
-                        } else if (data2.text) {
-                            responseText = data2.text;
-                        }
-                    }
-                } catch(e2) {
-                    console.warn('Secondary cerebro call error:', e2.message);
-                }
+                console.warn('Primary cerebro fallback local:', e.message);
             }
 
             if (!responseText) {

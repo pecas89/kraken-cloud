@@ -27,6 +27,7 @@ const alpacaService = require('./alpaca_service');
 const pepperstoneService = require('./pepperstone_centinela');
 const ti = require('./technical_indicators');
 const { evaluateStrategiesForBar } = require('./strategy_signals');
+const firestoreStore = require('./firestore_store');
 
 const PROMO_MATRIX_FILE = path.join(__dirname, 'promoted_strategies.json');
 let promotedMatrix = null;
@@ -153,10 +154,11 @@ if (fs.existsSync(STATE_FILE)) {
 }
 
 const PUBLIC_STATE_FILE = path.join(__dirname, '../public/trading_state.json');
-function saveState() {
+function saveState(forceCloud = false) {
     try {
         fs.writeFileSync(STATE_FILE, JSON.stringify(engineState, null, 2), 'utf8');
         fs.writeFileSync(PUBLIC_STATE_FILE, JSON.stringify(engineState, null, 2), 'utf8');
+        firestoreStore.syncEngineState(engineState, forceCloud).catch(() => {});
     } catch(e) {
         console.error('[ANASTASIA ENGINE] Error guardando estado:', e.message);
     }
@@ -1157,7 +1159,12 @@ async function sendDailyReport() {
     const today = romeDateStr();
     engineState.lastDailyReportDate = today;
     await notifyPedro(buildDailyReportText());
-    saveState();
+    firestoreStore.saveDailyPerformanceMetric(today, {
+        accountBalances: engineState.accountBalances,
+        liveMetrics: engineState.liveMetrics,
+        globalStats: (engineState.performanceStats && engineState.performanceStats.global) || {}
+    }).catch(() => {});
+    saveState(true);
     console.log('📬 [PARTE DIARIO] Enviado a Pedro por Telegram.');
 }
 
@@ -1360,6 +1367,11 @@ async function manageOpenPositions(currentQuotes) {
 
             engineState.closedTradesHistory.unshift(pos);
             computePerformanceStats();
+            firestoreStore.saveClosedTrade(pos).catch(() => {});
+            if (engineState.brokerReconciliation && Array.isArray(engineState.brokerReconciliation.ctraderPositions) && pos.positionId) {
+                engineState.brokerReconciliation.ctraderPositions = engineState.brokerReconciliation.ctraderPositions
+                    .filter(cp => String(cp.positionId) !== String(pos.positionId));
+            }
             const isAlpaca = pos.broker && pos.broker.includes('Alpaca');
             if (isAlpaca || (config && config.currency === 'USD')) engineState.dailyRealizedPnlUSD += pos.pnl;
             else engineState.dailyRealizedPnlEUR += pos.pnl;
@@ -1399,7 +1411,8 @@ async function manageOpenPositions(currentQuotes) {
         engineState.brokerReconciliation.ctraderManagedCount = remPep.length;
         engineState.brokerReconciliation.ctraderRealCount = Math.max(0, nextRealPepCount);
     }
-    saveState();
+    const hadClosedTrades = (engineState.openPositions.length !== remainingPositions.length);
+    saveState(hadClosedTrades);
     if (pepperstoneService && pepperstoneService.syncOpenPositions) {
         pepperstoneService.syncOpenPositions(remPep, engineState.brokerReconciliation ? engineState.brokerReconciliation.ctraderRealCount : remPep.length);
     }
@@ -1607,18 +1620,21 @@ async function startAutonomousDaemon(intervalMs = 30000) {
     console.log('===========================================================');
 
     // ♻️ Secuencia ordenada de arranque tras redespliegue:
-    // 1. Descargar velas/ATRs reales -> 2. Reconstruir fills Alpaca -> 3. Sincronizar APIs e hidratar custodia -> 4. Escaneo
-    let catchupIso = engineState.labResetAt || null;
-    if (engineState.closedTradesHistory && engineState.closedTradesHistory.length > 0) {
-        const latestMs = engineState.closedTradesHistory.reduce((mx, t) => Math.max(mx, new Date(t.closedAt || 0).getTime()), 0);
-        if (latestMs > 0) catchupIso = new Date(latestMs + 1000).toISOString();
-    }
-    console.log(`♻️ [ARRANQUE] Cargando mercado en vivo y sincronizando fills Alpaca desde ${catchupIso || '36h atrás'}...`);
+    // 1. Hidratar desde Google Firestore -> 2. Velas/ATRs -> 3. Fills Alpaca -> 4. Reconciliación APIs -> 5. Escaneo
     try {
+        await firestoreStore.hydrateFromFirestore(engineState).catch(e => console.warn('🔥 [ARRANQUE FIRESTORE] Error:', e.message));
+        let catchupIso = engineState.labResetAt || null;
+        if (engineState.closedTradesHistory && engineState.closedTradesHistory.length > 0) {
+            const latestMs = engineState.closedTradesHistory.reduce((mx, t) => Math.max(mx, new Date(t.closedAt || 0).getTime()), 0);
+            if (latestMs > 0) catchupIso = new Date(latestMs + 1000).toISOString();
+        }
+        console.log(`♻️ [ARRANQUE] Cargando mercado en vivo y sincronizando fills Alpaca desde ${catchupIso || '36h atrás'}...`);
         await fetchMarketQuotes().catch(e => console.warn('[ARRANQUE QUOTES] Error:', e.message));
         await rebuildHistoryFromAlpacaFills(catchupIso).catch(e => console.warn('♻️ [ARRANQUE REBUILD] Error:', e.message));
+        computePerformanceStats();
         seedRecentCooldownsFromHistory();
         await syncBrokerReality().catch(e => console.warn('[ARRANQUE RECON] Error:', e.message));
+        saveState(true);
     } finally {
         runAutonomousCycle().catch(e => console.error('[ANASTASIA ERROR]', e.message));
     }

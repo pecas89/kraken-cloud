@@ -1,0 +1,95 @@
+rules_version = '2';
+
+// ==============================================================================
+// CASTILLO IMPERIAL HOLDING S.A. // DOCTRINA DE SEGURIDAD "BAJO 7 LLAVES"
+// Piso 2: Kraken Quant Fund (Proyecto Firebase: kraken-trading-cloud)
+// ==============================================================================
+//
+// Arquitectura de Acceso Exclusivo por Backend (Admin-SDK-Only Lockdown):
+//   1. TODAS las lecturas y escrituras sobre Cloud Firestore se ejecutan
+//      EXCLUSIVAMENTE desde procesos de servidor de confianza mediante:
+//        - Firebase Admin SDK (`firebase-admin` en `functions/index.js`), y
+//        - Service Account OAuth2 (`https://www.googleapis.com/auth/datastore`
+//          sobre Firestore v1 REST API en `functions/firestore_store.js`).
+//      Las credenciales de Service Account operan a nivel de IAM de Google Cloud
+//      y omiten de forma segura las Security Rules de cliente.
+//   2. El dashboard web público (`https://kraken-trading-cloud.web.app` /
+//      `public/index.html`) NO carga ni utiliza el Firebase Client SDK y NO
+//      autentica usuarios finales; consume telemetría auditada únicamente vía
+//      endpoints HTTPS autorizados.
+//   3. En consecuencia, TODA petición directa desde SDKs de cliente (Web, iOS,
+//      Android o REST API de cliente, autenticada o no autenticada) queda
+//      estrictamente denegada por defecto en toda la base de datos.
+//
+// ==============================================================================
+// Assumed Data Model (Managed Exclusively Server-Side via Admin SDK / IAM)
+// ==============================================================================
+//
+// Collection: estado_motor
+// Document ID: actual
+// Fields (functions/firestore_store.js -> syncEngineState):
+//   - updatedAt: string (ISO 8601)
+//   - lastScanAt: string | null
+//   - totalScans: int
+//   - emergencyStop: bool
+//   - emergencyStopReason: string | null
+//   - accountBalances: map
+//   - liveMetrics: map
+//   - performanceStatsGlobal: map
+//   - openPositionsCount: int
+//   - openPositions: list (max 40 items)
+//   - closedCooldowns: map
+//   - lastSignalBarTime: map
+//   - lastDailyReportDate: string | null
+//   - lastHeartbeatDate: string | null
+//   - timeframes: list<string>
+//   - strategiesActive: int
+//
+// Collection: historial_ordenes
+// Document ID: {tradeId} (sanitized trade.id)
+// Fields (functions/firestore_store.js -> saveClosedTrade / fsQueryRecentTrades):
+//   - id: string
+//   - closedAt: string (indexed descending for recovery query)
+//   - persistedAt: string (ISO 8601)
+//   - [trade execution & PnL audit fields]
+//
+// Collection: metricas_rendimiento
+// Document ID: {dateStr}
+// Fields (functions/firestore_store.js -> saveDailyPerformanceMetric):
+//   - updatedAt: string (ISO 8601)
+//   - [daily risk and performance metrics]
+//
+// Collection: trades
+// Document ID: auto-generated ({tradeId})
+// Fields (functions/index.js -> api /webhook & /trades):
+//   - timestamp: timestamp (serverTimestamp)
+//   - created_at: string (ISO 8601, ordered descending)
+//   - ticker: string
+//   - action: string
+//   - price: number
+//   - entryNum: int
+//   - status: string
+//   - source: string
+//   - environment: string
+//
+// Collections: posiciones_abiertas, bitacora_nocturna, snapshots (and any future
+// collections / subcollections):
+//   - Reserved strictly for server-side Admin SDK / Service Account processes.
+//   - Zero direct client read/write surface.
+//
+// ==============================================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Lockdown total "Bajo 7 Llaves":
+    // Deniega incondicionalmente cualquier operación de cliente (get, list,
+    // create, update, delete) sobre estado_motor, posiciones_abiertas,
+    // historial_ordenes, metricas_rendimiento, bitacora_nocturna, trades,
+    // snapshots, subcolecciones y cualquier colección futura.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+  }
+}

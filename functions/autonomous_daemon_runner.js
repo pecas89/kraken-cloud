@@ -17,6 +17,7 @@ const { exec } = require('child_process');
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 const anastasiaEngine = require('./anastasia_autonomous_engine');
+const firestoreStore = require('./firestore_store');
 
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || '';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
@@ -172,6 +173,7 @@ const server = http.createServer(async (req, res) => {
                 posicionesAbiertasMotor: (st.openPositions || []).length,
                 posicionesRealesAlpaca: st.brokerReconciliation?.alpacaPositions?.length ?? null,
                 posicionesRealesCTrader: st.brokerReconciliation?.ctraderRealCount ?? null,
+                firestorePersisted: firestoreStore.isConfigured(),
                 filtroRVol: 'Activo (rVol >= 1.5 en SOL)',
                 serverTime: new Date().toISOString()
             }, null, 2));
@@ -195,6 +197,7 @@ DOCTRINA DE VERDAD FACTUAL PURA (CERO SUPOSICIONES):
   • Temporalidades activas: 5m, 15m, 1H, 4H (1m eliminado)
   • Estadísticas reales cerradas (${perf.total || 0} trades): WR ${perf.winRate || 0}%, PF ${perf.profitFactor || 0}, PnL Neto $${perf.netPnlUSD || 0} USD
   • Posiciones en libreta motor: ${(st.openPositions || []).length}
+  • Persistencia Google Firestore (kraken-trading-cloud): ${firestoreStore.isConfigured() ? 'ACTIVA' : 'PENDIENTE DE CREDENCIAL'}
 - TERMINANTEMENTE PROHIBIDO INVENTAR OPERACIONES, WIN RATES O RESULTADOS SIMULADOS.
 - Si falta un dato: "DATO NO REGISTRADO: [motivo técnico]".
 - FRIALDAD MATEMÁTICA RUSA: concisa, sin rodeos, cero adulación («cero sobona»).`;
@@ -203,11 +206,33 @@ DOCTRINA DE VERDAD FACTUAL PURA (CERO SUPOSICIONES):
                         contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\nConsulta de Pedro: ${rawText}` }, ...attachedParts] }]
                     };
 
-                    // 1. Intentar Vertex AI directo si la clave tiene permiso
-                    const key = process.env.GEMINI_API_KEY || '';
-                    if (key) {
+                    // Autonomía total de Piso 2 (Cero dependencia de Valentina / otros pisos):
+                    // 1. Intentar Google AI Studio (generativelanguage.googleapis.com) con GEMINI_AI_STUDIO_KEY o GEMINI_API_KEY
+                    const studioKey = process.env.GEMINI_AI_STUDIO_KEY || process.env.GEMINI_API_KEY || '';
+                    const vertexKey = process.env.GEMINI_API_KEY || '';
+                    let lastErr = null;
+
+                    if (studioKey) {
+                        const studioUrl = `https://generativelanguage.googleapis.com/v1beta/models/${process.env.GEMINI_STUDIO_MODEL || 'gemini-2.5-flash'}:generateContent?key=${studioKey}`;
                         try {
-                            const vertexUrl = `https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-3-flash-preview:generateContent?key=${key}`;
+                            const sRes = await fetch(studioUrl, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(geminiPayload)
+                            });
+                            const sJson = await sRes.json();
+                            if (sRes.ok && sJson && !sJson.error && sJson.candidates) {
+                                res.writeHead(200, { 'Content-Type': 'application/json' });
+                                return res.end(JSON.stringify(sJson));
+                            }
+                            lastErr = sJson;
+                        } catch(sErr) { lastErr = { error: { message: sErr.message } }; }
+                    }
+
+                    // 2. Intentar Vertex AI directo con GEMINI_API_KEY propio
+                    if (vertexKey) {
+                        const vertexUrl = `https://aiplatform.googleapis.com/v1/publishers/google/models/${process.env.GEMINI_MODEL || 'gemini-3-flash-preview'}:generateContent?key=${vertexKey}`;
+                        try {
                             const vRes = await fetch(vertexUrl, {
                                 method: 'POST',
                                 headers: { 'Content-Type': 'application/json' },
@@ -218,22 +243,12 @@ DOCTRINA DE VERDAD FACTUAL PURA (CERO SUPOSICIONES):
                                 res.writeHead(200, { 'Content-Type': 'application/json' });
                                 return res.end(JSON.stringify(vJson));
                             }
-                        } catch(vErr) { /* continuar al gateway oficial Cloud Run */ }
+                            lastErr = vJson;
+                        } catch(vErr) { lastErr = { error: { message: vErr.message } }; }
                     }
 
-                    // 2. Respaldo oficial del Holding en Google Cloud Run (europe-west1, Coste €0) con telemetría live
-                    const cloudRunUrl = 'https://cerebro-z4rcwssu7q-ew.a.run.app?reina=anastasia';
-                    const cRes = await fetch(cloudRunUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            reina: 'anastasia',
-                            contents: geminiPayload.contents
-                        })
-                    });
-                    const cJson = await cRes.json();
-                    res.writeHead(cRes.ok ? 200 : 502, { 'Content-Type': 'application/json' });
-                    return res.end(JSON.stringify(cJson));
+                    res.writeHead(502, { 'Content-Type': 'application/json' });
+                    return res.end(JSON.stringify(lastErr || { error: { message: 'GEMINI_API_KEY / GEMINI_AI_STUDIO_KEY sin acceso o créditos en Render.' } }));
                 } catch(e) {
                     res.writeHead(500, { 'Content-Type': 'application/json' });
                     return res.end(JSON.stringify({ error: e.message }));
@@ -253,6 +268,7 @@ DOCTRINA DE VERDAD FACTUAL PURA (CERO SUPOSICIONES):
         strategies: 8,
         activeAssets: ['TSLA', 'NVDA', 'GLD/XAUUSD', 'SOLUSD'],
         maxPositions: 24,
+        firestorePersisted: firestoreStore.isConfigured(),
         uptimeSeconds: Math.floor(process.uptime())
     }, null, 2));
 });
