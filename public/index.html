@@ -2312,7 +2312,7 @@
                     row.style.background = isProfit ? 'rgba(16, 185, 129, 0.07)' : 'rgba(239, 68, 68, 0.07)';
                     row.style.borderLeft = '3px solid ' + (isProfit ? 'var(--accent-green)' : color);
 
-                    row.innerHTML = '<td><b style="color: ' + color + ';">⚔️ ' + (pos.strategy || 'Estrategia 5M') + '</b></td>' +
+                    row.innerHTML = '<td><b style="color: ' + color + ';">⚔️ ' + (pos.strategy || 'Estrategia') + (pos.timeframe ? ' <span class="tag tag-timed" style="font-size:9px; margin-left:4px;">' + pos.timeframe + '</span>' : '') + '</b></td>' +
                         '<td>' + brokerTag + '</td>' +
                         '<td><b style="color: ' + color + ';">' + pos.symbol + ' (' + (pos.pez || '🦈') + ')</b></td>' +
                         '<td>' + fianzaLabel + '</td>' +
@@ -2330,7 +2330,7 @@
                 const noticeRow = document.createElement('tr');
                 noticeRow.className = 'dyn-live-row';
                 noticeRow.innerHTML = '<td colspan="10" style="background: rgba(255,255,255,0.02); text-align: center; color: var(--text-dim); font-size: 11px; padding: 12px 14px; border-left: 3px solid var(--accent-gold);">' +
-                    '⚔️ <b>Kraken Quant Fund:</b> 0 posiciones flotantes en este instante. Esperando nuevo gatillo 5M.' +
+                    '⚔️ <b>Kraken Quant Fund:</b> 0 posiciones flotantes en este instante. Escaneando 4 activos en 4 temporalidades (1m, 5m, 15m, 1H).' +
                     '</td>';
                 tbody.insertBefore(noticeRow, prev.nextSibling);
                 prev = noticeRow;
@@ -2398,7 +2398,7 @@
                     row.setAttribute('data-asset', assetKey);
                     row.setAttribute('data-strat', stratCode);
 
-                    row.innerHTML = '<td><b>' + (c.strategy ? c.strategy.split(':')[0] : '5M Sniper') + '</b></td>' +
+                    row.innerHTML = '<td><b>' + (c.strategy ? c.strategy.split(':')[0] : 'Sniper') + (c.timeframe ? ' <span class="tag tag-timed" style="font-size:9px; margin-left:3px;">' + c.timeframe + '</span>' : '') + '</b></td>' +
                         '<td>' + brokerTag + '</td>' +
                         '<td><b>' + c.symbol + '</b></td>' +
                         '<td>$' + (c.entryPrice ? c.entryPrice.toFixed(2) : '--') + ' ➔ $' + (c.exitPrice ? c.exitPrice.toFixed(2) : '--') + '</td>' +

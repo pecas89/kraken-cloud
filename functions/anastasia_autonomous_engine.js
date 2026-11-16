@@ -40,11 +40,19 @@ function loadPromotedMatrix() {
 }
 loadPromotedMatrix();
 
+// ⏱️ Las 4 Temporalidades Cuantitativas Sagradas (Mandato Pedro 16-Nov)
+const TIMEFRAMES = [
+    { code: '1Min', label: '1m' },
+    { code: '5Min', label: '5m' },
+    { code: '15Min', label: '15m' },
+    { code: '1Hour', label: '1H' }
+];
+
 let latestEnrichedBars = {
-    NVDA: [],
-    TSLA: [],
-    XAUUSD: [],
-    SOLUSD: []
+    NVDA: { '1m': [], '5m': [], '15m': [], '1H': [] },
+    TSLA: { '1m': [], '5m': [], '15m': [], '1H': [] },
+    XAUUSD: { '1m': [], '5m': [], '15m': [], '1H': [] },
+    SOLUSD: { '1m': [], '5m': [], '15m': [], '1H': [] }
 };
 
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || '';
@@ -255,7 +263,7 @@ async function notifyPedro(htmlText) {
 }
 
 // ------------------------------------------------------------------------------
-// 📡 FEED DE MERCADO EN VIVO PARA LOS 4 ACTIVOS (VELAS REALES 5M CON INDICADORES)
+// 📡 FEED DE MERCADO EN VIVO PARA LOS 4 ACTIVOS (VELAS REALES EN 4 TIMEFRAMES)
 // ------------------------------------------------------------------------------
 async function fetchMarketQuotes() {
     const quotes = {};
@@ -276,35 +284,36 @@ async function fetchMarketQuotes() {
         });
     }
 
+    const start = new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString().split('T')[0];
+
     try {
-        const [nvdaData, tslaData, gldData, cryptoData] = await Promise.all([
-            fetchBarsUrl('https://data.alpaca.markets/v2/stocks/NVDA/bars?timeframe=5Min&limit=50&feed=sip'),
-            fetchBarsUrl('https://data.alpaca.markets/v2/stocks/TSLA/bars?timeframe=5Min&limit=50&feed=sip'),
-            fetchBarsUrl('https://data.alpaca.markets/v2/stocks/GLD/bars?timeframe=5Min&limit=50&feed=sip'),
-            fetchBarsUrl('https://data.alpaca.markets/v1beta3/crypto/us/bars?symbols=SOL/USD&timeframe=5Min&limit=50')
-        ]);
+        const fetchPromises = [];
+        TIMEFRAMES.forEach(tf => {
+            fetchPromises.push(
+                fetchBarsUrl(`https://data.alpaca.markets/v2/stocks/NVDA/bars?timeframe=${tf.code}&limit=50&start=${start}&feed=sip`)
+                    .then(data => ({ ticker: 'NVDA', tf: tf.label, bars: data?.bars || [] })),
+                fetchBarsUrl(`https://data.alpaca.markets/v2/stocks/TSLA/bars?timeframe=${tf.code}&limit=50&start=${start}&feed=sip`)
+                    .then(data => ({ ticker: 'TSLA', tf: tf.label, bars: data?.bars || [] })),
+                fetchBarsUrl(`https://data.alpaca.markets/v2/stocks/GLD/bars?timeframe=${tf.code}&limit=50&start=${start}&feed=sip`)
+                    .then(data => ({ ticker: 'XAUUSD', tf: tf.label, bars: data?.bars || [] })),
+                fetchBarsUrl(`https://data.alpaca.markets/v1beta3/crypto/us/bars?symbols=SOL/USD&timeframe=${tf.code}&limit=50`)
+                    .then(data => ({ ticker: 'SOLUSD', tf: tf.label, bars: data?.bars?.['SOL/USD'] || [] }))
+            );
+        });
 
-        if (nvdaData && nvdaData.bars && nvdaData.bars.length > 0) {
-            latestEnrichedBars.NVDA = ti.enrichBarsWithIndicators(nvdaData.bars);
-            quotes.NVDA = latestEnrichedBars.NVDA[latestEnrichedBars.NVDA.length - 1].c;
-        }
-
-        if (tslaData && tslaData.bars && tslaData.bars.length > 0) {
-            latestEnrichedBars.TSLA = ti.enrichBarsWithIndicators(tslaData.bars);
-            quotes.TSLA = latestEnrichedBars.TSLA[latestEnrichedBars.TSLA.length - 1].c;
-        }
-
-        if (gldData && gldData.bars && gldData.bars.length > 0) {
-            latestEnrichedBars.XAUUSD = ti.enrichBarsWithIndicators(gldData.bars);
-            quotes.XAUUSD = latestEnrichedBars.XAUUSD[latestEnrichedBars.XAUUSD.length - 1].c;
-        }
-
-        if (cryptoData && cryptoData.bars && cryptoData.bars['SOL/USD'] && cryptoData.bars['SOL/USD'].length > 0) {
-            latestEnrichedBars.SOLUSD = ti.enrichBarsWithIndicators(cryptoData.bars['SOL/USD']);
-            quotes.SOLUSD = latestEnrichedBars.SOLUSD[latestEnrichedBars.SOLUSD.length - 1].c;
-        }
+        const results = await Promise.all(fetchPromises);
+        results.forEach(r => {
+            if (r.bars && r.bars.length > 0) {
+                if (!latestEnrichedBars[r.ticker]) latestEnrichedBars[r.ticker] = {};
+                latestEnrichedBars[r.ticker][r.tf] = ti.enrichBarsWithIndicators(r.bars);
+                const lastBar = r.bars[r.bars.length - 1];
+                if (r.tf === '5m' || !quotes[r.ticker]) {
+                    quotes[r.ticker] = lastBar.c;
+                }
+            }
+        });
     } catch(e) {
-        console.warn('[FEED] Error descargando velas 5m:', e.message);
+        console.warn('[FEED 4-TIMEFRAMES] Error descargando velas:', e.message);
     }
 
     // Fallbacks si el mercado estuviera cerrado o sin tick
@@ -382,13 +391,26 @@ computePerformanceStats();
 
 
 // ------------------------------------------------------------------------------
-// 🧠 EVALUACIÓN MULTI-ESTRATEGIA 5M (VELAS REALES ALPACA - CERO NÚMEROS ALEATORIOS)
+// 🧠 EVALUACIÓN MULTI-ESTRATEGIA EN 4 TIMEFRAMES (VELAS REALES ALPACA)
 // ------------------------------------------------------------------------------
-function evaluateAllStrategies(ticker, currentPrice) {
+function evaluateAllStrategies(ticker, currentPrice, timeframe = '5m') {
     loadPromotedMatrix();
-    const bars = latestEnrichedBars[ticker] || [];
+    const tickerData = latestEnrichedBars[ticker];
+    let bars = [];
+    if (tickerData) {
+        if (tickerData[timeframe] && tickerData[timeframe].length > 0) {
+            bars = tickerData[timeframe];
+        } else if (Array.isArray(tickerData) && tickerData.length > 0) {
+            bars = tickerData;
+        } else {
+            const firstKey = Object.keys(tickerData).find(k => tickerData[k]?.length > 0);
+            if (firstKey) bars = tickerData[firstKey];
+        }
+    }
     if (bars && bars.length > 0) {
-        return evaluateStrategiesForBar(ticker, bars, -1, promotedMatrix);
+        const results = evaluateStrategiesForBar(ticker, bars, -1, promotedMatrix);
+        results.forEach(r => { r.timeframe = timeframe; });
+        return results;
     }
     return [];
 }
@@ -487,6 +509,7 @@ async function executeAutonomousOpen(ticker, price, analysis) {
             pez: analysis.pez,
             indicators: analysis.indicators || null,
             signalReason: analysis.signalReason || '',
+            timeframe: analysis.timeframe || '5m',
             status: 'OPEN',
             openedAt: new Date().toISOString(),
             trailingStopMovedToBreakeven: false
@@ -506,7 +529,8 @@ async function executeAutonomousOpen(ticker, price, analysis) {
             score: analysis.score,
             pez: analysis.pez,
             sl: analysis.sl,
-            tp: analysis.tp
+            tp: analysis.tp,
+            timeframe: analysis.timeframe || '5m'
         });
         if (pepRes && pepRes.executed && pepRes.order && pepRes.order.id) {
             const pepRecord = {
@@ -537,6 +561,7 @@ async function executeAutonomousOpen(ticker, price, analysis) {
                 pez: analysis.pez,
                 indicators: analysis.indicators || null,
                 signalReason: analysis.signalReason || '',
+                timeframe: analysis.timeframe || '5m',
                 status: 'OPEN',
                 openedAt: new Date().toISOString(),
                 trailingStopMovedToBreakeven: false
@@ -554,7 +579,7 @@ async function executeAutonomousOpen(ticker, price, analysis) {
         const msg = `⚔️ <b>[DUELO EN VIVO • DÍA DE 15 • HEAD-TO-HEAD]</b>\n` +
             `🎯 <b>Disparo Paralelo en los 4 Activos: ${ticker}</b>\n` +
             `━━━━━━━━━━━━━━━━━━━━\n` +
-            `⚡ <b>Gatillo:</b> Score ${analysis.score}/100 (${analysis.pez}) en 5m\n` +
+            `⚡ <b>Gatillo:</b> ${analysis.strategyName} en <b>${analysis.timeframe || '5m'}</b> (Score ${analysis.score}/100)\n` +
             `💵 <b>Precio Entrada:</b> $${price.toFixed(2)}\n` +
             `🛡️ <b>Stop Loss:</b> $${analysis.sl} (-1.5 ATR)\n` +
             `🎯 <b>Take Profit:</b> $${analysis.tp} (+3.0 ATR)\n` +
@@ -1044,62 +1069,69 @@ async function runAutonomousCycle() {
     // 1. Gestionar posiciones abiertas existentes (Trailing BE, TP, SL)
     await manageOpenPositions(quotes);
 
-    // 2. Escaneo de los 4 activos evaluando las 5 Estrategias en Paralelo
+    // 2. Escaneo de los 4 activos evaluando las 8 Estrategias en los 4 Timeframes (1m, 5m, 15m, 1H)
     for (const [ticker, config] of Object.entries(ASSETS_CONFIG)) {
         const price = quotes[ticker] || quotes[config.altSymbol] || 100.0;
-        const allStrats = evaluateAllStrategies(ticker, price);
 
-        for (const analysis of allStrats) {
-            engineState.latestScores[ticker] = {
-                score: analysis.score,
-                pez: analysis.pez,
-                price: price,
-                action: analysis.action,
-                strategy: analysis.strategyName,
-                isPromoted: analysis.isPromoted,
-                indicators: analysis.indicators || null,
-                signalReason: analysis.signalReason || '',
-                time: new Date().toISOString()
-            };
+        for (const tf of TIMEFRAMES) {
+            const allStrats = evaluateAllStrategies(ticker, price, tf.label);
 
-            // Si está bloqueado por el filtro anti-caídas o es HOLD, registrar y saltar
-            if (analysis.action !== 'BUY') {
-                if (analysis.blockedReason) {
-                    console.log(`🛡️ [FILTRO ANTI-CAÍDAS] ${ticker} en ${analysis.strategyName}: ${analysis.blockedReason}`);
-                }
-                continue;
-            }
+            for (const analysis of allStrats) {
+                analysis.timeframe = tf.label;
 
-            // REGLA DE LABORATORIO DE PEDRO:
-            // Todas las 8 pistas ejecutan en Demo (Alpaca Paper y Pepperstone Demo) a tamaño mínimo.
-            // Restricciones de activo por diseño:
-            if (analysis.stratCode === 'p7' && (ticker !== 'TSLA' && ticker !== 'NVDA')) continue;
-            if (analysis.stratCode === 'p6' && (ticker !== 'NVDA' && ticker !== 'TSLA' && ticker !== 'GLD' && ticker !== 'XAUUSD')) continue;
-            if (analysis.stratCode === 'p8' && (ticker !== 'XAUUSD' && ticker !== 'GLD' && !ticker.includes('SOL'))) continue;
+                engineState.latestScores[ticker] = {
+                    score: analysis.score,
+                    pez: analysis.pez,
+                    price: price,
+                    action: analysis.action,
+                    strategy: analysis.strategyName,
+                    timeframe: tf.label,
+                    isPromoted: analysis.isPromoted,
+                    indicators: analysis.indicators || null,
+                    signalReason: analysis.signalReason || '',
+                    time: new Date().toISOString()
+                };
+                engineState.latestScores[`${ticker}_${tf.label}`] = { ...engineState.latestScores[ticker] };
 
-            // 🛑 MANDATO DE ORO DE PEDRO: Cero entradas en SOL en rango seco (volumen muerto de noche)
-            if (ticker.includes('SOL') && (analysis.indicators?.rvol || 0) < 1.5) {
-                console.log(`🛑 [CHOP FILTER] SOL ignorado: rVol insuficiente (${analysis.indicators?.rvol || 0} < 1.5x).`);
-                continue;
-            }
-
-            // Cada estrategia compite libremente sin duplicar posición en el mismo activo
-            const hasOpenInSameStrategy = engineState.openPositions.some(p => p.symbol === ticker && p.strategy === analysis.strategyName);
-            if (hasOpenInSameStrategy) continue;
-
-            // Disparo autónomo en ambos brokers si califica
-            if (analysis.score >= 65) {
-                // ⏰ MANDATO PEDRO: no abrir fuera de sesión ni en los últimos 30 min
-                if (!isEntryWindowForAsset(ticker)) {
-                    console.log(`⏰ [HORARIO] Señal ${ticker} (${analysis.strategyName}) ignorada: fuera de ventana de entrada (15:30-21:30 Roma, L-V).`);
+                // Si no es BUY (la propia estrategia dictó HOLD o sus propios filtros bloquearon), saltar
+                if (analysis.action !== 'BUY') {
+                    if (analysis.blockedReason) {
+                        console.log(`🛡️ [FILTRO PROPIO ${analysis.strategyName} • ${tf.label}] ${ticker}: ${analysis.blockedReason}`);
+                    }
                     continue;
                 }
+
+                // Restricciones de activo por diseño de la estrategia:
+                if (analysis.stratCode === 'p7' && (ticker !== 'TSLA' && ticker !== 'NVDA')) continue;
+                if (analysis.stratCode === 'p6' && (ticker !== 'NVDA' && ticker !== 'TSLA' && ticker !== 'GLD' && ticker !== 'XAUUSD')) continue;
+                if (analysis.stratCode === 'p8' && (ticker !== 'XAUUSD' && ticker !== 'GLD' && !ticker.includes('SOL'))) continue;
+
+                // 🛑 MANDATO DE ORO DE PEDRO: Cero entradas en SOL en rango seco (volumen muerto de noche)
+                if (ticker.includes('SOL') && (analysis.indicators?.rvol || 0) < 1.5) {
+                    console.log(`🛑 [CHOP FILTER ${tf.label}] SOL ignorado: rVol insuficiente (${analysis.indicators?.rvol || 0} < 1.5x).`);
+                    continue;
+                }
+
+                // Evitar duplicar posición en el mismo activo, misma estrategia y mismo timeframe
+                const hasOpenInSameStrategy = engineState.openPositions.some(p => 
+                    p.symbol === ticker && 
+                    p.strategy === analysis.strategyName &&
+                    (p.timeframe === tf.label || (!p.timeframe && tf.label === '5m'))
+                );
+                if (hasOpenInSameStrategy) continue;
+
+                // ⏰ MANDATO PEDRO: no abrir fuera de sesión ni en los últimos 30 min (SOL es 24/7)
+                if (!isEntryWindowForAsset(ticker)) {
+                    console.log(`⏰ [HORARIO] Señal ${ticker} (${analysis.strategyName} • ${tf.label}) ignorada: fuera de ventana de entrada (15:30-21:30 Roma, L-V).`);
+                    continue;
+                }
+
                 // Candado sagrado de máximo 24 posiciones simultáneas en Pepperstone
                 const pepCount = engineState.openPositions.filter(p => !p.broker || p.broker.includes('Pepperstone')).length;
                 if (pepCount < 24) {
                     await executeAutonomousOpen(ticker, price, analysis);
                 } else {
-                    console.log(`🔒 [CANDADO PEPPERSTONE] Máximo 24 posiciones en paralelo alcanzado (${pepCount}/24). Señal ${ticker} (${analysis.strategyName}) en espera.`);
+                    console.log(`🔒 [CANDADO PEPPERSTONE] Máximo 24 posiciones en paralelo alcanzado (${pepCount}/24). Señal ${ticker} (${analysis.strategyName} • ${tf.label}) en espera.`);
                 }
             }
         }
