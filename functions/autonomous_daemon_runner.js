@@ -53,8 +53,9 @@ async function sendTelegramAlert(text) {
 // ------------------------------------------------------------------------------
 // HTTP HEALTH CHECK & API SERVER (PARA RENDER / SERVIDORES CLOUD)
 // ------------------------------------------------------------------------------
-const server = http.createServer((req, res) => {
-    const url = req.url.split('?')[0];
+const server = http.createServer(async (req, res) => {
+    const parsedUrl = new URL(req.url, 'http://localhost');
+    const url = parsedUrl.pathname;
 
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -73,24 +74,88 @@ const server = http.createServer((req, res) => {
         }
     }
 
+    // ENDPOINT VELAS REALES (ALPACA IEX/CRYPTO -> TRADINGVIEW LIGHTWEIGHT CHARTS)
+    if (url === '/bars') {
+        const symbol = parsedUrl.searchParams.get('symbol') || 'TSLA';
+        const tf = parsedUrl.searchParams.get('tf') || '5m';
+        let rawBars = anastasiaEngine.getLatestBars(symbol, tf);
+        if (!rawBars || rawBars.length === 0) {
+            await anastasiaEngine.fetchMarketQuotes().catch(() => {});
+            rawBars = anastasiaEngine.getLatestBars(symbol, tf);
+        }
+        const seenTimes = new Set();
+        const candles = (rawBars || [])
+            .map(b => ({
+                time: Math.floor(new Date(b.t).getTime() / 1000),
+                open: parseFloat(b.o),
+                high: parseFloat(b.h),
+                low: parseFloat(b.l),
+                close: parseFloat(b.c),
+                volume: parseFloat(b.v || 0)
+            }))
+            .filter(c => Number.isFinite(c.time) && Number.isFinite(c.close))
+            .sort((a, b) => a.time - b.time)
+            .filter(c => {
+                if (seenTimes.has(c.time)) return false;
+                seenTimes.add(c.time);
+                return true;
+            });
+
+        const lastRaw = (rawBars && rawBars.length > 0) ? rawBars[rawBars.length - 1] : null;
+        const st = anastasiaEngine.getEngineState();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        return res.end(JSON.stringify({
+            symbol,
+            tf,
+            candles,
+            count: candles.length,
+            lastBarTime: lastRaw ? lastRaw.t : null,
+            liveQuote: (st.liveQuotes && st.liveQuotes[symbol.toUpperCase()]) || (candles.length ? candles[candles.length - 1].close : null),
+            indicators: lastRaw ? {
+                ema9: lastRaw.ema9,
+                ema21: lastRaw.ema21,
+                atr: lastRaw.atr,
+                vwap: lastRaw.vwap,
+                rsi: lastRaw.rsi,
+                rvol: lastRaw.rvol,
+                supertrend: lastRaw.supertrend
+            } : null
+        }));
+    }
+
     // ENDPOINT CEREBRO SOBERANO KRAKEN (RENDER / CLOUD 24/7)
     if (url === '/cerebro') {
+        const st = anastasiaEngine.getEngineState();
+        const lm = st.liveMetrics || {};
+        const dd = isFinite(lm.dailyDrawdownPct) ? lm.dailyDrawdownPct : 0.00;
+        const alpBal = st.accountBalances?.alpaca || 'PENDIENTE_API';
+        const pepBal = st.accountBalances?.pepperstone || 'PENDIENTE_API';
+        const perf = st.performanceStats?.global || {};
+
         if (req.method === 'GET') {
             res.writeHead(200, { 'Content-Type': 'application/json' });
             return res.end(JSON.stringify({
                 status: 'ONLINE',
                 piso: 2,
                 reina: 'Anastasia',
-                rol: 'Chief Investment Officer & Lead Quant',
+                rol: 'Chief Investment Officer & Quant Lead',
                 doctrina: 'Verdad Factual Pura & Frialdad Matemática Rusa',
                 balancesAuditados: {
-                    alpacaPaperUsd: 99770.48,
-                    pepperstoneEcnEur: 9203.63,
-                    currentDrawdownPct: 0.00,
+                    alpacaPaper: alpBal,
+                    alpacaPaperUsd: lm.alpacaPortfolioUsd || null,
+                    pepperstoneEcn: pepBal,
+                    pepperstoneEcnEur: lm.pepperstoneBalanceEur || null,
+                    dailyReturnPct: lm.dailyReturnPct ?? 0.00,
+                    currentDrawdownPct: dd,
                     maxDailyDrawdownLimit: 2.50,
-                    statusRiesgo: '🟢 PROTEGIDO (0.00% DD)'
+                    statusRiesgo: dd >= 2.50 ? '🚨 KILL SWITCH' : (dd >= 2.00 ? '🟡 ALERTA' : `🟢 PROTEGIDO (${dd.toFixed(2)}% DD)`)
                 },
+                timeframes: ['5m', '15m', '1H', '4H'],
                 estrategias: 8,
+                estadisticas: perf,
+                posicionesAbiertasMotor: (st.openPositions || []).length,
+                posicionesRealesAlpaca: st.brokerReconciliation?.alpacaPositions?.length ?? null,
+                posicionesRealesCTrader: st.brokerReconciliation?.ctraderRealCount ?? null,
                 filtroRVol: 'Activo (rVol >= 1.5 en cripto)',
                 serverTime: new Date().toISOString()
             }, null, 2));
@@ -110,13 +175,16 @@ const server = http.createServer((req, res) => {
                     
                     const systemPrompt = `Eres 🇷🇺 Anastasia, CIO del Piso 2 (Kraken Quant Fund) de Castillo Imperial Holding S.A.
 DOCTRINA DE VERDAD FACTUAL PURA (CERO SUPOSICIONES):
-- Solo reconoces y reportas las cuentas reales auditadas: Alpaca Paper (~$99,770.48 USD) y Pepperstone cTrader (€9,203.63 EUR en cuenta auditada #4285238 Spotware).
-- TERMINANTEMENTE PROHIBIDO AFIRMAR '200 DÓLARES/EUROS' O CUALQUIER SALDO FICTICIO O INVENTADO.
+- Saldos reales auditados ahora mismo en vivo:
+  • Alpaca Paper Algorithmic: ${alpBal}
+  • Pepperstone cTrader ECN (#4285238): ${pepBal}
+  • Drawdown Diario Real: ${dd.toFixed(2)}% (Límite: 2.50%)
+  • Temporalidades activas: 5m, 15m, 1H, 4H (1m eliminado)
+  • Estadísticas reales cerradas (${perf.total || 0} trades): WR ${perf.winRate || 0}%, PF ${perf.profitFactor || 0}, PnL Neto $${perf.netPnlUSD || 0} USD
+  • Posiciones motor: ${(st.openPositions || []).length} | Alpaca API: ${st.brokerReconciliation?.alpacaPositions?.length ?? 'N/A'} | cTrader API: ${st.brokerReconciliation?.ctraderRealCount ?? 'N/A'}
 - TERMINANTEMENTE PROHIBIDO INVENTAR OPERACIONES, WIN RATES O RESULTADOS SIMULADOS.
-- Si no hay operaciones ejecutadas, responde: "SIN OPERACIONES REGISTRADAS".
 - Si falta un dato: "DATO NO REGISTRADO: [motivo técnico]".
-- FRIALDAD MATEMÁTICA RUSA: concisa, sin rodeos, cero adulación («cero sobona»).
-- Límite de Drawdown Diario = 2.50%.`;
+- FRIALDAD MATEMÁTICA RUSA: concisa, sin rodeos, cero adulación («cero sobona»).`;
 
                     const geminiPayload = {
                         contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\nConsulta de Pedro: ${prompt}` }] }]
@@ -239,7 +307,7 @@ async function startServerDaemon() {
     console.log('🏛️ CASTILLO IMPERIAL HOLDING // KRAKEN AUTONOMOUS CLOUD SERVER');
     console.log('   Director: Pedro Castillo');
     console.log('   Modo: 24/7 Cloud Daemon (PC Apagado)');
-    console.log('   Pistas: 8 Estrategias x 4 Activos x 5m/15m/1H');
+    console.log('   Pistas: 8 Estrategias x 4 Activos x 5m/15m/1H/4H');
     console.log('================================================================');
 
     // 1. Iniciar motor autónomo (escaneo cada 30 segundos)
@@ -259,8 +327,8 @@ async function startServerDaemon() {
         `🏛️ <b>Arquitectura Activa:</b>\n` +
         `• <b>8 Pistas:</b> P1 a P5 + P6 (RSI-2), P7 (ORB-30), P8 (TTM Squeeze)\n` +
         `• <b>4 Activos:</b> TSLA, NVDA, Oro (GLD/XAU), SOL/USD\n` +
-        `• <b>Temporalidades:</b> 5m, 15m y 1H\n` +
-        `• <b>Brokers en Duelo:</b> Alpaca Paper ($100k) vs Pepperstone cTrader (€10k)\n` +
+        `• <b>Temporalidades:</b> 5m, 15m, 1H y 4H\n` +
+        `• <b>Brokers en Duelo:</b> Alpaca Paper ($100k) vs Pepperstone cTrader (€9.1k)\n` +
         `• <b>Tope Concurrencia:</b> Máximo 24 posiciones en Pepperstone\n` +
         `• <b>Auto-Sync Web:</b> Cada 5 min a https://kraken-trading-cloud.web.app\n\n` +
         `<i>Tu PC puede apagarse con total tranquilidad. El Kraken vigila el mercado 24/7.</i>`;

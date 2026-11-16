@@ -57,6 +57,8 @@ async function getAccount() {
         status: d.status,
         currency: d.currency,
         cash: parseFloat(d.cash),
+        equity: parseFloat(d.equity || d.portfolio_value),
+        lastEquity: parseFloat(d.last_equity || d.portfolio_value),
         portfolioValue: parseFloat(d.portfolio_value),
         buyingPower: parseFloat(d.buying_power),
         multiplier: d.multiplier,

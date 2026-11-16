@@ -286,24 +286,30 @@ async function fetchMarketQuotes() {
     }
 
     // 25 días atrás para asegurar suficientes velas en 4H (mínimo 30-50 barras para EMA21 y ATR14)
-    const start = new Date(Date.now() - 25 * 24 * 3600 * 1000).toISOString().split('T')[0];
+    // MANDATO VERDAD FACTUAL: usar feed=iex + sort=desc + reverse() para obtener siempre las ÚLTIMAS 50 velas reales hasta HOY (nunca velas viejas).
+    const start = new Date(Date.now() - 25 * 24 * 3600 * 1000).toISOString();
 
     try {
         const fetchPromises = [];
         TIMEFRAMES.forEach(tf => {
             fetchPromises.push(
-                fetchBarsUrl(`https://data.alpaca.markets/v2/stocks/NVDA/bars?timeframe=${tf.code}&limit=50&start=${start}&feed=sip`)
-                    .then(data => ({ ticker: 'NVDA', tf: tf.label, bars: data?.bars || [] })),
-                fetchBarsUrl(`https://data.alpaca.markets/v2/stocks/TSLA/bars?timeframe=${tf.code}&limit=50&start=${start}&feed=sip`)
-                    .then(data => ({ ticker: 'TSLA', tf: tf.label, bars: data?.bars || [] })),
-                fetchBarsUrl(`https://data.alpaca.markets/v2/stocks/GLD/bars?timeframe=${tf.code}&limit=50&start=${start}&feed=sip`)
-                    .then(data => ({ ticker: 'XAUUSD', tf: tf.label, bars: data?.bars || [] })),
-                fetchBarsUrl(`https://data.alpaca.markets/v1beta3/crypto/us/bars?symbols=SOL/USD&timeframe=${tf.code}&limit=50`)
-                    .then(data => ({ ticker: 'SOLUSD', tf: tf.label, bars: data?.bars?.['SOL/USD'] || [] }))
+                fetchBarsUrl(`https://data.alpaca.markets/v2/stocks/NVDA/bars?timeframe=${tf.code}&limit=50&start=${encodeURIComponent(start)}&sort=desc&feed=iex`)
+                    .then(data => ({ ticker: 'NVDA', tf: tf.label, bars: (data?.bars || []).slice().reverse() })),
+                fetchBarsUrl(`https://data.alpaca.markets/v2/stocks/TSLA/bars?timeframe=${tf.code}&limit=50&start=${encodeURIComponent(start)}&sort=desc&feed=iex`)
+                    .then(data => ({ ticker: 'TSLA', tf: tf.label, bars: (data?.bars || []).slice().reverse() })),
+                fetchBarsUrl(`https://data.alpaca.markets/v2/stocks/GLD/bars?timeframe=${tf.code}&limit=50&start=${encodeURIComponent(start)}&sort=desc&feed=iex`)
+                    .then(data => ({ ticker: 'XAUUSD', tf: tf.label, bars: (data?.bars || []).slice().reverse() })),
+                fetchBarsUrl(`https://data.alpaca.markets/v1beta3/crypto/us/bars?symbols=SOL/USD&timeframe=${tf.code}&limit=50&start=${encodeURIComponent(start)}&sort=desc`)
+                    .then(data => ({ ticker: 'SOLUSD', tf: tf.label, bars: (data?.bars?.['SOL/USD'] || []).slice().reverse() }))
             );
         });
 
-        const results = await Promise.all(fetchPromises);
+        const [results, stockSnaps, cryptoLatest] = await Promise.all([
+            Promise.all(fetchPromises),
+            fetchBarsUrl('https://data.alpaca.markets/v2/stocks/snapshots?symbols=NVDA,TSLA,GLD&feed=iex'),
+            fetchBarsUrl('https://data.alpaca.markets/v1beta3/crypto/us/latest/trades?symbols=SOL/USD')
+        ]);
+
         results.forEach(r => {
             if (r.bars && r.bars.length > 0) {
                 if (!latestEnrichedBars[r.ticker]) latestEnrichedBars[r.ticker] = {};
@@ -315,15 +321,22 @@ async function fetchMarketQuotes() {
                 }
             }
         });
+
+        // Sobrescribir quotes con último tick en vivo si está disponible (máxima precisión al segundo)
+        if (stockSnaps) {
+            if (stockSnaps.NVDA?.latestTrade?.p) quotes.NVDA = stockSnaps.NVDA.latestTrade.p;
+            if (stockSnaps.TSLA?.latestTrade?.p) quotes.TSLA = stockSnaps.TSLA.latestTrade.p;
+            if (stockSnaps.GLD?.latestTrade?.p) quotes.XAUUSD = stockSnaps.GLD.latestTrade.p;
+        }
+        if (cryptoLatest?.trades?.['SOL/USD']?.p) {
+            quotes.SOLUSD = cryptoLatest.trades['SOL/USD'].p;
+        }
     } catch(e) {
         console.warn('[FEED 4-TIMEFRAMES] Error descargando velas:', e.message);
     }
 
-    // Fallbacks si el mercado estuviera cerrado o sin tick
-    if (!quotes.NVDA) quotes.NVDA = 177.28;
-    if (!quotes.TSLA) quotes.TSLA = 372.91;
-    if (!quotes.SOLUSD) quotes.SOLUSD = 85.84;
-    if (!quotes.XAUUSD) quotes.XAUUSD = 373.64;
+    // Guardar cotizaciones vivas en el estado para la terminal web
+    engineState.liveQuotes = { ...quotes, updatedAt: new Date().toISOString() };
 
     return quotes;
 }
@@ -346,8 +359,8 @@ function computePerformanceStats() {
             const pnlEUR = isUSD ? pnl / 1.05 : pnl;
             netPnlUSD += pnlUSD;
             netPnlEUR += pnlEUR;
-            if (pnl > 0.05) { wins++; grossProfit += pnlUSD; }
-            else if (pnl < -0.05) { losses++; grossLoss += Math.abs(pnlUSD); }
+            if (pnl > 0.005) { wins++; grossProfit += pnlUSD; }
+            else if (pnl < -0.005) { losses++; grossLoss += Math.abs(pnlUSD); }
             else { bes++; }
         });
         const total = wins + losses + bes;
@@ -384,7 +397,8 @@ function computePerformanceStats() {
             p5: calc(history.filter(t => (t.strategy || '').toLowerCase().includes('supertrend') || (t.strategy || '').toLowerCase().includes('pista 5'))),
             p6: calc(history.filter(t => (t.strategy || '').toLowerCase().includes('reversión') || (t.strategy || '').toLowerCase().includes('bollinger') || (t.strategy || '').toLowerCase().includes('pista 6'))),
             p7: calc(history.filter(t => (t.strategy || '').toLowerCase().includes('orb-30') || (t.strategy || '').toLowerCase().includes('apertura') || (t.strategy || '').toLowerCase().includes('pista 7'))),
-            p8: calc(history.filter(t => (t.strategy || '').toLowerCase().includes('squeeze') || (t.strategy || '').toLowerCase().includes('ttm') || (t.strategy || '').toLowerCase().includes('pista 8')))
+            p8: calc(history.filter(t => (t.strategy || '').toLowerCase().includes('squeeze') || (t.strategy || '').toLowerCase().includes('ttm') || (t.strategy || '').toLowerCase().includes('pista 8'))),
+            rebuilt: calc(history.filter(t => t.rebuiltFromFills || (t.strategy || '').toLowerCase().includes('reconstruido')))
         },
         updatedAt: new Date().toISOString()
     };
@@ -706,15 +720,45 @@ async function syncBrokerReality() {
             alpacaService.getAccount().catch(() => null),
             alpacaService.getPositions().catch(() => [])
         ]);
+        let pepAcc = null;
         if (acc && isFinite(acc.portfolioValue)) {
             engineState.accountBalances.alpaca = `$${acc.portfolioValue.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD`;
         }
         try {
-            const pepAcc = await pepperstoneService.getLiveAccountData();
+            pepAcc = await pepperstoneService.getLiveAccountData();
             if (pepAcc && isFinite(pepAcc.balance)) {
-                engineState.accountBalances.pepperstone = `€${pepAcc.balance.toLocaleString('es-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EUR`;
+                engineState.accountBalances.pepperstone = `€${pepAcc.balance.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} EUR`;
             }
         } catch(e) { /* Pepperstone offline: conservar último saldo conocido */ }
+
+        // Métricas numéricas reales para KPI Strip, Drawdown y Cerebro (cero hardcoded)
+        const alpEquity = acc ? (acc.equity || acc.portfolioValue || 0) : null;
+        const alpLastEq = acc ? (acc.lastEquity || acc.portfolioValue || 0) : null;
+        const pepBalEur = (pepAcc && isFinite(pepAcc.balance)) ? pepAcc.balance : null;
+        let dailyChangeUsd = 0;
+        let baseEqUsd = 0;
+        if (alpEquity && alpLastEq && alpLastEq > 0) {
+            dailyChangeUsd += (alpEquity - alpLastEq);
+            baseEqUsd += alpLastEq;
+        }
+        const pepTodayPnlEur = engineState.dailyRealizedPnlEUR || 0;
+        if (pepBalEur && pepBalEur > 0) {
+            dailyChangeUsd += (pepTodayPnlEur * 1.05);
+            baseEqUsd += (pepBalEur * 1.05);
+        }
+        const dailyReturnPct = baseEqUsd > 0 ? parseFloat(((dailyChangeUsd / baseEqUsd) * 100).toFixed(2)) : 0.00;
+        const dailyDrawdownPct = dailyReturnPct < 0 ? Math.abs(dailyReturnPct) : 0.00;
+        engineState.liveMetrics = {
+            alpacaPortfolioUsd: acc ? acc.portfolioValue : null,
+            alpacaCashUsd: acc ? acc.cash : null,
+            alpacaEquityUsd: alpEquity,
+            alpacaLastEquityUsd: alpLastEq,
+            pepperstoneBalanceEur: pepBalEur,
+            dailyReturnPct,
+            dailyDrawdownPct,
+            maxDailyDrawdownPct: 2.50,
+            updatedAt: new Date().toISOString()
+        };
 
         // Reconcile REAL de cTrader (posiciones abiertas de verdad en el broker)
         let pepRealPositions = [];
@@ -722,6 +766,14 @@ async function syncBrokerReality() {
             const pepRecon = await pepperstoneService.getOpenPositionsViaOpenAPI();
             if (pepRecon && pepRecon.positions) pepRealPositions = pepRecon.positions;
         } catch(e) { console.warn('[RECONCILE cTrader] Error:', e.message); }
+
+        const SYMBOL_ID_NAMES = {
+            1614: 'SOLUSD',
+            338: 'NVDA',
+            339: 'TSLA',
+            41: 'XAUUSD',
+            340: 'T.US (legacy)'
+        };
 
         // 🧹 PURGA AUTORIZADA POR PEDRO (12-NOV): cerrar TODAS las posiciones reales
         // de cTrader en cuanto el mercado abra (los CFDs de acciones US estaban
@@ -777,9 +829,27 @@ async function syncBrokerReality() {
             checkedAt: new Date().toISOString(),
             alpacaPositions: (alpPositions || []).map(p => ({
                 symbol: p.symbol, qty: p.qty, side: p.side,
-                avgEntryPrice: p.avgEntryPrice, unrealizedPnl: p.unrealizedPnl,
-                unrealizedPnlPct: p.unrealizedPnlPct
+                avgEntryPrice: p.avgEntryPrice, currentPrice: p.currentPrice,
+                unrealizedPnl: p.unrealizedPnl, unrealizedPnlPct: p.unrealizedPnlPct
             })),
+            ctraderPositions: (pepRealPositions || []).map(p => {
+                const td = p.tradeData || {};
+                const symId = td.symbolId;
+                const sym = SYMBOL_ID_NAMES[symId] || `ID_${symId}`;
+                return {
+                    positionId: p.positionId,
+                    symbolId: symId,
+                    symbol: sym,
+                    side: td.tradeSide === 2 ? 'SELL' : 'BUY',
+                    volumeRaw: td.volume || 0,
+                    unitsLabel: sym === 'SOLUSD' ? `${((td.volume || 0) / 100).toFixed(2)} SOL` : `${((td.volume || 0) / 100).toFixed(2)} lot`,
+                    entryPrice: p.price,
+                    usedMarginEur: (p.usedMargin || 0) / 100,
+                    swapEur: (p.swap || 0) / 100,
+                    comment: td.comment || '',
+                    openedAt: td.openTimestamp ? new Date(td.openTimestamp).toISOString() : null
+                };
+            }),
             ctraderRealCount: pepRealPositions.length,
             ctraderLibretaCount: pepLibreta,
             engineAlpacaQty: engineAlpaca,
@@ -1123,29 +1193,29 @@ async function runAutonomousCycle() {
     // 1. Gestionar posiciones abiertas existentes (Trailing BE, TP, SL)
     await manageOpenPositions(quotes);
 
-    // 2. Escaneo de los 4 activos evaluando las 8 Estrategias en los 4 Timeframes (1m, 5m, 15m, 1H)
+    // Limpiar restos antiguos de temporalidad 1m eliminada por mandato de Pedro
+    Object.keys(engineState.latestScores || {}).forEach(k => {
+        if (k.endsWith('_1m')) delete engineState.latestScores[k];
+    });
+
+    // 2. Escaneo de los 4 activos evaluando las 8 Estrategias en los 4 Timeframes (5m, 15m, 1H, 4H)
     for (const [ticker, config] of Object.entries(ASSETS_CONFIG)) {
         const price = quotes[ticker] || quotes[config.altSymbol] || 100.0;
+        let bestOverall = null;
 
         for (const tf of TIMEFRAMES) {
             const allStrats = evaluateAllStrategies(ticker, price, tf.label);
+            let bestForTf = null;
 
             for (const analysis of allStrats) {
                 analysis.timeframe = tf.label;
 
-                engineState.latestScores[ticker] = {
-                    score: analysis.score,
-                    pez: analysis.pez,
-                    price: price,
-                    action: analysis.action,
-                    strategy: analysis.strategyName,
-                    timeframe: tf.label,
-                    isPromoted: analysis.isPromoted,
-                    indicators: analysis.indicators || null,
-                    signalReason: analysis.signalReason || '',
-                    time: new Date().toISOString()
-                };
-                engineState.latestScores[`${ticker}_${tf.label}`] = { ...engineState.latestScores[ticker] };
+                // Seleccionar la mejor estrategia de este timeframe (BUY primero, luego mayor Score)
+                const candPriority = (analysis.action === 'BUY' ? 1000 : 0) + (analysis.score || 0);
+                const curTfPriority = bestForTf ? ((bestForTf.action === 'BUY' ? 1000 : 0) + (bestForTf.score || 0)) : -1;
+                if (!bestForTf || candPriority > curTfPriority) {
+                    bestForTf = analysis;
+                }
 
                 // Si no es BUY (la propia estrategia dictó HOLD o sus propios filtros bloquearon), saltar
                 if (analysis.action !== 'BUY') {
@@ -1198,6 +1268,41 @@ async function runAutonomousCycle() {
                     console.log(`🔒 [CANDADO PEPPERSTONE] Máximo 24 posiciones en paralelo alcanzado (${pepCount}/24). Señal ${ticker} (${analysis.strategyName} • ${tf.label}) en espera.`);
                 }
             }
+
+            if (bestForTf) {
+                const tfEntry = {
+                    score: bestForTf.score,
+                    pez: bestForTf.pez,
+                    price: price,
+                    barPrice: bestForTf.barPrice || price,
+                    action: bestForTf.action,
+                    strategy: bestForTf.strategyName,
+                    stratCode: bestForTf.stratCode,
+                    timeframe: tf.label,
+                    isPromoted: bestForTf.isPromoted,
+                    indicators: bestForTf.indicators || null,
+                    signalReason: bestForTf.signalReason || '',
+                    sl: bestForTf.sl,
+                    tp: bestForTf.tp,
+                    allStrats: allStrats.map(s => ({
+                        code: s.stratCode,
+                        score: s.score,
+                        action: s.action
+                    })),
+                    time: new Date().toISOString()
+                };
+                engineState.latestScores[`${ticker}_${tf.label}`] = tfEntry;
+
+                const tfPrio = (bestForTf.action === 'BUY' ? 1000 : 0) + (bestForTf.score || 0);
+                const ovPrio = bestOverall ? ((bestOverall.action === 'BUY' ? 1000 : 0) + (bestOverall.score || 0)) : -1;
+                if (!bestOverall || tfPrio > ovPrio) {
+                    bestOverall = tfEntry;
+                }
+            }
+        }
+
+        if (bestOverall) {
+            engineState.latestScores[ticker] = { ...bestOverall, price: price };
         }
     }
 
@@ -1246,6 +1351,22 @@ function startAutonomousDaemon(intervalMs = 30000) {
     }, intervalMs);
 }
 
+function getLatestBars(symbol, timeframe = '5m') {
+    const raw = (symbol || 'TSLA').toUpperCase();
+    let key = raw;
+    if (raw === 'GLD' || raw === 'ORO' || raw.includes('XAU')) key = 'XAUUSD';
+    else if (raw.includes('SOL')) key = 'SOLUSD';
+
+    const tfMap = { '5m': '5m', '5Min': '5m', '15m': '15m', '15Min': '15m', '1H': '1H', '1Hour': '1H', '4H': '4H', '4Hour': '4H' };
+    const tfKey = tfMap[timeframe] || '5m';
+    const bars = (latestEnrichedBars[key] && latestEnrichedBars[key][tfKey]) ? latestEnrichedBars[key][tfKey] : [];
+    return bars;
+}
+
+function getEngineState() {
+    return engineState;
+}
+
 // Ejecución directa si se invoca con node
 if (require.main === module) {
     startAutonomousDaemon();
@@ -1254,6 +1375,8 @@ if (require.main === module) {
 module.exports = {
     ASSETS_CONFIG,
     engineState,
+    getEngineState,
+    getLatestBars,
     startAutonomousDaemon,
     runAutonomousCycle,
     fetchMarketQuotes,
