@@ -158,10 +158,11 @@ function saveState() {
 async function rebuildHistoryFromAlpacaFills(sinceIso) {
     try {
         const since = sinceIso ? new Date(sinceIso).getTime() : (Date.now() - 36 * 3600 * 1000);
+        const afterParam = new Date(since).toISOString();
         let fills = [];
         let pageToken = null;
-        for (let page = 0; page < 10; page++) {
-            let url = '/account/activities/FILL?page_size=100&direction=asc';
+        for (let page = 0; page < 35; page++) {
+            let url = `/account/activities/FILL?page_size=100&direction=asc&after=${encodeURIComponent(afterParam)}`;
             if (pageToken) url += '&page_token=' + encodeURIComponent(pageToken);
             const res = await alpacaService.alpacaRequest(url, 'GET');
             if (!res.ok || !Array.isArray(res.data) || res.data.length === 0) break;
@@ -171,13 +172,14 @@ async function rebuildHistoryFromAlpacaFills(sinceIso) {
         }
         fills = fills.filter(f => new Date(f.transaction_time).getTime() >= since);
         if (fills.length === 0) {
-            console.log('♻️ [REBUILD] Sin fills nuevos desde el reseteo. Nada que reconstruir.');
+            console.log('♻️ [REBUILD] Sin fills nuevos desde el snapshot. Nada que reconstruir.');
             return 0;
         }
 
-        const alpacaSymbolToTicker = { 'NVDA': 'NVDA', 'TSLA': 'TSLA', 'GLD': 'XAUUSD', 'SOLUSD': 'SOLUSD' };
+        const alpacaSymbolToTicker = { 'NVDA': 'NVDA', 'TSLA': 'TSLA', 'GLD': 'XAUUSD', 'SOLUSD': 'SOLUSD', 'SOL/USD': 'SOLUSD' };
         const books = {};
         const rebuilt = [];
+        let lotSeq = 0;
         fills.forEach(f => {
             const sym = f.symbol;
             if (!books[sym]) books[sym] = [];
@@ -191,13 +193,14 @@ async function rebuildHistoryFromAlpacaFills(sinceIso) {
                     const lot = books[sym][0];
                     const take = Math.min(lot.qty, remaining);
                     const pnl = (price - lot.price) * take;
+                    lotSeq++;
                     rebuilt.push({
-                        id: 'REBUILT-' + f.id,
+                        id: `REBUILT-${f.id}-${lotSeq}`,
                         broker: 'Alpaca Markets Paper Algorithmic',
                         strategy: '(reconstruido Alpaca)',
                         symbol: alpacaSymbolToTicker[sym] || sym,
                         orderSymbol: sym === 'SOLUSD' ? 'SOL/USD' : sym,
-                        qty: take,
+                        qty: parseFloat(take.toFixed(6)),
                         currency: 'USD',
                         side: 'BUY',
                         entryPrice: lot.price,
@@ -218,12 +221,12 @@ async function rebuildHistoryFromAlpacaFills(sinceIso) {
         });
 
         if (rebuilt.length > 0) {
-            // Fusionar sin duplicar (por si ya existían algunas)
+            rebuilt.sort((a, b) => new Date(b.closedAt) - new Date(a.closedAt));
             const existing = new Set((engineState.closedTradesHistory || []).map(t => t.id));
             const fresh = rebuilt.filter(t => !existing.has(t.id));
             engineState.closedTradesHistory = fresh.concat(engineState.closedTradesHistory || []);
             computePerformanceStats();
-            console.log(`♻️ [REBUILD] Historial reconstruido desde Alpaca: +${fresh.length} trades reales recuperados.`);
+            console.log(`♻️ [REBUILD] Historial sincronizado desde Alpaca: +${fresh.length} trades reales recuperados.`);
             return fresh.length;
         }
         return 0;
@@ -1331,19 +1334,19 @@ function startAutonomousDaemon(intervalMs = 30000) {
     console.log('   Modo: 100% Independiente y Manos Libres para Pedro');
     console.log('===========================================================');
 
-    // ♻️ Arranque tras redespliegue: si la libreta quedó vacía, reconstruir desde
-    // los fills reales del broker (la verdad siempre vive en Alpaca).
-    if (!engineState.closedTradesHistory || engineState.closedTradesHistory.length === 0) {
-        console.log('♻️ [ARRANQUE] Libreta vacía tras redespliegue. Reconstruyendo desde fills reales de Alpaca...');
-        rebuildHistoryFromAlpacaFills(engineState.labResetAt || null)
-            .catch(e => console.warn('♻️ [ARRANQUE REBUILD] Error:', e.message))
-            .finally(() => {
-                runAutonomousCycle().catch(e => console.error('[ANASTASIA ERROR]', e.message));
-            });
-    } else {
-        // Primera pasada inmediata
-        runAutonomousCycle().catch(e => console.error('[ANASTASIA ERROR]', e.message));
+    // ♻️ Arranque tras redespliegue: sincronizar SIEMPRE cualquier fill real ocurrido en Alpaca
+    // después del último cierre guardado en git (Render Free reinicia el disco al snapshot de git).
+    let catchupIso = engineState.labResetAt || null;
+    if (engineState.closedTradesHistory && engineState.closedTradesHistory.length > 0) {
+        const latestMs = engineState.closedTradesHistory.reduce((mx, t) => Math.max(mx, new Date(t.closedAt || 0).getTime()), 0);
+        if (latestMs > 0) catchupIso = new Date(latestMs + 1000).toISOString();
     }
+    console.log(`♻️ [ARRANQUE] Sincronizando fills reales de Alpaca desde ${catchupIso || '36h atrás'}...`);
+    rebuildHistoryFromAlpacaFills(catchupIso)
+        .catch(e => console.warn('♻️ [ARRANQUE REBUILD] Error:', e.message))
+        .finally(() => {
+            runAutonomousCycle().catch(e => console.error('[ANASTASIA ERROR]', e.message));
+        });
 
     // Bucle continuo cada 30 segundos
     daemonTimer = setInterval(() => {

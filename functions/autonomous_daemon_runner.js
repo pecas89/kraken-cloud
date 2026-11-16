@@ -196,8 +196,8 @@ DOCTRINA DE VERDAD FACTUAL PURA (CERO SUPOSICIONES):
                         body: JSON.stringify(geminiPayload)
                     });
                     const vJson = await vRes.json();
-
-                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                    const statusOut = (!vRes.ok || vJson.error) ? 502 : 200;
+                    res.writeHead(statusOut, { 'Content-Type': 'application/json' });
                     return res.end(JSON.stringify(vJson));
                 } catch(e) {
                     res.writeHead(500, { 'Content-Type': 'application/json' });

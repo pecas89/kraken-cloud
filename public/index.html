@@ -2562,11 +2562,13 @@
                 }
 
                 if (hud) {
+                    const rvolVal = (ind.rvol !== undefined && ind.rvol !== null) ? ind.rvol : '--';
+                    const rsiVal = (ind.rsi !== undefined && ind.rsi !== null) ? ind.rsi : '--';
                     hud.innerHTML =
                         '<div class="hud-stat-item"><span class="hud-stat-label">Activo &amp; Marco Real</span><span class="hud-stat-value" style="color: var(--accent-cyan);">' + symbol + ' • ' + tf + ' (' + lastTimeRoma + ')</span></div>' +
                         '<div class="hud-stat-item"><span class="hud-stat-label">📍 Precio Live / Cierre</span><span class="hud-stat-value" style="color: var(--accent-blue);">$' + (payload.liveQuote || lastC.close).toFixed(decimals) + '</span></div>' +
                         '<div class="hud-stat-item"><span class="hud-stat-label">📈 EMA 9 / EMA 21</span><span class="hud-stat-value">' + (ind.ema9 ? ind.ema9.toFixed(2) : '--') + ' / ' + (ind.ema21 ? ind.ema21.toFixed(2) : '--') + '</span></div>' +
-                        '<div class="hud-stat-item"><span class="hud-stat-label">⚡ RSI 14 • rVol • ATR</span><span class="hud-stat-value">' + (ind.rsi || '--') + ' • ' + (ind.rvol || '--') + 'x • $' + (ind.atr ? ind.atr.toFixed(2) : '--') + '</span></div>' +
+                        '<div class="hud-stat-item"><span class="hud-stat-label">⚡ RSI 14 • rVol • ATR</span><span class="hud-stat-value">' + rsiVal + ' • ' + rvolVal + 'x • $' + (ind.atr ? ind.atr.toFixed(2) : '--') + '</span></div>' +
                         '<div class="hud-stat-item"><span class="hud-stat-label">🎯 Estado Orden Motor</span><span class="hud-stat-value" style="color:' + (openPos ? 'var(--accent-green)' : 'var(--text-dim)') + ';">' + (openPos ? ('VIVA en $' + openPos.entryPrice.toFixed(decimals)) : 'Sin orden abierta en motor') + '</span></div>';
                 }
 
@@ -2795,8 +2797,11 @@
             const secondaryEndpoint = 'https://cerebro-z4rcwssu7q-ew.a.run.app?reina=anastasia';
 
             const st = latestEngineState || {};
+            const recon = st.brokerReconciliation || {};
+            const ctCount = typeof recon.ctraderRealCount === 'number' ? recon.ctraderRealCount : 'N/A';
+            const alpCount = recon.alpacaPositions ? recon.alpacaPositions.length : 'N/A';
             const liveContextNote = st.accountBalances
-                ? `[CONTEXTO LIVE ACTUAL: Alpaca=${st.accountBalances.alpaca}, Pepperstone=${st.accountBalances.pepperstone}, DD=${(st.liveMetrics?.dailyDrawdownPct ?? 0).toFixed(2)}%, Cerradas=${(st.closedTradesHistory || []).length}, Marcos=5m/15m/1H/4H]\n\n`
+                ? `[TELEMETRÍA LIVE EXACTA DEL SISTEMA: Alpaca=${st.accountBalances.alpaca} (${alpCount} pos abiertas API), Pepperstone=${st.accountBalances.pepperstone} (${ctCount} pos abiertas en cTrader #4285238), Drawdown Diario Real=${(st.liveMetrics?.dailyDrawdownPct ?? 0).toFixed(2)}%, Var Día=${(st.liveMetrics?.dailyReturnPct ?? 0).toFixed(2)}%, Trades Cerrados Auditados=${(st.closedTradesHistory || []).length}, Marcos=5m/15m/1H/4H. OBLIGATORIO reportar AMBAS cifras de posiciones abiertas (Alpaca y Pepperstone cTrader) y Drawdown real exacto.]\n\n`
                 : '';
 
             const userParts = [{ text: liveContextNote + (text || 'Analiza el documento o gráfico adjunto con rigor cuantitativo.') }];
@@ -2854,15 +2859,18 @@
                 const alpStr = (st.accountBalances && st.accountBalances.alpaca) ? st.accountBalances.alpaca : 'DATO NO REGISTRADO';
                 const pepStr = (st.accountBalances && st.accountBalances.pepperstone) ? st.accountBalances.pepperstone : 'DATO NO REGISTRADO';
                 const ddVal = isFinite(st.liveMetrics?.dailyDrawdownPct) ? st.liveMetrics.dailyDrawdownPct.toFixed(2) + '%' : 'DATO NO REGISTRADO';
-                responseText = '🇷🇺 <b>Anastasia CIO • Dictamen Factual (Telemetría Local):</b><br>' +
-                    '• 🦙 Alpaca Paper: <b>' + alpStr + '</b><br>' +
-                    '• 🏛️ Pepperstone cTrader: <b>' + pepStr + '</b> (Cuenta #4285238)<br>' +
-                    '• 🛡️ Drawdown Diario: <b>' + ddVal + '</b> (Límite: 2.50%)<br>' +
-                    '• ⚡ Marcos Activos: <b>5m, 15m, 1H, 4H</b> (8 Estrategias)<br>' +
-                    '<i>Sin IA generativa disponible en este instante; mostrando solo saldos reales auditados.</i>';
+                botBubble.innerHTML = '<b>🇷🇺 Anastasia CIO • Dictamen Factual (Telemetría Local):</b><br>' +
+                    '• 🦙 Alpaca Paper: <b>' + escapeHtml(alpStr) + '</b> (' + alpCount + ' pos. API)<br>' +
+                    '• 🏛️ Pepperstone cTrader: <b>' + escapeHtml(pepStr) + '</b> (' + ctCount + ' pos. cTrader)<br>' +
+                    '• 🛡️ Drawdown Diario Real: <b>' + ddVal + '</b> (Límite: 2.50%)<br>' +
+                    '• ⚡ Marcos Activos: <b>5m, 15m, 1H, 4H</b> (8 Estrategias)';
+            } else {
+                const formatted = escapeHtml(responseText)
+                    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+                    .replace(/^\s*\*\s+/gm, '• ')
+                    .replace(/\n/g, '<br>');
+                botBubble.innerHTML = '<b>🇷🇺 Anastasia CIO:</b><br>' + formatted;
             }
-
-            botBubble.innerHTML = '<b>🇷🇺 Anastasia CIO:</b><br>' + responseText.replace(/\n/g, '<br>');
             scrollChatToBottom();
         }
     </script>
