@@ -123,7 +123,8 @@ let engineState = {
         TSLA: { score: 0, pez: '🐡 PEZ GLOBO', price: 0, time: null },
         XAUUSD: { score: 0, pez: '🐡 PEZ GLOBO', price: 0, time: null },
         SOLUSD: { score: 0, pez: '🐡 PEZ GLOBO', price: 0, time: null }
-    }
+    },
+    closedCooldowns: {}
 };
 
 // Cargar estado persistente si existe
@@ -307,7 +308,8 @@ async function fetchMarketQuotes() {
                 if (!latestEnrichedBars[r.ticker]) latestEnrichedBars[r.ticker] = {};
                 latestEnrichedBars[r.ticker][r.tf] = ti.enrichBarsWithIndicators(r.bars);
                 const lastBar = r.bars[r.bars.length - 1];
-                if (r.tf === '5m' || !quotes[r.ticker]) {
+                // Priorizar la vela más fresca (1m es el precio más reciente de mercado)
+                if (r.tf === '1m' || !quotes[r.ticker]) {
                     quotes[r.ticker] = lastBar.c;
                 }
             }
@@ -409,7 +411,12 @@ function evaluateAllStrategies(ticker, currentPrice, timeframe = '5m') {
     }
     if (bars && bars.length > 0) {
         const results = evaluateStrategiesForBar(ticker, bars, -1, promotedMatrix);
-        results.forEach(r => { r.timeframe = timeframe; });
+        const lastBar = bars[bars.length - 1];
+        const barClose = (lastBar && typeof lastBar.c === 'number') ? lastBar.c : currentPrice;
+        results.forEach(r => {
+            r.timeframe = timeframe;
+            r.barPrice = barClose;
+        });
         return results;
     }
     return [];
@@ -426,6 +433,27 @@ function calculate26HermanasScore(ticker, currentPrice) {
 async function executeAutonomousOpen(ticker, price, analysis) {
     const config = ASSETS_CONFIG[ticker];
     if (!config) return null;
+
+    // 🛡️ CANDADO MATEMÁTICO INQUEBRANTABLE (Mandato Frialdad Rusa de Pedro):
+    // El Take Profit para BUY DEBE ser estrictamente MAYOR al precio de entrada (+3.0 ATR).
+    // El Stop Loss para BUY DEBE ser estrictamente MENOR al precio de entrada (-1.5 ATR).
+    // Jamás se permite una entrada con TP inferior o igual al precio de entrada.
+    const atr = (analysis.indicators && analysis.indicators.atr) ? analysis.indicators.atr : (price * 0.01);
+    if (!analysis.tp || analysis.tp <= price) {
+        analysis.tp = parseFloat((price + (atr * 3.0)).toFixed(2));
+    }
+    if (!analysis.sl || analysis.sl >= price) {
+        analysis.sl = parseFloat((price - (atr * 1.5)).toFixed(2));
+    }
+    if (!analysis.breakevenTrigger || analysis.breakevenTrigger <= price) {
+        analysis.breakevenTrigger = parseFloat((price + (atr * 1.5)).toFixed(2));
+    }
+    if (analysis.isDelfin4x4) {
+        analysis.tp1 = parseFloat((price + (atr * 0.75)).toFixed(2));
+        analysis.tp2 = parseFloat((price + (atr * 1.50)).toFixed(2));
+        analysis.tp3 = parseFloat((price + (atr * 2.25)).toFixed(2));
+        analysis.tp4 = parseFloat((price + (atr * 3.00)).toFixed(2));
+    }
 
     console.log(`\n⚔️ [DUELO EN VIVO • ALPACA vs PEPPERSTONE] DISPARO PARALELO EN ${ticker}:`);
     console.log(`   Acción: ${analysis.action} | Precio: $${price} | Score: ${analysis.score} (${analysis.pez})`);
@@ -576,22 +604,31 @@ async function executeAutonomousOpen(ticker, price, analysis) {
     if (executedOrders.length > 0) {
         saveState();
 
-        const msg = `⚔️ <b>[DUELO EN VIVO • DÍA DE 15 • HEAD-TO-HEAD]</b>\n` +
-            `🎯 <b>Disparo Paralelo en los 4 Activos: ${ticker}</b>\n` +
-            `━━━━━━━━━━━━━━━━━━━━\n` +
-            `⚡ <b>Gatillo:</b> ${analysis.strategyName} en <b>${analysis.timeframe || '5m'}</b> (Score ${analysis.score}/100)\n` +
-            `💵 <b>Precio Entrada:</b> $${price.toFixed(2)}\n` +
-            `🛡️ <b>Stop Loss:</b> $${analysis.sl} (-1.5 ATR)\n` +
-            `🎯 <b>Take Profit:</b> $${analysis.tp} (+3.0 ATR)\n` +
-            `🔒 <b>Trailing a Breakeven:</b> Al superar $${analysis.breakevenTrigger}\n\n` +
-            `🏛️ <b>EJECUCIÓN EN IGUALDAD DE CONDICIONES:</b>\n` +
-            `• 🦙 <b>Alpaca:</b> ${config.alpacaSymbol} (${config.alpacaQty} ud - Margen 4x)\n` +
-            `• 🏛️ <b>Pepperstone:</b> ${config.pepperstoneSymbol} (${config.pepperstoneQty} lotes - Palanca 1:30)\n` +
-            `━━━━━━━━━━━━━━━━━━━━\n` +
-            `<i>Evaluación de 15 días. Al final nos quedaremos con el broker de mayor Beneficio Neto Total.</i>`;
+        // 🔕 POLÍTICA TELEGRAM CERO SPAM (Mandato Don Pedro):
+        // Micro-scalping en 1m y 5m se opera en silencio en la nube (visibles en terminal web y logs).
+        // A Telegram solo se envían disparos institucionales de 15m/1H o con Score de alta convicción (>= 85).
+        const isInstitutionalTf = (analysis.timeframe === '15m' || analysis.timeframe === '1H');
+        const isHighConviction = (analysis.score >= 85);
+        if (isInstitutionalTf || isHighConviction) {
+            const msg = `⚔️ <b>[DUELO EN VIVO • DÍA DE 15 • HEAD-TO-HEAD]</b>\n` +
+                `🎯 <b>Disparo Paralelo en los 4 Activos: ${ticker}</b>\n` +
+                `━━━━━━━━━━━━━━━━━━━━\n` +
+                `⚡ <b>Gatillo:</b> ${analysis.strategyName} en <b>${analysis.timeframe || '5m'}</b> (Score ${analysis.score}/100)\n` +
+                `💵 <b>Precio Entrada:</b> $${price.toFixed(2)}\n` +
+                `🛡️ <b>Stop Loss:</b> $${analysis.sl} (-1.5 ATR)\n` +
+                `🎯 <b>Take Profit:</b> $${analysis.tp} (+3.0 ATR)\n` +
+                `🔒 <b>Trailing a Breakeven:</b> Al superar $${analysis.breakevenTrigger}\n\n` +
+                `🏛️ <b>EJECUCIÓN EN IGUALDAD DE CONDICIONES:</b>\n` +
+                `• 🦙 <b>Alpaca:</b> ${config.alpacaSymbol} (${config.alpacaQty} ud - Margen 4x)\n` +
+                `• 🏛️ <b>Pepperstone:</b> ${config.pepperstoneSymbol} (${config.pepperstoneQty} lotes - Palanca 1:30)\n` +
+                `━━━━━━━━━━━━━━━━━━━━\n` +
+                `<i>Evaluación de 15 días. Al final nos quedaremos con el broker de mayor Beneficio Neto Total.</i>`;
 
-        await notifyPedro(msg);
-        console.log(`✅ [DUELO PARALELO] Órdenes registradas y Pedro notificado vía Telegram.`);
+            await notifyPedro(msg);
+            console.log(`✅ [DUELO PARALELO] Órdenes registradas y Pedro notificado vía Telegram.`);
+        } else {
+            console.log(`✅ [DUELO PARALELO SILENCIOSO (${analysis.timeframe || '5m'})] Órdenes registradas en nube (Telegram silenciado para micro-scalp).`);
+        }
     }
 
     return executedOrders;
@@ -893,11 +930,13 @@ async function manageOpenPositions(currentQuotes) {
                 pos.realizedPartialPnl = (pos.realizedPartialPnl || 0) + profit1;
                 console.log(`🐬🎯 [DELFÍN 4x4 • ESCALÓN 1/4] ${pos.symbol}: +0.75 ATR ($${pos.tp1})! 25% cobrado (+$$${profit1.toFixed(2)}).`);
 
-                const msg = `🐬🎯 <b>[DELFÍN ESCALÓN 1/4 COBRADO]</b>\n` +
-                    `💰 <b>${pos.symbol} superó +0.75 ATR ($${pos.tp1.toFixed(2)})</b>\n` +
-                    `✅ <b>25% asegurado en caja:</b> +$${profit1.toFixed(2)} ${pos.currency || 'USD'}\n` +
-                    `🛡️ Resto de la posición protegida esperando Escalón 2.`;
-                await notifyPedro(msg);
+                if (pos.timeframe === '15m' || pos.timeframe === '1H' || Math.abs(profit1) >= 2.0) {
+                    const msg = `🐬🎯 <b>[DELFÍN ESCALÓN 1/4 COBRADO]</b>\n` +
+                        `💰 <b>${pos.symbol} superó +0.75 ATR ($${pos.tp1.toFixed(2)})</b>\n` +
+                        `✅ <b>25% asegurado en caja:</b> +$${profit1.toFixed(2)} ${pos.currency || 'USD'}\n` +
+                        `🛡️ Resto de la posición protegida esperando Escalón 2.`;
+                    await notifyPedro(msg);
+                }
             }
 
             // Escalón 2: +1.50 ATR -> Cobrar otro 25% + Mover SL a BREAKEVEN (Riesgo Cero 🛡️)
@@ -909,12 +948,14 @@ async function manageOpenPositions(currentQuotes) {
                 pos.trailingStopMovedToBreakeven = true;
                 console.log(`🐬🛡️ [DELFÍN 4x4 • ESCALÓN 2/4] ${pos.symbol}: +1.50 ATR ($${pos.tp2})! 50% cobrado y SL a Breakeven ($${pos.entryPrice}).`);
 
-                const msg = `🐬🛡️ <b>[DELFÍN ESCALÓN 2/4 • CAPITAL BLINDADO]</b>\n` +
-                    `💰 <b>${pos.symbol} superó +1.50 ATR ($${pos.tp2.toFixed(2)})</b>\n` +
-                    `✅ <b>Otro 25% cobrado (Total 50% en ganancias)</b>\n` +
-                    `🛡️ <b>Stop Loss movido a Breakeven ($${pos.entryPrice})</b>.\n` +
-                    `🔒 ¡Riesgo CERO absoluto garantizado en esta operación!`;
-                await notifyPedro(msg);
+                if (pos.timeframe === '15m' || pos.timeframe === '1H' || Math.abs(profit2) >= 2.0) {
+                    const msg = `🐬🛡️ <b>[DELFÍN ESCALÓN 2/4 • CAPITAL BLINDADO]</b>\n` +
+                        `💰 <b>${pos.symbol} superó +1.50 ATR ($${pos.tp2.toFixed(2)})</b>\n` +
+                        `✅ <b>Otro 25% cobrado (Total 50% en ganancias)</b>\n` +
+                        `🛡️ <b>Stop Loss movido a Breakeven ($${pos.entryPrice})</b>.\n` +
+                        `🔒 ¡Riesgo CERO absoluto garantizado en esta operación!`;
+                    await notifyPedro(msg);
+                }
             }
 
             // Escalón 3: +2.25 ATR -> Cobrar otro 25% + Subir SL a Asegurar Ganancia (+0.75 ATR)
@@ -925,11 +966,13 @@ async function manageOpenPositions(currentQuotes) {
                 pos.sl = pos.tp1; // Subir SL a asegurar ganancia mínima de +0.75 ATR
                 console.log(`🐬🚀 [DELFÍN 4x4 • ESCALÓN 3/4] ${pos.symbol}: +2.25 ATR ($${pos.tp3})! 75% cobrado y SL en ganancia ($${pos.sl}).`);
 
-                const msg = `🐬🚀 <b>[DELFÍN ESCALÓN 3/4 • GANANCIA BLOQUEADA]</b>\n` +
-                    `💰 <b>${pos.symbol} superó +2.25 ATR ($${pos.tp3.toFixed(2)})</b>\n` +
-                    `✅ <b>75% del trade cobrado en caja</b>\n` +
-                    `🔒 <b>Stop Loss subido a $${pos.sl.toFixed(2)} (+0.75 ATR)</b> garantizando ganancia pase lo que pase.`;
-                await notifyPedro(msg);
+                if (pos.timeframe === '15m' || pos.timeframe === '1H' || Math.abs(profit3) >= 2.0) {
+                    const msg = `🐬🚀 <b>[DELFÍN ESCALÓN 3/4 • GANANCIA BLOQUEADA]</b>\n` +
+                        `💰 <b>${pos.symbol} superó +2.25 ATR ($${pos.tp3.toFixed(2)})</b>\n` +
+                        `✅ <b>75% del trade cobrado en caja</b>\n` +
+                        `🔒 <b>Stop Loss subido a $${pos.sl.toFixed(2)} (+0.75 ATR)</b> garantizando ganancia pase lo que pase.`;
+                    await notifyPedro(msg);
+                }
             }
 
             // Escalón 4: +3.00 ATR -> Take Profit Final o Runner completado!
@@ -949,17 +992,19 @@ async function manageOpenPositions(currentQuotes) {
                 pos.trailingStopMovedToBreakeven = true;
                 console.log(`🔒 [TRAILING A BREAKEVEN] ${pos.symbol}: Stop Loss movido a $${pos.entryPrice} (Riesgo Cero).`);
 
-                const beMsg = `🇷🇺👑 <b>[Anastasia CIO • BLINDAJE DE CAPITAL]</b>\n` +
-                    `🛡️ <b>${pos.symbol} superó +1.5 ATR de ganancia</b>\n` +
-                    `He movido el Stop Loss al precio de entrada ($${pos.entryPrice}).\n` +
-                    `<b>Riesgo Cero absoluto garantizado</b> en esta operación.`;
-                await notifyPedro(beMsg);
+                if (pos.timeframe === '15m' || pos.timeframe === '1H') {
+                    const beMsg = `🇷🇺👑 <b>[Anastasia CIO • BLINDAJE DE CAPITAL]</b>\n` +
+                        `🛡️ <b>${pos.symbol} superó +1.5 ATR de ganancia</b>\n` +
+                        `He movido el Stop Loss al precio de entrada ($${pos.entryPrice}).\n` +
+                        `<b>Riesgo Cero absoluto garantizado</b> en esta operación.`;
+                    await notifyPedro(beMsg);
+                }
             }
 
             // 2. Verificación de Take Profit / Ballena Runner (+3.0 a +5.0 ATR)
             const isWhale = pos.pez && pos.pez.includes('BALLENA');
             const targetTp = isWhale ? (pos.whaleRunnerTp || pos.tp) : pos.tp;
-            if (currentPrice >= targetTp) {
+            if (currentPrice >= targetTp && currentPrice > pos.entryPrice) {
                 positionClosed = true;
                 closeReason = isWhale ? '🐋 Ballena Runner Completada (+5.0 ATR) 🎯' : 'Take Profit alcanzado (+3.0 ATR) 🎯';
                 profitAmount = (currentPrice - pos.entryPrice) * pos.qty;
@@ -1012,30 +1057,38 @@ async function manageOpenPositions(currentQuotes) {
             pos.pnl = parseFloat(profitAmount.toFixed(pnlDecimals));
             pos.closeReason = closeReason;
 
+            // Cooldown anti-churn: registrar marca de tiempo para evitar reaperturas instantáneas
+            if (!engineState.closedCooldowns) engineState.closedCooldowns = {};
+            const cooldownKey = `${pos.symbol}_${pos.strategy}_${pos.timeframe || '5m'}`;
+            engineState.closedCooldowns[cooldownKey] = Date.now();
+
             engineState.closedTradesHistory.unshift(pos);
             computePerformanceStats();
             const isAlpaca = pos.broker && pos.broker.includes('Alpaca');
             if (isAlpaca || (config && config.currency === 'USD')) engineState.dailyRealizedPnlUSD += pos.pnl;
             else engineState.dailyRealizedPnlEUR += pos.pnl;
 
-            // Notificación a Pedro del cierre
-            const isProfit = pos.pnl >= 0;
-            const icon = isProfit ? '💰' : '🛡️';
-            const sign = isProfit ? '+' : '';
+            // Notificación a Pedro del cierre (Solo 15m/1H o PnL relevante >= $2.00 para evitar spam de micro-scalp)
+            const shouldNotifyClose = (pos.timeframe === '15m' || pos.timeframe === '1H' || Math.abs(pos.pnl) >= 2.0);
+            if (shouldNotifyClose) {
+                const isProfit = pos.pnl >= 0;
+                const icon = isProfit ? '💰' : '🛡️';
+                const sign = isProfit ? '+' : '';
 
-            const closeMsg = `🇷🇺👑 <b>[Anastasia CIO • POSICIÓN CERRADA]</b>\n` +
-                `${icon} <b>Operación completada en ${pos.symbol}</b>\n` +
-                `━━━━━━━━━━━━━━━━━━━━\n` +
-                `📊 <b>Motivo:</b> ${closeReason}\n` +
-                `💵 <b>Entrada:</b> $${pos.entryPrice} | <b>Salida:</b> $${currentPrice}\n` +
-                `📈 <b>Beneficio Neto:</b> ${sign}$${pos.pnl.toFixed(pnlDecimals)} ${config.currency}\n` +
-                `🏢 <b>Broker:</b> ${pos.broker}\n` +
-                `🔧 <b>Cierre real en broker:</b> ${pos.brokerCloseExecuted ? '✅ Ejecutado' : '❌ FALLÓ: ' + (pos.closeError || 'desconocido')}\n` +
-                `⏰ <b>Hora:</b> ${new Date().toLocaleTimeString('es-ES', { timeZone: 'Europe/Rome' })}\n` +
-                `━━━━━━━━━━━━━━━━━━━━\n` +
-                `<i>Capital protegido y acumulado con frialdad cuantitativa.</i>`;
+                const closeMsg = `🇷🇺👑 <b>[Anastasia CIO • POSICIÓN CERRADA]</b>\n` +
+                    `${icon} <b>Operación completada en ${pos.symbol}</b>\n` +
+                    `━━━━━━━━━━━━━━━━━━━━\n` +
+                    `📊 <b>Motivo:</b> ${closeReason}\n` +
+                    `💵 <b>Entrada:</b> $${pos.entryPrice} | <b>Salida:</b> $${currentPrice}\n` +
+                    `📈 <b>Beneficio Neto:</b> ${sign}$${pos.pnl.toFixed(pnlDecimals)} ${config.currency}\n` +
+                    `🏢 <b>Broker:</b> ${pos.broker}\n` +
+                    `🔧 <b>Cierre real en broker:</b> ${pos.brokerCloseExecuted ? '✅ Ejecutado' : '❌ FALLÓ: ' + (pos.closeError || 'desconocido')}\n` +
+                    `⏰ <b>Hora:</b> ${new Date().toLocaleTimeString('es-ES', { timeZone: 'Europe/Rome' })}\n` +
+                    `━━━━━━━━━━━━━━━━━━━━\n` +
+                    `<i>Capital protegido y acumulado con frialdad cuantitativa.</i>`;
 
-            await notifyPedro(closeMsg);
+                await notifyPedro(closeMsg);
+            }
         } else {
             remainingPositions.push(pos);
         }
@@ -1120,6 +1173,15 @@ async function runAutonomousCycle() {
                 );
                 if (hasOpenInSameStrategy) continue;
 
+                // Cooldown anti-churn: mínimo 5 minutos tras cierre para reabrir la misma estrategia y timeframe
+                const cooldownKey = `${ticker}_${analysis.strategyName}_${tf.label}`;
+                if (engineState.closedCooldowns && engineState.closedCooldowns[cooldownKey]) {
+                    const elapsed = Date.now() - engineState.closedCooldowns[cooldownKey];
+                    if (elapsed < 5 * 60 * 1000) {
+                        continue;
+                    }
+                }
+
                 // ⏰ MANDATO PEDRO: no abrir fuera de sesión ni en los últimos 30 min (SOL es 24/7)
                 if (!isEntryWindowForAsset(ticker)) {
                     console.log(`⏰ [HORARIO] Señal ${ticker} (${analysis.strategyName} • ${tf.label}) ignorada: fuera de ventana de entrada (15:30-21:30 Roma, L-V).`);
@@ -1127,9 +1189,10 @@ async function runAutonomousCycle() {
                 }
 
                 // Candado sagrado de máximo 24 posiciones simultáneas en Pepperstone
+                const openPrice = analysis.barPrice || price;
                 const pepCount = engineState.openPositions.filter(p => !p.broker || p.broker.includes('Pepperstone')).length;
                 if (pepCount < 24) {
-                    await executeAutonomousOpen(ticker, price, analysis);
+                    await executeAutonomousOpen(ticker, openPrice, analysis);
                 } else {
                     console.log(`🔒 [CANDADO PEPPERSTONE] Máximo 24 posiciones en paralelo alcanzado (${pepCount}/24). Señal ${ticker} (${analysis.strategyName} • ${tf.label}) en espera.`);
                 }

@@ -87,13 +87,13 @@ async function processIncomingSignal(signal) {
         return { executed: false, reason: 'Límite de posiciones simultáneas alcanzado' };
     }
 
-    // Mapeo oficial de símbolos cTrader
+    // Mapeo oficial de símbolos cTrader (Spotware Open API Pepperstone Europe)
     const SYMBOL_MAP = {
         'SOLUSD': 1614,
         'SOL/USD': 1614,
         'XAUUSD': 41,
-        'NVDA': 7250, // NVDA.US
-        'TSLA': 340   // TSLA.US
+        'NVDA': 338,   // NVDA.US (symbolId oficial verificado: 338)
+        'TSLA': 339    // TSLA.US (symbolId oficial verificado: 339)
     };
 
     const symbolId = SYMBOL_MAP[signal.ticker] || 1614;
@@ -121,12 +121,13 @@ async function processIncomingSignal(signal) {
         console.error('[cTrader WebSocket Error]:', err.message);
     }
 
-    if (!cTraderResult || cTraderResult.errorCode || !cTraderResult.position || !cTraderResult.position.positionId) {
+    const positionId = (cTraderResult && cTraderResult.position && cTraderResult.position.positionId) || 
+                       (cTraderResult && cTraderResult.order && cTraderResult.order.positionId);
+
+    if (!cTraderResult || cTraderResult.errorCode || !positionId) {
         console.warn(`❌ [cTrader ORDEN RECHAZADA] ${signal.ticker}:`, cTraderResult ? (cTraderResult.errorCode + ' - ' + (cTraderResult.description || '')) : 'Sin respuesta de cTrader');
         return { executed: false, error: cTraderResult ? cTraderResult.errorCode : 'NO_RESPONSE', description: cTraderResult ? cTraderResult.description : 'Unknown error' };
     }
-
-    const positionId = cTraderResult.position.positionId;
 
     const tradeOrder = {
         id: positionId,
