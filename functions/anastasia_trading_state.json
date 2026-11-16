@@ -6956,7 +6956,7 @@
     {
       "id": "ORD-PEP-1794262873956",
       "duelPairId": "DUEL-1794262872743",
-      "broker": "Pepperstone cTrader ECN Razor (€200)",
+      "broker": "Pepperstone cTrader ECN Razor",
       "strategy": "Pista 2: 🟢 Base Institucional (Ambos)",
       "account": 4285238,
       "symbol": "NVDA",
@@ -7033,7 +7033,7 @@
     {
       "id": "ORD-PEP-1794256795390",
       "duelPairId": "DUEL-1794256794620",
-      "broker": "Pepperstone cTrader ECN Razor (€200)",
+      "broker": "Pepperstone cTrader ECN Razor",
       "account": 4285238,
       "symbol": "SOLUSD",
       "orderSymbol": "SOLUSD",
@@ -7058,7 +7058,7 @@
     {
       "id": "ORD-PEP-1794262875083",
       "duelPairId": "DUEL-1794262874301",
-      "broker": "Pepperstone cTrader ECN Razor (€200)",
+      "broker": "Pepperstone cTrader ECN Razor",
       "strategy": "Pista 4: 🐋 News Sentiment & 13F Whales (Institucional)",
       "account": 4285238,
       "symbol": "TSLA",
@@ -7135,7 +7135,7 @@
     {
       "id": 59602259,
       "duelPairId": "DUEL-1794256793343",
-      "broker": "Pepperstone cTrader ECN Razor (€200)",
+      "broker": "Pepperstone cTrader ECN Razor",
       "account": 4285238,
       "symbol": "XAUUSD",
       "orderSymbol": "XAUUSD",
@@ -7160,7 +7160,7 @@
     {
       "id": "ORD-PEP-1794256141927",
       "duelPairId": "DUEL-1794256140710",
-      "broker": "Pepperstone cTrader ECN Razor (€200)",
+      "broker": "Pepperstone cTrader ECN Razor",
       "account": 4285238,
       "symbol": "NVDA",
       "orderSymbol": "NVDA",
@@ -7210,7 +7210,7 @@
     {
       "id": "ORD-PEP-1794256143095",
       "duelPairId": "DUEL-1794256142347",
-      "broker": "Pepperstone cTrader ECN Razor (€200)",
+      "broker": "Pepperstone cTrader ECN Razor",
       "account": 4285238,
       "symbol": "TSLA",
       "orderSymbol": "TSLA",

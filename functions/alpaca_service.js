@@ -136,6 +136,14 @@ async function getOrders(status = 'open') {
     return res.data;
 }
 
+// 6b. Get Single Order By ID (capturar fill price real tras apertura)
+async function getOrderById(orderId) {
+    if (!orderId) return null;
+    const res = await alpacaRequest(`/orders/${encodeURIComponent(orderId)}`, 'GET');
+    if (!res.ok) throw new Error(res.data ? res.data.message : `HTTP ${res.status}`);
+    return res.data;
+}
+
 // 7. Cancel All Orders
 async function cancelAllOrders() {
     const res = await alpacaRequest('/orders', 'DELETE');
@@ -168,6 +176,7 @@ module.exports = {
     getAccount,
     getPositions,
     getOrders,
+    getOrderById,
     placeBracketOrder,
     placeMarketOrder,
     closePosition,

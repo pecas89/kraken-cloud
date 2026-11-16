@@ -8,12 +8,12 @@
  * Directiva Maestra: N° 003-2026 (El Tridente Soberano)
  *
  * DOCTRINA SAGRADA:
- * 1. Verdad Factual Pura: Cuentas reales verificadas Alpaca ($100k) y Pepperstone (€200).
- *    Terminantemente prohibido inventar operaciones, Win Rates o rendimientos.
- *    Si falta el dato: "DATO NO REGISTRADO: [motivo técnico]".
+ * 1. Verdad Factual Pura: Cuentas reales auditadas en vivo vía API (Alpaca y Pepperstone cTrader #4285238).
+ *    Terminantemente prohibido inventar saldos, repetir '200', o inventar Win Rates/rendimientos.
+ *    Si falta el dato: "DATO NO CONTROLADO: Para decirte la verdad debo controlar la API en vivo."
  *    Si no hay trades: "SIN OPERACIONES REGISTRADAS".
  * 2. Cero Adulación («Cero Sobona»): Frialdad matemática de hierro rusa.
- * 3. Control de Drawdown: Máximo Drawdown Diario permitido = 2.50%.
+ * 3. Control de Drawdown: Máximo Drawdown Diario permitido = 2.50% (Kill Switch).
  * ==============================================================================
  */
 
@@ -46,15 +46,16 @@ const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || "8549742951";
 const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3-flash-preview";
 const VERTEX_URL = `https://aiplatform.googleapis.com/v1/publishers/google/models/${GEMINI_MODEL}:generateContent`;
 
-// Parámetros de Riesgo del Fondo
+// Parámetros de Riesgo del Fondo (prohibido hardcodear balances aquí; se consultan en vivo)
 const RISK_PARAMS = {
     maxDailyDrawdownPct: 2.50,
     warningDrawdownPct: 2.00,
-    alpacaBaseUsd: 99770.48,
-    pepperstoneBaseEur: 9203.63,
+    maxPepperstonePositions: 24,
     maxLeveragePepperstone: "1:30",
     maxLeverageAlpaca: "1:2"
 };
+
+const RENDER_ENGINE_URL = process.env.RENDER_ENGINE_URL || "https://kraken-cloud.onrender.com";
 
 const ALLOWED_ORIGINS = [
     "https://kraken-trading-cloud.web.app",
@@ -109,41 +110,36 @@ const ANASTASIA_SYSTEM_PROMPT = `Eres 🇷🇺 Anastasia, Chief Investment Offic
 
 DIRECTIVA MAESTRA N° 003-2026:
 1. DOCTRINA SAGRADA DE VERDAD FACTUAL PURA:
-   - Solo auditas y reportas el capital fondeado en las dos cuentas institucionales:
-     • Alpaca Paper Algorithmic: ~$99,770.48 USD
-     • Pepperstone cTrader ECN: €9,203.63 EUR (cuenta auditada #4285238 en Spotware)
-   - TIENES TERMINANTEMENTE PROHIBIDO INVENTAR SALDOS FICTICIOS O REPETIR PLANTILLAS SUPUESTAS. PROHIBIDO DECIR '200 DÓLARES/EUROS'. SIEMPRE AUDITAS LAS APIS EN VIVO.
-   - TIENES TERMINANTEMENTE PROHIBIDO INVENTAR OPERACIONES, RENDIMIENTOS O WIN RATES HIPOTÉTICOS.
-   - Si un dato no consta en los registros de Firestore o en el ledger auditado de los brokers, tu respuesta obligatoria es:
-     "DATO NO REGISTRADO: [Explicación técnica concisa de qué dato falta y dónde debe asentarse]."
+   - Solo auditas y reportas el capital controlado EN VIVO desde las APIs oficiales de:
+     • Alpaca Markets Paper Algorithmic (v2/account)
+     • Pepperstone cTrader ECN Razor (Spotware cuenta #4285238)
+   - TIENES TERMINANTEMENTE PROHIBIDO INVENTAR SALDOS FICTICIOS O REPETIR PLANTILLAS DE MEMORIA. PROHIBIDO DECIR '200 DÓLARES/EUROS' O REPETIR SALDOS VIEJOS SIN CONSULTAR LA API.
+   - Si una API no responde en este instante: "DATO NO CONTROLADO: Para decirte la verdad debo controlar la API en vivo, y no tengo consulta viva en este instante."
    - Si no hay operaciones ejecutadas, responde estrictamente: "SIN OPERACIONES REGISTRADAS".
 
 2. CERO ADULACIÓN («CERO SOBONA»):
    - Tratas a Don Pedro Castillo Gonzales (Chairman y Propietario 100%) con respeto ejecutivo, máxima brevedad, franqueza absoluta y frialdad matemática rusa.
-   - Prohibidos los saludos serviles, elogios vacíos o decir "a la orden" por inercia.
-   - Si Pedro o cualquier interlocutor propone una operación de alto riesgo, sobreapalancamiento o apagar los stop-loss ("una webada"), estás obligada a frenarlo en seco con números y probabilidad de ruina.
+   - Si Pedro o cualquier interlocutor propone apagar los stop-loss o sobreapalancarse, estás obligada a frenarlo en seco con números y probabilidad de ruina.
 
 3. CONTROL DE DRAWDOWN Y CIRCUIT BREAKER:
-   - Límite absoluto de Drawdown Diario = 2.50%.
-   - Si el Drawdown diario alcanza el 2.00%, alerta amarilla inmediata.
-   - Si alcanza o supera el 2.50%, detención total del motor de trading (Kill Switch) y aviso urgente a Pedro.
+   - Límite absoluto de Drawdown Diario = 2.50% (alerta amarilla en 2.00%, Kill Switch automático en 2.50%).
 
-4. 8 PISTAS CUANTITATIVAS DEL FONDO:
-   - P1: 🐬 Delfín 4x4 (TSLA/NVDA/SOL/GLD)
-   - P2: 🦈 Base Institucional (Tendencia VWAP + EMA)
-   - P3: ⚡ Scalper ECN 15M (Ruptura Volatilidad)
-   - P4: 🛡️ Reversión VWAP (Sobreextensión Gaussiana)
-   - P5: 🌊 Breakout Fractal (Ruptura Donchian)
-   - P6: 🎯 R:B Asimétrico 1:3 (Extensión de Rango)
-   - P7: 🧬 Cointegración StatArb (Pares TSLA/NVDA)
-   - P8: 🪐 Macro Cobertura Oro (GLD/XAU hedge)`;
+4. 8 PISTAS CUANTITATIVAS DEL FONDO (4 ACTIVOS x 4 MARCOS 5m / 15m / 1H / 4H):
+   - P1: 🐬 Delfín Rápido (EMA 9/21 + Escalera 4x4)
+   - P2: 🦈 Base Institucional (Multi-EMA + VWAP)
+   - P3: ⏳ TimeMachine Probabilística (Donchian Breakout)
+   - P4: 🌊 VWAP + Volume Burst Scalper (rVol > 1.5x)
+   - P5: ⚡ SuperTrend + EMA Ribbon 9/21 (Anti-Caídas)
+   - P6: 🎯 Reversión a la Media (RSI-2 + Bollinger)
+   - P7: 🚪 Ruptura Rango Apertura (ORB-30 en TSLA/NVDA)
+   - P8: 🗜️ Squeeze de Volatilidad (TTM Squeeze en Oro/SOL)`;
 
 // Herramientas / Function Declarations para Anastasia
 const KRAKEN_TOOLS = [{
     functionDeclarations: [
         {
             name: "consultar_balance",
-            description: "Devuelve el balance auditado en tiempo real de Alpaca ($100k USD) y Pepperstone (€200 EUR), drawdown diario actual y exposición de margen.",
+            description: "Devuelve el balance controlado en vivo por API de Alpaca y Pepperstone cTrader (#4285238), drawdown diario real y exposición.",
             parameters: {
                 type: "OBJECT",
                 properties: {
@@ -153,7 +149,7 @@ const KRAKEN_TOOLS = [{
         },
         {
             name: "consultar_posiciones",
-            description: "Consulta las posiciones abiertas reales en Alpaca Markets y Pepperstone cTrader.",
+            description: "Consulta las posiciones abiertas reales en Alpaca Markets y Pepperstone cTrader (#4285238).",
             parameters: {
                 type: "OBJECT",
                 properties: {
@@ -163,12 +159,12 @@ const KRAKEN_TOOLS = [{
         },
         {
             name: "consultar_estrategias",
-            description: "Consulta el estado operativo y parámetros de riesgo de las 8 pistas cuantitativas del fondo.",
+            description: "Consulta el estado operativo y parámetros reales de las 8 pistas cuantitativas en 5m, 15m, 1H y 4H.",
             parameters: { type: "OBJECT", properties: {} }
         },
         {
             name: "consultar_operaciones",
-            description: "Consulta el historial real de operaciones cerradas en Firestore (colección 'trades').",
+            description: "Consulta el historial real de operaciones cerradas auditadas desde el motor vivo / Firestore.",
             parameters: {
                 type: "OBJECT",
                 properties: {
@@ -201,20 +197,40 @@ const KRAKEN_TOOLS = [{
     ]
 }];
 
-// Implementación de las Manos Cuantitativas
+async function fetchRenderState() {
+    try {
+        const res = await fetch(`${RENDER_ENGINE_URL}/trading_state.json`);
+        if (res.ok) return await res.json();
+    } catch(e) {}
+    return null;
+}
+
+// Implementación de las Manos Cuantitativas (100% Live API, cero supuestos)
 async function ejecutarManoKraken(name, args) {
     if (name === "consultar_balance") {
-        let alpacaData = { balance: RISK_PARAMS.alpacaBaseUsd, pnlToday: 0.00, status: "ONLINE_PAPER" };
-        let pepperData = { balance: RISK_PARAMS.pepperstoneBaseEur, pnlToday: 0.00, status: "ONLINE_ECN" };
+        let alpacaData = { balance: null, pnlToday: 0.00, status: "NO_CONTROLADO" };
+        let pepperData = { balance: null, pnlToday: 0.00, status: "NO_CONTROLADO" };
+        let currentDrawdownPct = null;
+        let tradesTodayCount = 0;
 
         if (alpacaService) {
             try {
                 const acc = await alpacaService.getAccount();
-                alpacaData.balance = acc.portfolioValue || alpacaData.balance;
-                alpacaData.cash = acc.cash;
-                alpacaData.buyingPower = acc.buyingPower;
+                const eq = acc.equity || acc.portfolioValue;
+                const lastEq = acc.lastEquity || acc.portfolioValue;
+                alpacaData = {
+                    balance: eq,
+                    cash: acc.cash,
+                    buyingPower: acc.buyingPower,
+                    pnlToday: (eq && lastEq) ? parseFloat((eq - lastEq).toFixed(2)) : 0.00,
+                    status: "API_LIVE"
+                };
+                if (lastEq > 0) {
+                    const ddAlp = ((eq - lastEq) / lastEq) * 100;
+                    currentDrawdownPct = ddAlp < 0 ? parseFloat(Math.abs(ddAlp).toFixed(2)) : 0.00;
+                }
             } catch(e) {
-                console.warn("[Cerebro] Alpaca API error fallback:", e.message);
+                console.warn("[Cerebro] Alpaca API error:", e.message);
             }
         }
 
@@ -222,24 +238,41 @@ async function ejecutarManoKraken(name, args) {
             try {
                 const acc = await pepperstoneCentinela.getLiveAccountData();
                 if (acc && acc.success) {
-                    pepperData.balance = acc.balance || pepperData.balance;
-                    pepperData.currency = acc.currency;
-                    pepperData.leverage = acc.leverage;
+                    pepperData = {
+                        balance: acc.balance,
+                        currency: acc.currency,
+                        leverage: acc.leverage,
+                        pnlToday: 0.00,
+                        status: "API_LIVE"
+                    };
                 }
             } catch(e) {
-                console.warn("[Cerebro] Pepperstone API error fallback:", e.message);
+                console.warn("[Cerebro] Pepperstone API error:", e.message);
             }
         }
 
-        const currentDrawdownPct = 0.00; // Auditado factual
+        const engineState = await fetchRenderState();
+        if (engineState) {
+            if (isFinite(engineState.dailyRealizedPnlEUR)) pepperData.pnlToday = parseFloat(engineState.dailyRealizedPnlEUR.toFixed(2));
+            if (engineState.liveMetrics && isFinite(engineState.liveMetrics.dailyDrawdownPct)) {
+                currentDrawdownPct = engineState.liveMetrics.dailyDrawdownPct;
+            }
+            const romeToday = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome' }).format(new Date());
+            tradesTodayCount = (engineState.closedTradesHistory || []).filter(t =>
+                t.closedAt && new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome' }).format(new Date(t.closedAt)) === romeToday
+            ).length;
+        }
+
+        const hasLiveControl = alpacaData.balance !== null || pepperData.balance !== null;
         return {
-            ok: true,
+            ok: hasLiveControl,
             alpaca: alpacaData,
             pepperstone: pepperData,
             currentDrawdownPct: currentDrawdownPct,
+            tradesTodayCount,
             maxDailyDrawdownLimit: RISK_PARAMS.maxDailyDrawdownPct,
-            statusRiesgo: currentDrawdownPct >= RISK_PARAMS.maxDailyDrawdownPct ? "🚨 BREACH" : "🟢 PROTEGIDO",
-            veredicto: "Cuentas en regla. Cero violación de margen."
+            statusRiesgo: currentDrawdownPct === null ? "⚠️ DATO NO CONTROLADO" : (currentDrawdownPct >= RISK_PARAMS.maxDailyDrawdownPct ? "🚨 BREACH" : "🟢 PROTEGIDO"),
+            veredicto: hasLiveControl ? "Control en vivo ejecutado por API." : "⚠️ DATO NO CONTROLADO: Sin respuesta viva de APIs."
         };
     }
 
@@ -251,13 +284,26 @@ async function ejecutarManoKraken(name, args) {
                 if (Array.isArray(alpacaPos)) {
                     openPositions.push(...alpacaPos.map(p => ({ broker: "Alpaca", ...p })));
                 }
-            } catch(e){}
+            } catch(e) {}
+        }
+        if (pepperstoneCentinela && pepperstoneCentinela.getOpenPositionsViaOpenAPI) {
+            try {
+                const pepRecon = await pepperstoneCentinela.getOpenPositionsViaOpenAPI();
+                if (pepRecon && Array.isArray(pepRecon.positions)) {
+                    openPositions.push(...pepRecon.positions.map(p => ({
+                        broker: "Pepperstone cTrader #4285238",
+                        positionId: p.positionId,
+                        symbolId: p.tradeData && p.tradeData.symbolId,
+                        entryPrice: p.price
+                    })));
+                }
+            } catch(e) {}
         }
         return {
             ok: true,
             count: openPositions.length,
             posiciones: openPositions,
-            mensaje: openPositions.length === 0 ? "SIN POSICIONES ABIERTAS (Mercado en espera de señal con rVol > 1.5)" : undefined
+            mensaje: openPositions.length === 0 ? "SIN POSICIONES ABIERTAS" : undefined
         };
     }
 
@@ -265,23 +311,30 @@ async function ejecutarManoKraken(name, args) {
         return {
             ok: true,
             totalPistas: 8,
+            timeframes: ["5m", "15m", "1H", "4H"],
+            activos: ["TSLA", "NVDA", "XAUUSD/GLD", "SOLUSD"],
             pistas: [
-                { id: "P1", nombre: "Delfín 4x4", activos: ["TSLA", "NVDA", "SOL", "GLD"], timeframe: "15M", estado: "ACTIVA" },
-                { id: "P2", nombre: "Base Institucional", activos: ["SOLUSD", "TSLA"], timeframe: "1H", estado: "ACTIVA" },
-                { id: "P3", nombre: "Scalper ECN", activos: ["EURUSD", "XAUUSD"], timeframe: "5M", estado: "ACTIVA" },
-                { id: "P4", nombre: "Reversión VWAP", activos: ["TSLA", "NVDA"], timeframe: "15M", estado: "ACTIVA" },
-                { id: "P5", nombre: "Breakout Fractal", activos: ["SOLUSD"], timeframe: "1H", estado: "ACTIVA" },
-                { id: "P6", nombre: "R:B Asimétrico 1:3", activos: ["NVDA"], timeframe: "30M", estado: "ACTIVA" },
-                { id: "P7", nombre: "Cointegración StatArb", activos: ["TSLA-NVDA"], timeframe: "1H", estado: "ACTIVA" },
-                { id: "P8", nombre: "Macro Cobertura Oro", activos: ["GLD"], timeframe: "4H", estado: "ACTIVA" }
+                { id: "P1", nombre: "Delfín Rápido 4x4", activos: ["TSLA", "NVDA", "GLD/XAUUSD", "SOLUSD"], estado: "ACTIVA" },
+                { id: "P2", nombre: "Base Institucional Multi-EMA", activos: ["TSLA", "NVDA", "GLD/XAUUSD", "SOLUSD"], estado: "ACTIVA" },
+                { id: "P3", nombre: "TimeMachine Probabilística Donchian", activos: ["TSLA", "NVDA", "GLD/XAUUSD", "SOLUSD"], estado: "ACTIVA" },
+                { id: "P4", nombre: "VWAP + Volume Burst Scalper", activos: ["TSLA", "NVDA", "GLD/XAUUSD", "SOLUSD"], estado: "ACTIVA" },
+                { id: "P5", nombre: "SuperTrend + EMA Ribbon Anti-Caídas", activos: ["TSLA", "NVDA", "GLD/XAUUSD", "SOLUSD"], estado: "ACTIVA" },
+                { id: "P6", nombre: "Reversión a la Media RSI-2 + Bollinger", activos: ["TSLA", "NVDA", "GLD/XAUUSD"], estado: "ACTIVA" },
+                { id: "P7", nombre: "Ruptura Rango Apertura ORB-30", activos: ["TSLA", "NVDA"], estado: "ACTIVA" },
+                { id: "P8", nombre: "Squeeze de Volatilidad TTM", activos: ["GLD/XAUUSD", "SOLUSD"], estado: "ACTIVA" }
             ],
-            filtroExclusivo: "Filtro rVol >= 1.5 estricto para cripto nocturna."
+            filtroExclusivo: "Cada estrategia evalúa sus propios filtros + Candado DD 2.50% y rVol >= 1.5x en SOL."
         };
     }
 
     if (name === "consultar_operaciones") {
         try {
-            const snap = await db.collection("trades").orderBy("created_at", "desc").limit(args.limite || 10).get();
+            const state = await fetchRenderState();
+            const lim = Math.min(20, args.limite || 10);
+            if (state && Array.isArray(state.closedTradesHistory) && state.closedTradesHistory.length > 0) {
+                return { ok: true, totalAuditados: state.closedTradesHistory.length, trades: state.closedTradesHistory.slice(0, lim) };
+            }
+            const snap = await db.collection("trades").orderBy("created_at", "desc").limit(lim).get();
             if (snap.empty) {
                 return { ok: true, count: 0, trades: [], mensaje: "SIN OPERACIONES REGISTRADAS en el período auditado." };
             }
@@ -371,8 +424,8 @@ exports.cerebro = onRequest(
                     pepperstonePnlToday: balanceData.pepperstone.pnlToday,
                     currentDrawdownPct: balanceData.currentDrawdownPct,
                     maxDailyDrawdownLimit: RISK_PARAMS.maxDailyDrawdownPct,
-                    tradesTodayCount: 0,
-                    status: "ONLINE_24_7_EUROPE_WEST1",
+                    tradesTodayCount: balanceData.tradesTodayCount || 0,
+                    status: balanceData.ok ? "ONLINE_LIVE" : "DATO_NO_CONTROLADO",
                     timestamp: new Date().toISOString()
                 });
             }
@@ -536,7 +589,7 @@ exports.api = onRequest({ cors: true, region: "europe-west1" }, async (req, res)
         const isBuy = action === "BUY";
         const icon = isBuy ? "🟢" : "🔴";
         const typeStr = isBuy ? "CALL (Compra)" : "PUT (Venta)";
-        const brokerLabel = broker === "alpaca" ? "Alpaca Markets ($100k Paper)" : "Pepperstone cTrader (€200 ECN)";
+        const brokerLabel = broker === "alpaca" ? "Alpaca Markets (Paper API)" : "Pepperstone cTrader (#4285238)";
 
         const tgText = `🇷🇺👑 <b>[Anastasia CIO • DISPARO AUTÓNOMO EN LA NUBE]</b>\n\n` +
             `⚡ <b>${ticker} ${typeStr} EJECUTADO</b> ${icon}\n` +

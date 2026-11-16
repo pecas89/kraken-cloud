@@ -133,22 +133,38 @@ const server = http.createServer(async (req, res) => {
         const perf = st.performanceStats?.global || {};
 
         if (req.method === 'GET') {
+            const romeDate = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome' }).format(new Date());
+            const hist = Array.isArray(st.closedTradesHistory) ? st.closedTradesHistory : [];
+            const todayTrades = hist.filter(t => t.closedAt && new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome' }).format(new Date(t.closedAt)) === romeDate);
+            const alpNum = isFinite(lm.alpacaPortfolioUsd) ? lm.alpacaPortfolioUsd : null;
+            const pepNum = isFinite(lm.pepperstoneBalanceEur) ? lm.pepperstoneBalanceEur : null;
             res.writeHead(200, { 'Content-Type': 'application/json' });
             return res.end(JSON.stringify({
-                status: 'ONLINE',
+                ok: true,
+                status: 'ONLINE_24_7',
                 piso: 2,
                 reina: 'Anastasia',
                 rol: 'Chief Investment Officer & Quant Lead',
                 doctrina: 'Verdad Factual Pura & Frialdad Matemática Rusa',
+                alpacaBalance: alpNum,
+                pepperstoneBalance: pepNum,
+                alpacaBalanceLabel: alpBal,
+                pepperstoneBalanceLabel: pepBal,
+                alpacaPnlToday: parseFloat((st.dailyRealizedPnlUSD || 0).toFixed(2)),
+                pepperstonePnlToday: parseFloat((st.dailyRealizedPnlEUR || 0).toFixed(2)),
+                currentDrawdownPct: dd,
+                maxDailyDrawdownLimit: 2.50,
+                emergencyStop: !!st.emergencyStop,
+                tradesTodayCount: todayTrades.length,
                 balancesAuditados: {
                     alpacaPaper: alpBal,
-                    alpacaPaperUsd: lm.alpacaPortfolioUsd || null,
+                    alpacaPaperUsd: alpNum,
                     pepperstoneEcn: pepBal,
-                    pepperstoneEcnEur: lm.pepperstoneBalanceEur || null,
+                    pepperstoneEcnEur: pepNum,
                     dailyReturnPct: lm.dailyReturnPct ?? 0.00,
                     currentDrawdownPct: dd,
                     maxDailyDrawdownLimit: 2.50,
-                    statusRiesgo: dd >= 2.50 ? '🚨 KILL SWITCH' : (dd >= 2.00 ? '🟡 ALERTA' : `🟢 PROTEGIDO (${dd.toFixed(2)}% DD)`)
+                    statusRiesgo: st.emergencyStop ? '🚨 KILL SWITCH ACTIVO' : (dd >= 2.50 ? '🚨 KILL SWITCH' : (dd >= 2.00 ? '🟡 ALERTA' : `🟢 PROTEGIDO (${dd.toFixed(2)}% DD)`))
                 },
                 timeframes: ['5m', '15m', '1H', '4H'],
                 estrategias: 8,
@@ -156,7 +172,7 @@ const server = http.createServer(async (req, res) => {
                 posicionesAbiertasMotor: (st.openPositions || []).length,
                 posicionesRealesAlpaca: st.brokerReconciliation?.alpacaPositions?.length ?? null,
                 posicionesRealesCTrader: st.brokerReconciliation?.ctraderRealCount ?? null,
-                filtroRVol: 'Activo (rVol >= 1.5 en cripto)',
+                filtroRVol: 'Activo (rVol >= 1.5 en SOL)',
                 serverTime: new Date().toISOString()
             }, null, 2));
         }
@@ -167,38 +183,57 @@ const server = http.createServer(async (req, res) => {
             req.on('end', async () => {
                 try {
                     const parsed = body ? JSON.parse(body) : {};
-                    const prompt = (parsed.contents && parsed.contents[0] && parsed.contents[0].parts && parsed.contents[0].parts[0].text) || 'Reporte de estado';
-                    
-                    // Conexión con Vertex AI Gemini
-                    const key = process.env.GEMINI_API_KEY || '';
-                    const vertexUrl = `https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-3-flash-preview:generateContent?key=${key}`;
-                    
+                    const rawText = (parsed.contents && parsed.contents[0] && parsed.contents[0].parts && parsed.contents[0].parts[0].text) || 'Reporte de estado';
+                    const attachedParts = (parsed.contents && parsed.contents[0] && parsed.contents[0].parts) ? parsed.contents[0].parts.slice(1) : [];
+
                     const systemPrompt = `Eres 🇷🇺 Anastasia, CIO del Piso 2 (Kraken Quant Fund) de Castillo Imperial Holding S.A.
 DOCTRINA DE VERDAD FACTUAL PURA (CERO SUPOSICIONES):
 - Saldos reales auditados ahora mismo en vivo:
-  • Alpaca Paper Algorithmic: ${alpBal}
-  • Pepperstone cTrader ECN (#4285238): ${pepBal}
-  • Drawdown Diario Real: ${dd.toFixed(2)}% (Límite: 2.50%)
+  • Alpaca Paper Algorithmic: ${alpBal} (${st.brokerReconciliation?.alpacaPositions?.length ?? 'N/A'} pos API)
+  • Pepperstone cTrader ECN (#4285238): ${pepBal} (${st.brokerReconciliation?.ctraderRealCount ?? 'N/A'} pos cTrader)
+  • Drawdown Diario Real: ${dd.toFixed(2)}% (Límite: 2.50% | Kill Switch: ${st.emergencyStop ? 'ACTIVO' : 'INACTIVO'})
   • Temporalidades activas: 5m, 15m, 1H, 4H (1m eliminado)
   • Estadísticas reales cerradas (${perf.total || 0} trades): WR ${perf.winRate || 0}%, PF ${perf.profitFactor || 0}, PnL Neto $${perf.netPnlUSD || 0} USD
-  • Posiciones motor: ${(st.openPositions || []).length} | Alpaca API: ${st.brokerReconciliation?.alpacaPositions?.length ?? 'N/A'} | cTrader API: ${st.brokerReconciliation?.ctraderRealCount ?? 'N/A'}
+  • Posiciones en libreta motor: ${(st.openPositions || []).length}
 - TERMINANTEMENTE PROHIBIDO INVENTAR OPERACIONES, WIN RATES O RESULTADOS SIMULADOS.
 - Si falta un dato: "DATO NO REGISTRADO: [motivo técnico]".
 - FRIALDAD MATEMÁTICA RUSA: concisa, sin rodeos, cero adulación («cero sobona»).`;
 
                     const geminiPayload = {
-                        contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\nConsulta de Pedro: ${prompt}` }] }]
+                        contents: [{ role: 'user', parts: [{ text: `${systemPrompt}\n\nConsulta de Pedro: ${rawText}` }, ...attachedParts] }]
                     };
 
-                    const vRes = await fetch(vertexUrl, {
+                    // 1. Intentar Vertex AI directo si la clave tiene permiso
+                    const key = process.env.GEMINI_API_KEY || '';
+                    if (key) {
+                        try {
+                            const vertexUrl = `https://aiplatform.googleapis.com/v1/publishers/google/models/gemini-3-flash-preview:generateContent?key=${key}`;
+                            const vRes = await fetch(vertexUrl, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify(geminiPayload)
+                            });
+                            const vJson = await vRes.json();
+                            if (vRes.ok && vJson && !vJson.error && vJson.candidates) {
+                                res.writeHead(200, { 'Content-Type': 'application/json' });
+                                return res.end(JSON.stringify(vJson));
+                            }
+                        } catch(vErr) { /* continuar al gateway oficial Cloud Run */ }
+                    }
+
+                    // 2. Respaldo oficial del Holding en Google Cloud Run (europe-west1, Coste €0) con telemetría live
+                    const cloudRunUrl = 'https://cerebro-z4rcwssu7q-ew.a.run.app?reina=anastasia';
+                    const cRes = await fetch(cloudRunUrl, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(geminiPayload)
+                        body: JSON.stringify({
+                            reina: 'anastasia',
+                            contents: geminiPayload.contents
+                        })
                     });
-                    const vJson = await vRes.json();
-                    const statusOut = (!vRes.ok || vJson.error) ? 502 : 200;
-                    res.writeHead(statusOut, { 'Content-Type': 'application/json' });
-                    return res.end(JSON.stringify(vJson));
+                    const cJson = await cRes.json();
+                    res.writeHead(cRes.ok ? 200 : 502, { 'Content-Type': 'application/json' });
+                    return res.end(JSON.stringify(cJson));
                 } catch(e) {
                     res.writeHead(500, { 'Content-Type': 'application/json' });
                     return res.end(JSON.stringify({ error: e.message }));
@@ -328,7 +363,7 @@ async function startServerDaemon() {
         `• <b>8 Pistas:</b> P1 a P5 + P6 (RSI-2), P7 (ORB-30), P8 (TTM Squeeze)\n` +
         `• <b>4 Activos:</b> TSLA, NVDA, Oro (GLD/XAU), SOL/USD\n` +
         `• <b>Temporalidades:</b> 5m, 15m, 1H y 4H\n` +
-        `• <b>Brokers en Duelo:</b> Alpaca Paper ($100k) vs Pepperstone cTrader (€9.1k)\n` +
+        `• <b>Brokers en Duelo:</b> Alpaca Paper API vs Pepperstone cTrader #4285238 (consulta live)\n` +
         `• <b>Tope Concurrencia:</b> Máximo 24 posiciones en Pepperstone\n` +
         `• <b>Auto-Sync Web:</b> Cada 5 min a https://kraken-trading-cloud.web.app\n\n` +
         `<i>Tu PC puede apagarse con total tranquilidad. El Kraken vigila el mercado 24/7.</i>`;

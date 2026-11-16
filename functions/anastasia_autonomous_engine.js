@@ -3,18 +3,17 @@
  * KRAKEN CLOUD // ANASTASIA AUTONOMOUS TRADING ENGINE 24/7 (PISO 2 • CIO)
  * ==============================================================================
  * Mandato Supremo: 100% Autónomo. Cero intervención manual de Pedro ("franc").
- * Anastasia abre, gestiona (Trailing BE) y cierra posiciones sola en los 4 activos:
- * 1. 🚗 TSLA (Tesla)      -> Alpaca Markets Paper (Wall Street)
- * 2. 💚 NVDA (Nvidia)     -> Alpaca Markets Paper (Wall Street)
- * 3. 🥇 XAUUSD (Oro)      -> Pepperstone cTrader ECN Razor (Spotware Londres)
- * 4. 🟣 SOLUSD (Solana)   -> Pepperstone / Alpaca Crypto 24/7
+ * Anastasia abre, gestiona (Trailing BE) y cierra posiciones reales en los 4 activos:
+ * 1. 🚗 TSLA (Tesla)      -> Alpaca Markets Paper & Pepperstone cTrader #4285238
+ * 2. 💚 NVDA (Nvidia)     -> Alpaca Markets Paper & Pepperstone cTrader #4285238
+ * 3. 🥇 XAUUSD / GLD (Oro)-> Pepperstone cTrader ECN & Alpaca ETF GLD
+ * 4. 🟣 SOLUSD (Solana)   -> Pepperstone cTrader & Alpaca Crypto 24/7
  * 
- * Regla Cuantitativa Ágil:
- * - Marco Temporal: 5 Minutos (5m)
- * - Las 3 Estrategias: Pista 1 (Delfín de Pedro), Pista 2 (Base), Pista 3 (Valentina 2.0)
- * - Gatillo: Score >= 60
- * - Especie Marina: 🐬 Delfín o 🦈 Tiburón (Pez Globo 🐡 bloqueado)
- * - Riesgo: Stop Loss -1.5 ATR | Take Profit +3.0 ATR | Trailing a BE a +1.5 ATR
+ * Regla Cuantitativa Oficial (Mandato Pedro 16-Nov-2026):
+ * - Marcos Temporales: 5m, 15m, 1H, 4H (1m eliminado)
+ * - Las 8 Pistas Cuantitativas: P1 a P8 (cada estrategia usa sus propios filtros y R:R)
+ * - Candados Transversales: DD Diario Máx 2.50% (Kill Switch), rVol SOL >= 1.5x,
+ *   Ventana bursátil L-V 15:30-21:30 Roma, Cooldown anti-churn y Control Real por API.
  * ==============================================================================
  */
 
@@ -110,13 +109,15 @@ let engineState = {
     startedAt: new Date().toISOString(),
     lastScanAt: null,
     totalScans: 0,
+    emergencyStop: false,
+    emergencyStopReason: null,
     openPositions: [],
     closedTradesHistory: [],
     dailyRealizedPnlUSD: 0.0,
     dailyRealizedPnlEUR: 0.0,
     accountBalances: {
-        alpaca: '$99,940.84 USD',
-        pepperstone: '€10,184.84 EUR'
+        alpaca: 'CONSULTANDO API...',
+        pepperstone: 'CONSULTANDO API...'
     },
     latestScores: {
         NVDA: { score: 0, pez: '🐡 PEZ GLOBO', price: 0, time: null },
@@ -124,14 +125,28 @@ let engineState = {
         XAUUSD: { score: 0, pez: '🐡 PEZ GLOBO', price: 0, time: null },
         SOLUSD: { score: 0, pez: '🐡 PEZ GLOBO', price: 0, time: null }
     },
-    closedCooldowns: {}
+    closedCooldowns: {},
+    lastSignalBarTime: {}
 };
 
-// Cargar estado persistente si existe
+// Cargar estado persistente si existe y depurar restos legados
 if (fs.existsSync(STATE_FILE)) {
     try {
         const saved = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
         engineState = { ...engineState, ...saved, running: true };
+        if (Array.isArray(engineState.closedTradesHistory)) {
+            engineState.closedTradesHistory.forEach(t => {
+                if (t && typeof t.broker === 'string' && t.broker.includes('200')) {
+                    t.broker = 'Pepperstone cTrader ECN Razor';
+                }
+            });
+        }
+        if (engineState.latestScores) {
+            Object.keys(engineState.latestScores).forEach(k => {
+                if (k.endsWith('_1m')) delete engineState.latestScores[k];
+            });
+        }
+        if (!engineState.lastSignalBarTime) engineState.lastSignalBarTime = {};
     } catch(e) {
         console.warn('[ANASTASIA ENGINE] Error cargando estado previo:', e.message);
     }
@@ -452,126 +467,146 @@ async function executeAutonomousOpen(ticker, price, analysis) {
     const config = ASSETS_CONFIG[ticker];
     if (!config) return null;
 
+    // Obtener precio vivo real actual para calcular SL/TP sin desfase respecto a la vela
+    const liveRefPrice = (engineState.liveQuotes && engineState.liveQuotes[ticker] > 0)
+        ? parseFloat(engineState.liveQuotes[ticker])
+        : parseFloat(price);
+
     // 🛡️ CANDADO MATEMÁTICO INQUEBRANTABLE (Mandato Frialdad Rusa de Pedro):
-    // El Take Profit para BUY DEBE ser estrictamente MAYOR al precio de entrada (+3.0 ATR).
-    // El Stop Loss para BUY DEBE ser estrictamente MENOR al precio de entrada (-1.5 ATR).
-    // Jamás se permite una entrada con TP inferior o igual al precio de entrada.
-    const atr = (analysis.indicators && analysis.indicators.atr) ? analysis.indicators.atr : (price * 0.01);
-    if (!analysis.tp || analysis.tp <= price) {
-        analysis.tp = parseFloat((price + (atr * 3.0)).toFixed(2));
-    }
-    if (!analysis.sl || analysis.sl >= price) {
-        analysis.sl = parseFloat((price - (atr * 1.5)).toFixed(2));
-    }
-    if (!analysis.breakevenTrigger || analysis.breakevenTrigger <= price) {
-        analysis.breakevenTrigger = parseFloat((price + (atr * 1.5)).toFixed(2));
-    }
+    // Toda entrada BUY DEBE tener TP > liveRefPrice y SL < liveRefPrice calculados sobre precio vivo.
+    const atr = Math.max(0.01, (analysis.indicators && analysis.indicators.atr) ? analysis.indicators.atr : (liveRefPrice * 0.01));
+    const stratRisk = Math.max(atr * 0.5, (isFinite(analysis.sl) && isFinite(analysis.barPrice) && analysis.barPrice > analysis.sl) ? (analysis.barPrice - analysis.sl) : (atr * 1.5));
+    const stratReward = Math.max(atr * 1.0, (isFinite(analysis.tp) && isFinite(analysis.barPrice) && analysis.tp > analysis.barPrice) ? (analysis.tp - analysis.barPrice) : (atr * 3.0));
+    const priceDecimals = ticker.includes('SOL') ? 4 : 2;
+
+    analysis.sl = parseFloat((liveRefPrice - stratRisk).toFixed(priceDecimals));
+    analysis.tp = parseFloat((liveRefPrice + stratReward).toFixed(priceDecimals));
+    analysis.breakevenTrigger = parseFloat((liveRefPrice + (stratRisk)).toFixed(priceDecimals));
     if (analysis.isDelfin4x4) {
-        analysis.tp1 = parseFloat((price + (atr * 0.75)).toFixed(2));
-        analysis.tp2 = parseFloat((price + (atr * 1.50)).toFixed(2));
-        analysis.tp3 = parseFloat((price + (atr * 2.25)).toFixed(2));
-        analysis.tp4 = parseFloat((price + (atr * 3.00)).toFixed(2));
+        analysis.tp1 = parseFloat((liveRefPrice + (atr * 0.75)).toFixed(priceDecimals));
+        analysis.tp2 = parseFloat((liveRefPrice + (atr * 1.50)).toFixed(priceDecimals));
+        analysis.tp3 = parseFloat((liveRefPrice + (atr * 2.25)).toFixed(priceDecimals));
+        analysis.tp4 = parseFloat((liveRefPrice + (atr * 3.00)).toFixed(priceDecimals));
+        analysis.sl = parseFloat((liveRefPrice - (atr * 1.5)).toFixed(priceDecimals));
+        analysis.tp = analysis.tp4;
+        analysis.breakevenTrigger = analysis.tp2;
     }
 
     console.log(`\n⚔️ [DUELO EN VIVO • ALPACA vs PEPPERSTONE] DISPARO PARALELO EN ${ticker}:`);
-    console.log(`   Acción: ${analysis.action} | Precio: $${price} | Score: ${analysis.score} (${analysis.pez})`);
-    console.log(`   SL: $${analysis.sl} (-1.5 ATR) | TP: $${analysis.tp} (+3.0 ATR)`);
+    console.log(`   Acción: ${analysis.action} | Precio Live: $${liveRefPrice} | Score: ${analysis.score} (${analysis.pez})`);
+    console.log(`   SL: $${analysis.sl} | TP: $${analysis.tp}`);
 
     const duelPairId = 'DUEL-' + Date.now();
     const executedOrders = [];
 
-    // 1. DISPARO A ALPACA MARKETS - Mínimo capital (1 acción / 1 SOL / 1 GLD)
-    try {
-        const isCrypto = config.alpacaSymbol.includes('/');
-        let alpacaTp = analysis.tp;
-        let alpacaSl = analysis.sl;
-        let alpacaEntry = price;
+    // 1. DISPARO A ALPACA MARKETS - Validar tope real en cartera (máx 3 posiciones simultáneas por símbolo)
+    const reconAlpPos = (engineState.brokerReconciliation && Array.isArray(engineState.brokerReconciliation.alpacaPositions))
+        ? engineState.brokerReconciliation.alpacaPositions : [];
+    const existingAlpSameSym = engineState.openPositions.filter(p => p.broker && p.broker.includes('Alpaca') && p.symbol === ticker).length;
+    const brokerHasHeavyBag = reconAlpPos.some(ap => (ap.symbol === config.alpacaSymbol || ap.symbol === config.alpacaSymbol.replace('/', '')) && parseFloat(ap.qty || 0) >= 3);
 
-        // Si es Oro (XAUUSD), Alpaca compra el ETF GLD con su propio precio (~$371 - $379)
-        if (ticker === 'XAUUSD') {
-            const posList = await alpacaService.getPositions().catch(() => []);
-            const gldPos = posList.find(p => p.symbol === 'GLD');
-            const gldPrice = gldPos ? (gldPos.currentPrice || gldPos.current_price) : 371.66;
-            alpacaEntry = parseFloat(gldPrice) || 371.66;
-            const gldAtr = 2.50;
-            alpacaSl = parseFloat((alpacaEntry - (gldAtr * 1.5)).toFixed(2));
-            alpacaTp = parseFloat((alpacaEntry + (gldAtr * 3.0)).toFixed(2));
-        }
+    if (existingAlpSameSym < 3 && !brokerHasHeavyBag) {
+        try {
+            const isCrypto = config.alpacaSymbol.includes('/');
+            let alpacaTp = analysis.tp;
+            let alpacaSl = analysis.sl;
+            let alpacaEntry = liveRefPrice;
 
-        let alpacaOrder = null;
-        if (isCrypto) {
-            // Cripto en Alpaca no permite brackets OTOCO, entra por market simple
-            alpacaOrder = await alpacaService.placeMarketOrder({
-                symbol: config.alpacaSymbol,
-                qty: config.alpacaQty,
-                side: 'buy'
-            });
-        } else {
-            try {
-                alpacaOrder = await alpacaService.placeBracketOrder({
-                    symbol: config.alpacaSymbol,
-                    qty: config.alpacaQty,
-                    side: 'buy',
-                    takeProfitLimit: alpacaTp,
-                    stopLossStop: alpacaSl
-                });
-            } catch (bracketErr) {
-                console.warn(`[ALPACA BRACKET FALLBACK] ${config.alpacaSymbol} bracket fallo (${bracketErr.message}), ejecutando market order simple...`);
+            let alpacaOrder = null;
+            if (isCrypto) {
                 alpacaOrder = await alpacaService.placeMarketOrder({
                     symbol: config.alpacaSymbol,
                     qty: config.alpacaQty,
                     side: 'buy'
                 });
+            } else {
+                try {
+                    alpacaOrder = await alpacaService.placeBracketOrder({
+                        symbol: config.alpacaSymbol,
+                        qty: config.alpacaQty,
+                        side: 'buy',
+                        takeProfitLimit: parseFloat(alpacaTp.toFixed(2)),
+                        stopLossStop: parseFloat(alpacaSl.toFixed(2))
+                    });
+                } catch (bracketErr) {
+                    console.warn(`[ALPACA BRACKET FALLBACK] ${config.alpacaSymbol} bracket fallo (${bracketErr.message}), ejecutando market order simple...`);
+                    alpacaOrder = await alpacaService.placeMarketOrder({
+                        symbol: config.alpacaSymbol,
+                        qty: config.alpacaQty,
+                        side: 'buy'
+                    });
+                }
             }
+            if (!alpacaOrder || !alpacaOrder.id) {
+                throw new Error(`Alpaca no devolvió ID de orden válido para ${config.alpacaSymbol}. Orden no ejecutada.`);
+            }
+
+            // Capturar Fill Price real de Alpaca (Mandato 3.B.3)
+            let realAlpacaFill = parseFloat(alpacaOrder.filled_avg_price || 0);
+            if (!realAlpacaFill || realAlpacaFill <= 0) {
+                await new Promise(r => setTimeout(r, 450));
+                try {
+                    const refreshedOrder = await alpacaService.getOrderById(alpacaOrder.id);
+                    if (refreshedOrder && parseFloat(refreshedOrder.filled_avg_price) > 0) {
+                        realAlpacaFill = parseFloat(refreshedOrder.filled_avg_price);
+                    }
+                } catch(e) {}
+            }
+            if (realAlpacaFill > 0) {
+                alpacaEntry = realAlpacaFill;
+                alpacaSl = parseFloat((alpacaEntry - stratRisk).toFixed(priceDecimals));
+                alpacaTp = parseFloat((alpacaEntry + stratReward).toFixed(priceDecimals));
+            }
+
+            const alpacaRecord = {
+                id: alpacaOrder.id,
+                duelPairId: duelPairId,
+                broker: 'Alpaca Markets Paper Algorithmic',
+                strategy: analysis.strategyName,
+                account: 'PA35UQ22S',
+                symbol: ticker,
+                orderSymbol: config.alpacaSymbol,
+                qty: config.alpacaQty,
+                initialQty: config.alpacaQty,
+                unit: 'acción',
+                currency: 'USD',
+                side: 'BUY',
+                entryPrice: alpacaEntry,
+                fillPrice: realAlpacaFill || alpacaEntry,
+                sl: alpacaSl,
+                tp: alpacaTp,
+                isDelfin4x4: analysis.isDelfin4x4 || false,
+                tp1: analysis.isDelfin4x4 ? parseFloat((alpacaEntry + atr * 0.75).toFixed(priceDecimals)) : null,
+                tp2: analysis.isDelfin4x4 ? parseFloat((alpacaEntry + atr * 1.50).toFixed(priceDecimals)) : null,
+                tp3: analysis.isDelfin4x4 ? parseFloat((alpacaEntry + atr * 2.25).toFixed(priceDecimals)) : null,
+                tp4: analysis.isDelfin4x4 ? parseFloat((alpacaEntry + atr * 3.00).toFixed(priceDecimals)) : null,
+                tranchesClosed: 0,
+                realizedPartialPnl: 0,
+                breakevenTrigger: parseFloat((alpacaEntry + stratRisk).toFixed(priceDecimals)),
+                score: analysis.score,
+                pez: analysis.pez,
+                indicators: analysis.indicators || null,
+                signalReason: analysis.signalReason || '',
+                timeframe: analysis.timeframe || '5m',
+                status: 'OPEN',
+                openedAt: new Date().toISOString(),
+                trailingStopMovedToBreakeven: false
+            };
+            executedOrders.push(alpacaRecord);
+            engineState.openPositions.push(alpacaRecord);
+        } catch(err) {
+            console.error(`❌ [ALPACA ERROR] No se pudo enviar orden en ${ticker} (${config.alpacaSymbol}):`, err.message);
         }
-        if (!alpacaOrder || !alpacaOrder.id) {
-            throw new Error(`Alpaca no devolvió ID de orden válido para ${config.alpacaSymbol}. Orden no ejecutada.`);
-        }
-        const alpacaRecord = {
-            id: alpacaOrder.id,
-            duelPairId: duelPairId,
-            broker: 'Alpaca Markets Paper Algorithmic',
-            strategy: analysis.strategyName,
-            account: 'PA35UQ22S',
-            symbol: ticker,
-            orderSymbol: config.alpacaSymbol,
-            qty: config.alpacaQty,
-            initialQty: config.alpacaQty,
-            unit: 'acción',
-            currency: 'USD',
-            side: 'BUY',
-            entryPrice: price,
-            sl: analysis.sl,
-            tp: analysis.tp,
-            isDelfin4x4: analysis.isDelfin4x4 || false,
-            tp1: analysis.tp1 || null,
-            tp2: analysis.tp2 || null,
-            tp3: analysis.tp3 || null,
-            tp4: analysis.tp4 || null,
-            tranchesClosed: 0,
-            realizedPartialPnl: 0,
-            breakevenTrigger: analysis.breakevenTrigger,
-            score: analysis.score,
-            pez: analysis.pez,
-            indicators: analysis.indicators || null,
-            signalReason: analysis.signalReason || '',
-            timeframe: analysis.timeframe || '5m',
-            status: 'OPEN',
-            openedAt: new Date().toISOString(),
-            trailingStopMovedToBreakeven: false
-        };
-        executedOrders.push(alpacaRecord);
-        engineState.openPositions.push(alpacaRecord);
-    } catch(err) {
-        console.error(`❌ [ALPACA ERROR] No se pudo enviar orden en ${ticker} (${config.alpacaSymbol}):`, err.message);
+    } else {
+        console.log(`🔒 [CANDADO ALPACA] Límite de exposición en ${ticker} alcanzado (${existingAlpSameSym} pos motor).`);
     }
 
-    // 2. DISPARO A PEPPERSTONE cTRADER - Mínimo volumen (0.01 micro-lotes)
+    // 2. DISPARO A PEPPERSTONE cTRADER - Mínimo volumen (0.01 micro-lotes / 0.10 CFD)
     try {
         const pepRes = await pepperstoneService.processIncomingSignal({
             action: 'BUY',
             ticker: config.pepperstoneSymbol,
-            price: price,
+            price: liveRefPrice,
             score: analysis.score,
             pez: analysis.pez,
             sl: analysis.sl,
@@ -579,8 +614,13 @@ async function executeAutonomousOpen(ticker, price, analysis) {
             timeframe: analysis.timeframe || '5m'
         });
         if (pepRes && pepRes.executed && pepRes.order && pepRes.order.id) {
+            const pepEntry = pepRes.order.fillPrice || pepRes.order.entryPrice || liveRefPrice;
+            const pepSl = isFinite(pepRes.order.stopLoss) ? pepRes.order.stopLoss : analysis.sl;
+            const pepTp = isFinite(pepRes.order.takeProfit) ? pepRes.order.takeProfit : analysis.tp;
+            const pepRiskDist = Math.abs(pepEntry - pepSl) || stratRisk;
             const pepRecord = {
                 id: pepRes.order.id,
+                positionId: pepRes.order.positionId || pepRes.order.id,
                 duelPairId: duelPairId,
                 broker: 'Pepperstone cTrader ECN Razor',
                 strategy: analysis.strategyName,
@@ -592,17 +632,19 @@ async function executeAutonomousOpen(ticker, price, analysis) {
                 unit: 'micro-lotes',
                 currency: 'EUR',
                 side: 'BUY',
-                entryPrice: price,
-                sl: analysis.sl,
-                tp: analysis.tp,
+                entryPrice: pepEntry,
+                fillPrice: pepEntry,
+                sl: pepSl,
+                tp: pepTp,
+                brokerSltpBound: !!pepRes.order.brokerSltpBound,
                 isDelfin4x4: analysis.isDelfin4x4 || false,
-                tp1: analysis.tp1 || null,
-                tp2: analysis.tp2 || null,
-                tp3: analysis.tp3 || null,
-                tp4: analysis.tp4 || null,
+                tp1: analysis.isDelfin4x4 ? parseFloat((pepEntry + atr * 0.75).toFixed(priceDecimals)) : null,
+                tp2: analysis.isDelfin4x4 ? parseFloat((pepEntry + atr * 1.50).toFixed(priceDecimals)) : null,
+                tp3: analysis.isDelfin4x4 ? parseFloat((pepEntry + atr * 2.25).toFixed(priceDecimals)) : null,
+                tp4: analysis.isDelfin4x4 ? parseFloat((pepEntry + atr * 3.00).toFixed(priceDecimals)) : null,
                 tranchesClosed: 0,
                 realizedPartialPnl: 0,
-                breakevenTrigger: analysis.breakevenTrigger,
+                breakevenTrigger: parseFloat((pepEntry + pepRiskDist).toFixed(priceDecimals)),
                 score: analysis.score,
                 pez: analysis.pez,
                 indicators: analysis.indicators || null,
@@ -632,15 +674,13 @@ async function executeAutonomousOpen(ticker, price, analysis) {
                 `🎯 <b>Disparo Paralelo en los 4 Activos: ${ticker}</b>\n` +
                 `━━━━━━━━━━━━━━━━━━━━\n` +
                 `⚡ <b>Gatillo:</b> ${analysis.strategyName} en <b>${analysis.timeframe || '5m'}</b> (Score ${analysis.score}/100)\n` +
-                `💵 <b>Precio Entrada:</b> $${price.toFixed(2)}\n` +
-                `🛡️ <b>Stop Loss:</b> $${analysis.sl} (-1.5 ATR)\n` +
-                `🎯 <b>Take Profit:</b> $${analysis.tp} (+3.0 ATR)\n` +
+                `💵 <b>Precio Entrada:</b> $${liveRefPrice.toFixed(priceDecimals)}\n` +
+                `🛡️ <b>Stop Loss:</b> $${analysis.sl} | 🎯 <b>Take Profit:</b> $${analysis.tp}\n` +
                 `🔒 <b>Trailing a Breakeven:</b> Al superar $${analysis.breakevenTrigger}\n\n` +
-                `🏛️ <b>EJECUCIÓN EN IGUALDAD DE CONDICIONES:</b>\n` +
-                `• 🦙 <b>Alpaca:</b> ${config.alpacaSymbol} (${config.alpacaQty} ud - Margen 4x)\n` +
-                `• 🏛️ <b>Pepperstone:</b> ${config.pepperstoneSymbol} (${config.pepperstoneQty} lotes - Palanca 1:30)\n` +
+                `🏛️ <b>EJECUCIÓN CONFIRMADA:</b>\n` +
+                executedOrders.map(o => `• ${o.broker.includes('Alpaca') ? '🦙 Alpaca' : '🏛️ Pepperstone'} ID <code>${o.id}</code> ($${o.entryPrice})`).join('\n') + `\n` +
                 `━━━━━━━━━━━━━━━━━━━━\n` +
-                `<i>Evaluación de 15 días. Al final nos quedaremos con el broker de mayor Beneficio Neto Total.</i>`;
+                `<i>Orden verificada con ID oficial de broker. Cero operaciones fantasma.</i>`;
 
             await notifyPedro(msg);
             console.log(`✅ [DUELO PARALELO] Órdenes registradas y Pedro notificado vía Telegram.`);
@@ -685,18 +725,23 @@ function isEntryWindowForAsset(symbol) {
 async function executeRealBrokerClose(pos) {
     const isAlpaca = pos.broker && pos.broker.includes('Alpaca');
     if (isAlpaca) {
-        // Vendemos exactamente la qty de ESTA posición (nunca closePosition(symbol),
-        // que liquidaría toda la posición neteada del símbolo, incluidas otras pistas).
-        const order = await alpacaService.placeMarketOrder({
-            symbol: pos.orderSymbol,
-            qty: pos.qty,
-            side: 'sell'
-        });
-        return { broker: 'Alpaca', orderId: order && order.id ? order.id : null };
+        try {
+            const order = await alpacaService.placeMarketOrder({
+                symbol: pos.orderSymbol,
+                qty: pos.qty,
+                side: 'sell'
+            });
+            return { broker: 'Alpaca', orderId: order && order.id ? order.id : null };
+        } catch (sellErr) {
+            // Si es custodia hidratada única del símbolo (ej. SOLUSD con fracción neta por fees), usar closePosition oficial
+            const openSameSym = engineState.openPositions.filter(p => p.broker && p.broker.includes('Alpaca') && p.orderSymbol === pos.orderSymbol).length;
+            if (pos.hydratedFromBroker && openSameSym <= 1) {
+                const closeRes = await alpacaService.closePosition((pos.orderSymbol || pos.symbol).replace('/', ''));
+                return { broker: 'Alpaca', orderId: closeRes && closeRes.id ? closeRes.id : null, viaClosePosition: true };
+            }
+            throw sellErr;
+        }
     }
-    // Pepperstone cTrader: cierre por positionId. El volumen se deriva del símbolo
-    // con el mismo mapa que la apertura (los registros antiguos no guardan cTraderVolume):
-    // SOL=100 (1 SOL), NVDA/TSLA=10 (0.10 lotes), XAUUSD=100 (0.01 lotes = 1 onza).
     const pid = pos.positionId || pos.id;
     let vol = pos.cTraderVolume;
     if (!vol) {
@@ -706,10 +751,122 @@ async function executeRealBrokerClose(pos) {
     }
     const res = await pepperstoneService.closeOrderViaOpenAPI(pid, vol);
     if (!res) throw new Error('Sin respuesta de cTrader');
+    if (res.errorCode && String(res.errorCode).includes('POSITION_NOT_FOUND')) {
+        return { broker: 'Pepperstone', positionId: pid, alreadyClosedByBroker: true };
+    }
     if (res.errorCode) throw new Error(`${res.errorCode} - ${res.description || 'Error cTrader'}`);
     if (res.error) throw new Error(res.error);
     if (res.timeout) throw new Error('Timeout cerrando posición en cTrader (10s)');
     return { broker: 'Pepperstone', positionId: pid };
+}
+
+function getLiveAtrForTicker(ticker, refPrice) {
+    const tfData = latestEnrichedBars[ticker] || {};
+    const bars = (tfData['15m'] && tfData['15m'].length) ? tfData['15m']
+        : ((tfData['5m'] && tfData['5m'].length) ? tfData['5m'] : []);
+    const lastBar = bars.length ? bars[bars.length - 1] : null;
+    if (lastBar && isFinite(lastBar.atr) && lastBar.atr > 0) return lastBar.atr;
+    return Math.max(0.05, (ASSETS_CONFIG[ticker] && ASSETS_CONFIG[ticker].baseAtr) || (refPrice * 0.01));
+}
+
+// Hidrata posiciones reales abiertas en los brokers que faltan en engineState.openPositions (tras reinicios)
+// Protege el capital con SL (-1.5 ATR), Breakeven (+1.5 ATR) y TP (+3.0 ATR) reales; excluye T.US (legacy).
+function adoptUnmanagedBrokerPositions(alpPositions, pepRealPositions) {
+    let adopted = 0;
+    const SYMBOL_ID_MAP = { 1614: 'SOLUSD', 338: 'NVDA', 339: 'TSLA', 41: 'XAUUSD' };
+
+    // 1. Pepperstone cTrader: cada posición tiene positionId único
+    (pepRealPositions || []).forEach(p => {
+        const td = p.tradeData || {};
+        const ticker = SYMBOL_ID_MAP[td.symbolId];
+        if (!ticker || !ASSETS_CONFIG[ticker]) return; // Respeta T.US (legacy) u otros externos
+        const pid = p.positionId;
+        const alreadyTracked = engineState.openPositions.some(op =>
+            String(op.positionId || op.id) === String(pid)
+        );
+        if (alreadyTracked) return;
+
+        const entry = parseFloat(p.price) || (engineState.liveQuotes && engineState.liveQuotes[ticker]) || 0;
+        if (!(entry > 0)) return;
+        const decimals = ticker.includes('SOL') ? 4 : 2;
+        const atr = getLiveAtrForTicker(ticker, entry);
+        const cfg = ASSETS_CONFIG[ticker];
+        engineState.openPositions.push({
+            id: pid,
+            positionId: pid,
+            broker: 'Pepperstone cTrader ECN Razor',
+            strategy: `Custodia Broker (${td.comment || 'cTrader'})`,
+            account: 4285238,
+            symbol: ticker,
+            orderSymbol: cfg.pepperstoneSymbol,
+            qty: ticker.includes('SOL') ? ((td.volume || 100) / 100) : cfg.pepperstoneQty,
+            initialQty: ticker.includes('SOL') ? ((td.volume || 100) / 100) : cfg.pepperstoneQty,
+            cTraderVolume: td.volume || (ticker.includes('NVDA') || ticker.includes('TSLA') ? 10 : 100),
+            usedMarginEur: (p.usedMargin || 0) / 100,
+            unit: ticker.includes('SOL') ? 'SOL' : 'CFD',
+            currency: 'EUR',
+            side: td.tradeSide === 2 ? 'SELL' : 'BUY',
+            entryPrice: entry,
+            sl: parseFloat((entry - atr * 1.5).toFixed(decimals)),
+            tp: parseFloat((entry + atr * 3.0).toFixed(decimals)),
+            breakevenTrigger: parseFloat((entry + atr * 1.5).toFixed(decimals)),
+            pez: '🛡️ CUSTODIA',
+            timeframe: '15m',
+            status: 'OPEN',
+            hydratedFromBroker: true,
+            openedAt: td.openTimestamp ? new Date(td.openTimestamp).toISOString() : new Date().toISOString(),
+            trailingStopMovedToBreakeven: false
+        });
+        adopted++;
+    });
+
+    // 2. Alpaca: posiciones netas por símbolo (adoptar solo si no hay cobertura suficiente en libreta)
+    const ALP_TO_TICKER = { 'NVDA': 'NVDA', 'TSLA': 'TSLA', 'GLD': 'XAUUSD', 'SOLUSD': 'SOLUSD', 'SOL/USD': 'SOLUSD' };
+    (alpPositions || []).forEach(ap => {
+        const ticker = ALP_TO_TICKER[ap.symbol];
+        if (!ticker || !ASSETS_CONFIG[ticker]) return;
+        const cfg = ASSETS_CONFIG[ticker];
+        const normSym = s => (s || '').replace('/', '').toUpperCase();
+        const engineQtyForSym = engineState.openPositions
+            .filter(op => op.broker && op.broker.includes('Alpaca') && normSym(op.orderSymbol || op.symbol) === normSym(ap.symbol))
+            .reduce((sum, op) => sum + (parseFloat(op.qty) || 0), 0);
+        if (Math.abs(engineQtyForSym - parseFloat(ap.qty || 0)) <= 0.001) return;
+        if (engineQtyForSym > 0) return; // Evitar duplicar si ya existen sub-órdenes registradas
+
+        const entry = parseFloat(ap.avgEntryPrice) || (engineState.liveQuotes && engineState.liveQuotes[ticker]) || 0;
+        if (!(entry > 0)) return;
+        const decimals = ticker.includes('SOL') ? 4 : 2;
+        const atr = getLiveAtrForTicker(ticker, entry);
+        engineState.openPositions.push({
+            id: `ALP-CUST-${ap.symbol}`,
+            broker: 'Alpaca Markets Paper Algorithmic',
+            strategy: 'Custodia Broker (Alpaca API)',
+            account: 'PA35UQ22S',
+            symbol: ticker,
+            orderSymbol: cfg.alpacaSymbol,
+            qty: parseFloat(ap.qty),
+            initialQty: parseFloat(ap.qty),
+            unit: ticker.includes('SOL') ? 'SOL' : 'acción',
+            currency: 'USD',
+            side: 'BUY',
+            entryPrice: entry,
+            sl: parseFloat((entry - atr * 1.5).toFixed(decimals)),
+            tp: parseFloat((entry + atr * 3.0).toFixed(decimals)),
+            breakevenTrigger: parseFloat((entry + atr * 1.5).toFixed(decimals)),
+            pez: '🛡️ CUSTODIA',
+            timeframe: '15m',
+            status: 'OPEN',
+            hydratedFromBroker: true,
+            openedAt: new Date().toISOString(),
+            trailingStopMovedToBreakeven: false
+        });
+        adopted++;
+    });
+
+    if (adopted > 0) {
+        console.log(`♻️ [CUSTODIA HIDRATADA] +${adopted} posiciones reales adoptadas bajo protección SL/TP automática.`);
+        saveState();
+    }
 }
 
 // ------------------------------------------------------------------------------
@@ -765,9 +922,13 @@ async function syncBrokerReality() {
 
         // Reconcile REAL de cTrader (posiciones abiertas de verdad en el broker)
         let pepRealPositions = [];
+        let pepReconOk = false;
         try {
             const pepRecon = await pepperstoneService.getOpenPositionsViaOpenAPI();
-            if (pepRecon && pepRecon.positions) pepRealPositions = pepRecon.positions;
+            if (pepRecon && Array.isArray(pepRecon.positions)) {
+                pepRealPositions = pepRecon.positions;
+                pepReconOk = true;
+            }
         } catch(e) { console.warn('[RECONCILE cTrader] Error:', e.message); }
 
         const SYMBOL_ID_NAMES = {
@@ -778,9 +939,7 @@ async function syncBrokerReality() {
             340: 'T.US (legacy)'
         };
 
-        // 🧹 PURGA AUTORIZADA POR PEDRO (12-NOV): cerrar TODAS las posiciones reales
-        // de cTrader en cuanto el mercado abra (los CFDs de acciones US estaban
-        // MARKET_CLOSED a la 01:00). Reintenta cada 5 min hasta dejarlo en cero.
+        // 🧹 PURGA AUTORIZADA POR PEDRO (12-NOV)
         if (engineState.pendingBrokerPurge && pepRealPositions.length > 0) {
             let purged = 0, failed = 0;
             for (const p of pepRealPositions) {
@@ -797,9 +956,29 @@ async function syncBrokerReality() {
                 engineState.pendingBrokerPurge = false;
                 await notifyPedro('🧹👑 <b>[LABORATORIO RESETEADO]</b>\nTodas las posiciones reales de cTrader han sido cerradas a mercado.\nEl duelo Alpaca vs Pepperstone empieza limpio: libreta = broker en cero.\nDesde ahora, cada cierre es 100% real. 🇵🇪✨');
             }
-        } else if (engineState.pendingBrokerPurge && pepRealPositions.length === 0) {
+        } else if (engineState.pendingBrokerPurge && pepRealPositions.length === 0 && pepReconOk) {
             engineState.pendingBrokerPurge = false;
             await notifyPedro('🧹👑 <b>[LABORATORIO RESETEADO]</b>\ncTrader ya está en cero. Duelo limpio activado.');
+        }
+
+        // Si cTrader confirma en vivo las posiciones, limpiar fantasmas ya cerrados en servidor (SL/TP nativo o cierre manual)
+        if (pepReconOk) {
+            const livePidSet = new Set(pepRealPositions.map(p => String(p.positionId)));
+            const beforeLen = engineState.openPositions.length;
+            engineState.openPositions = engineState.openPositions.filter(op => {
+                if (!op.broker || !op.broker.includes('Pepperstone')) return true;
+                return livePidSet.has(String(op.positionId || op.id));
+            });
+            if (engineState.openPositions.length !== beforeLen) {
+                console.log(`♻️ [SYNC cTrader] Limpiadas ${beforeLen - engineState.openPositions.length} posiciones ya cerradas en servidor cTrader.`);
+            }
+        }
+
+        // Adoptar posiciones reales del broker que falten tras reinicios ANTES del cálculo de divergencias
+        adoptUnmanagedBrokerPositions(alpPositions, pepRealPositions);
+        if (pepperstoneService && pepperstoneService.syncOpenPositions) {
+            const pepTracked = engineState.openPositions.filter(p => p.broker && p.broker.includes('Pepperstone'));
+            pepperstoneService.syncOpenPositions(pepTracked, pepRealPositions.length);
         }
 
         const engineAlpaca = {};
@@ -823,9 +1002,11 @@ async function syncBrokerReality() {
             }
         });
 
+        const MANAGED_CTRADER_IDS = new Set([1614, 338, 339, 41]);
+        const pepManagedCount = pepRealPositions.filter(p => MANAGED_CTRADER_IDS.has(p.tradeData?.symbolId)).length;
         const pepLibreta = engineState.openPositions.filter(p => p.broker && p.broker.includes('Pepperstone')).length;
-        if (Math.abs(pepRealPositions.length - pepLibreta) > 0) {
-            divergences.push({ symbol: 'cTrader', engineQty: pepLibreta, brokerQty: pepRealPositions.length });
+        if (pepReconOk && Math.abs(pepManagedCount - pepLibreta) > 0) {
+            divergences.push({ symbol: 'cTrader', engineQty: pepLibreta, brokerQty: pepManagedCount });
         }
 
         engineState.brokerReconciliation = {
@@ -854,10 +1035,37 @@ async function syncBrokerReality() {
                 };
             }),
             ctraderRealCount: pepRealPositions.length,
+            ctraderManagedCount: pepManagedCount,
             ctraderLibretaCount: pepLibreta,
             engineAlpacaQty: engineAlpaca,
             divergences
         };
+
+        // 🚨 CIRCUIT BREAKER AUTOMÁTICO (Regla Sagrada Holding: Límite Drawdown Diario 2.50%)
+        const today = romeDateStr();
+        if (dailyDrawdownPct >= 2.50 && !engineState.emergencyStop) {
+            engineState.emergencyStop = true;
+            engineState.emergencyStopReason = `Drawdown diario alcanzó ${dailyDrawdownPct.toFixed(2)}% (>= 2.50%)`;
+            if (pepperstoneService && pepperstoneService.centinelaState) {
+                pepperstoneService.centinelaState.circuitBreakerTripped = true;
+            }
+            saveState();
+            if (engineState.killSwitchAlertDate !== today) {
+                engineState.killSwitchAlertDate = today;
+                await notifyPedro(
+                    `🚨🚨 <b>[ANASTASIA CIO • KILL SWITCH ACTIVADO (DD ${dailyDrawdownPct.toFixed(2)}%)]</b> 🚨🚨\n\n` +
+                    `🛑 Se alcanzó el límite máximo diario de Drawdown (2.50%).\n` +
+                    `🔒 Nuevas aperturas bloqueadas en Alpaca y Pepperstone hasta revisión del Chairman.`
+                );
+            }
+        } else if (dailyDrawdownPct >= 2.00 && dailyDrawdownPct < 2.50 && engineState.dailyWarnAlertDate !== today) {
+            engineState.dailyWarnAlertDate = today;
+            await notifyPedro(
+                `🟡 <b>[ANASTASIA CIO • ALERTA AMARILLA DE DRAWDOWN]</b>\n` +
+                `⚠️ Drawdown diario actual: <b>${dailyDrawdownPct.toFixed(2)}%</b> (Límite crítico Kill Switch: 2.50%).`
+            );
+        }
+
         if (divergences.length > 0) {
             console.warn(`⚠️ [RECONCILE] Divergencias libreta vs Alpaca: ${JSON.stringify(divergences)}`);
         }
@@ -978,10 +1186,21 @@ async function manageOpenPositions(currentQuotes) {
     const remainingPositions = [];
 
     for (const pos of engineState.openPositions) {
+        if (pos.legacyExternal) {
+            remainingPositions.push(pos);
+            continue;
+        }
         // Fuera de sesión (acciones US / oro): no gestionar. Las velas llegan congeladas
         // y comparar precios viejos contra SL/TP genera cierres fantasma que el broker
         // rechaza con MARKET_CLOSED. La posición espera viva a la próxima sesión.
         if (!isSessionOpenForAsset(pos.symbol)) {
+            remainingPositions.push(pos);
+            continue;
+        }
+
+        // Protección anti-whipsaw de entrada: no ejecutar cierres automáticos en los primeros 60s desde apertura
+        const ageMs = pos.openedAt ? (Date.now() - new Date(pos.openedAt).getTime()) : 999999;
+        if (ageMs >= 0 && ageMs < 60000) {
             remainingPositions.push(pos);
             continue;
         }
@@ -1058,13 +1277,16 @@ async function manageOpenPositions(currentQuotes) {
             }
         }
 
-        // B) GESTIÓN ESTÁNDAR PARA NO-DELFÍN (PISTAS 2, 3, 4, 5)
+        // B) GESTIÓN ESTÁNDAR PARA NO-DELFÍN (PISTAS 2..8 / CUSTODIA)
         if (!pos.isDelfin4x4) {
             // 1. Verificación de Trailing Stop a Breakeven (+1.5 ATR)
             if (!pos.trailingStopMovedToBreakeven && currentPrice >= pos.breakevenTrigger) {
                 pos.sl = pos.entryPrice; // Movemos SL al precio de entrada (Riesgo Cero)
                 pos.trailingStopMovedToBreakeven = true;
                 console.log(`🔒 [TRAILING A BREAKEVEN] ${pos.symbol}: Stop Loss movido a $${pos.entryPrice} (Riesgo Cero).`);
+                if (pos.broker && pos.broker.includes('Pepperstone') && (pos.positionId || pos.id) && pepperstoneService.amendPositionSLTPViaOpenAPI) {
+                    pepperstoneService.amendPositionSLTPViaOpenAPI(pos.positionId || pos.id, pos.sl, pos.tp).catch(() => {});
+                }
 
                 if (pos.timeframe === '15m' || pos.timeframe === '1H' || pos.timeframe === '4H') {
                     const beMsg = `🇷🇺👑 <b>[Anastasia CIO • BLINDAJE DE CAPITAL]</b>\n` +
@@ -1169,9 +1391,17 @@ async function manageOpenPositions(currentQuotes) {
     }
 
     engineState.openPositions = remainingPositions;
+    const remPep = remainingPositions.filter(p => p.broker && p.broker.includes('Pepperstone'));
+    const nextRealPepCount = (engineState.brokerReconciliation && typeof engineState.brokerReconciliation.ctraderRealCount === 'number')
+        ? Math.max(remPep.length, engineState.brokerReconciliation.ctraderRealCount - (engineState.brokerReconciliation.ctraderManagedCount - remPep.length))
+        : remPep.length;
+    if (engineState.brokerReconciliation) {
+        engineState.brokerReconciliation.ctraderManagedCount = remPep.length;
+        engineState.brokerReconciliation.ctraderRealCount = Math.max(0, nextRealPepCount);
+    }
     saveState();
     if (pepperstoneService && pepperstoneService.syncOpenPositions) {
-        pepperstoneService.syncOpenPositions(remainingPositions.filter(p => p.broker && p.broker.includes('Pepperstone')));
+        pepperstoneService.syncOpenPositions(remPep, engineState.brokerReconciliation ? engineState.brokerReconciliation.ctraderRealCount : remPep.length);
     }
 }
 
@@ -1202,12 +1432,18 @@ async function runAutonomousCycle() {
     });
 
     // 2. Escaneo de los 4 activos evaluando las 8 Estrategias en los 4 Timeframes (5m, 15m, 1H, 4H)
+    const TF_COOLDOWN_MS = { '5m': 15 * 60 * 1000, '15m': 30 * 60 * 1000, '1H': 60 * 60 * 1000, '4H': 240 * 60 * 1000 };
+    if (!engineState.lastSignalBarTime) engineState.lastSignalBarTime = {};
+
     for (const [ticker, config] of Object.entries(ASSETS_CONFIG)) {
-        const price = quotes[ticker] || quotes[config.altSymbol] || 100.0;
+        const price = quotes[ticker] || quotes[config.altSymbol] || 0;
         let bestOverall = null;
+        let openedTickerThisCycle = false;
 
         for (const tf of TIMEFRAMES) {
             const allStrats = evaluateAllStrategies(ticker, price, tf.label);
+            const barsForTf = (latestEnrichedBars[ticker] && latestEnrichedBars[ticker][tf.label]) ? latestEnrichedBars[ticker][tf.label] : [];
+            const currentBarTime = barsForTf.length ? barsForTf[barsForTf.length - 1].t : null;
             let bestForTf = null;
 
             for (const analysis of allStrats) {
@@ -1239,6 +1475,12 @@ async function runAutonomousCycle() {
                     continue;
                 }
 
+                // Máximo 1 disparo por misma vela cerrada/en curso en (activo, estrategia, timeframe)
+                const barKey = `${ticker}_${analysis.stratCode}_${tf.label}`;
+                if (currentBarTime && engineState.lastSignalBarTime[barKey] === currentBarTime) {
+                    continue;
+                }
+
                 // Evitar duplicar posición en el mismo activo, misma estrategia y mismo timeframe
                 const hasOpenInSameStrategy = engineState.openPositions.some(p => 
                     p.symbol === ticker && 
@@ -1247,14 +1489,19 @@ async function runAutonomousCycle() {
                 );
                 if (hasOpenInSameStrategy) continue;
 
-                // Cooldown anti-churn: mínimo 5 minutos tras cierre para reabrir la misma estrategia y timeframe
+                // Cooldown anti-churn proporcional al timeframe tras cierre (o reinicio desde historial)
                 const cooldownKey = `${ticker}_${analysis.strategyName}_${tf.label}`;
+                const assetCooldownKey = `${ticker}_LAST_OPEN`;
+                const minCooldown = TF_COOLDOWN_MS[tf.label] || 15 * 60 * 1000;
                 if (engineState.closedCooldowns && engineState.closedCooldowns[cooldownKey]) {
                     const elapsed = Date.now() - engineState.closedCooldowns[cooldownKey];
-                    if (elapsed < 5 * 60 * 1000) {
-                        continue;
-                    }
+                    if (elapsed < minCooldown) continue;
                 }
+                if (engineState.closedCooldowns && engineState.closedCooldowns[assetCooldownKey]) {
+                    const elapsedAsset = Date.now() - engineState.closedCooldowns[assetCooldownKey];
+                    if (elapsedAsset < 10 * 60 * 1000) continue; // Mínimo 10 min entre aperturas en el mismo activo
+                }
+                if (openedTickerThisCycle) continue; // Máximo 1 apertura simultánea por activo y escaneo
 
                 // ⏰ MANDATO PEDRO: no abrir fuera de sesión ni en los últimos 30 min (SOL es 24/7)
                 if (!isEntryWindowForAsset(ticker)) {
@@ -1262,13 +1509,22 @@ async function runAutonomousCycle() {
                     continue;
                 }
 
-                // Candado sagrado de máximo 24 posiciones simultáneas en Pepperstone
-                const openPrice = analysis.barPrice || price;
-                const pepCount = engineState.openPositions.filter(p => !p.broker || p.broker.includes('Pepperstone')).length;
-                if (pepCount < 24) {
-                    await executeAutonomousOpen(ticker, openPrice, analysis);
+                // Candado sagrado de máximo 24 posiciones simultáneas REALES en Pepperstone (libreta + API cTrader)
+                const pepLibretaCount = engineState.openPositions.filter(p => !p.broker || p.broker.includes('Pepperstone')).length;
+                const ctraderRealCount = (engineState.brokerReconciliation && typeof engineState.brokerReconciliation.ctraderRealCount === 'number')
+                    ? engineState.brokerReconciliation.ctraderRealCount : pepLibretaCount;
+                const pepCount = Math.max(pepLibretaCount, ctraderRealCount);
+
+                if (pepCount < 24 && price > 0) {
+                    const opened = await executeAutonomousOpen(ticker, price, analysis);
+                    if (opened && opened.length > 0) {
+                        openedTickerThisCycle = true;
+                        if (currentBarTime) engineState.lastSignalBarTime[barKey] = currentBarTime;
+                        if (!engineState.closedCooldowns) engineState.closedCooldowns = {};
+                        engineState.closedCooldowns[assetCooldownKey] = Date.now();
+                    }
                 } else {
-                    console.log(`🔒 [CANDADO PEPPERSTONE] Máximo 24 posiciones en paralelo alcanzado (${pepCount}/24). Señal ${ticker} (${analysis.strategyName} • ${tf.label}) en espera.`);
+                    console.log(`🔒 [CANDADO PEPPERSTONE] Máximo 24 posiciones reales alcanzado (${pepCount}/24 en cTrader). Señal ${ticker} (${analysis.strategyName} • ${tf.label}) en espera.`);
                 }
             }
 
@@ -1321,7 +1577,23 @@ async function runAutonomousCycle() {
 // Iniciar Motor Perpetuo
 let daemonTimer = null;
 
-function startAutonomousDaemon(intervalMs = 30000) {
+function seedRecentCooldownsFromHistory() {
+    if (!engineState.closedCooldowns) engineState.closedCooldowns = {};
+    const hist = engineState.closedTradesHistory || [];
+    const nowMs = Date.now();
+    for (const t of hist.slice(0, 60)) {
+        const closedMs = new Date(t.closedAt || 0).getTime();
+        if (!closedMs || (nowMs - closedMs) > 60 * 60 * 1000) continue;
+        const sym = t.symbol;
+        if (!sym) continue;
+        const key = `${sym}_LAST_OPEN`;
+        if (!engineState.closedCooldowns[key] || closedMs > engineState.closedCooldowns[key]) {
+            engineState.closedCooldowns[key] = closedMs;
+        }
+    }
+}
+
+async function startAutonomousDaemon(intervalMs = 30000) {
     if (daemonTimer) {
         console.log('[ANASTASIA ENGINE] Ya se encuentra en ejecución activa.');
         return;
@@ -1334,19 +1606,22 @@ function startAutonomousDaemon(intervalMs = 30000) {
     console.log('   Modo: 100% Independiente y Manos Libres para Pedro');
     console.log('===========================================================');
 
-    // ♻️ Arranque tras redespliegue: sincronizar SIEMPRE cualquier fill real ocurrido en Alpaca
-    // después del último cierre guardado en git (Render Free reinicia el disco al snapshot de git).
+    // ♻️ Secuencia ordenada de arranque tras redespliegue:
+    // 1. Descargar velas/ATRs reales -> 2. Reconstruir fills Alpaca -> 3. Sincronizar APIs e hidratar custodia -> 4. Escaneo
     let catchupIso = engineState.labResetAt || null;
     if (engineState.closedTradesHistory && engineState.closedTradesHistory.length > 0) {
         const latestMs = engineState.closedTradesHistory.reduce((mx, t) => Math.max(mx, new Date(t.closedAt || 0).getTime()), 0);
         if (latestMs > 0) catchupIso = new Date(latestMs + 1000).toISOString();
     }
-    console.log(`♻️ [ARRANQUE] Sincronizando fills reales de Alpaca desde ${catchupIso || '36h atrás'}...`);
-    rebuildHistoryFromAlpacaFills(catchupIso)
-        .catch(e => console.warn('♻️ [ARRANQUE REBUILD] Error:', e.message))
-        .finally(() => {
-            runAutonomousCycle().catch(e => console.error('[ANASTASIA ERROR]', e.message));
-        });
+    console.log(`♻️ [ARRANQUE] Cargando mercado en vivo y sincronizando fills Alpaca desde ${catchupIso || '36h atrás'}...`);
+    try {
+        await fetchMarketQuotes().catch(e => console.warn('[ARRANQUE QUOTES] Error:', e.message));
+        await rebuildHistoryFromAlpacaFills(catchupIso).catch(e => console.warn('♻️ [ARRANQUE REBUILD] Error:', e.message));
+        seedRecentCooldownsFromHistory();
+        await syncBrokerReality().catch(e => console.warn('[ARRANQUE RECON] Error:', e.message));
+    } finally {
+        runAutonomousCycle().catch(e => console.error('[ANASTASIA ERROR]', e.message));
+    }
 
     // Bucle continuo cada 30 segundos
     daemonTimer = setInterval(() => {

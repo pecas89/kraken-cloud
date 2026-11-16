@@ -2030,23 +2030,38 @@
                         elKpiPepSub.innerText = 'Cuenta #4285238 Spotware • ' + ctCount + ' pos. cTrader';
                     }
 
-                    // Drawdown Real Diario
+                    // Drawdown Real Diario & Kill Switch
                     const dd = isFinite(lm.dailyDrawdownPct) ? lm.dailyDrawdownPct : 0.00;
-                    const ddText = dd.toFixed(2) + '% / 2.50%';
-                    const ddColor = dd >= 2.50 ? '#ef4444' : (dd >= 1.80 ? '#fbbf24' : '#34d399');
+                    const isKillSwitch = !!engineState.emergencyStop;
+                    const ddText = dd.toFixed(2) + '% / 2.50%' + (isKillSwitch ? ' (KILL SWITCH)' : '');
+                    const ddColor = (isKillSwitch || dd >= 2.50) ? '#ef4444' : (dd >= 1.80 ? '#fbbf24' : '#34d399');
                     const hdrDd = document.getElementById('header-drawdown-status');
                     if (hdrDd) { hdrDd.innerText = ddText; hdrDd.style.color = ddColor; }
+                    const hdrDdPill = document.getElementById('header-drawdown-pill');
+                    if (hdrDdPill && isKillSwitch) {
+                        hdrDdPill.style.borderColor = 'rgba(239, 68, 68, 0.7)';
+                        hdrDdPill.style.background = 'rgba(239, 68, 68, 0.15)';
+                    }
                     const kpiDd = document.getElementById('kpi-current-dd');
-                    if (kpiDd) { kpiDd.innerText = ddText; kpiDd.style.color = ddColor; }
+                    if (kpiDd) { kpiDd.innerText = dd.toFixed(2) + '% / 2.50%'; kpiDd.style.color = ddColor; }
                     const kpiDdBadge = document.getElementById('kpi-dd-badge');
                     if (kpiDdBadge) {
-                        kpiDdBadge.innerText = engineState.emergencyStop ? '🚨 KILL SWITCH' : (dd >= 2.00 ? '🟡 ALERTA' : '🟢 SEGURO');
+                        kpiDdBadge.innerText = isKillSwitch ? '🚨 KILL SWITCH' : (dd >= 2.00 ? '🟡 ALERTA' : '🟢 SEGURO');
+                        kpiDdBadge.className = isKillSwitch ? 'negative' : (dd >= 2.00 ? 'neutral' : 'positive');
                     }
                     const kpiDdSub = document.getElementById('kpi-dd-sub');
                     if (kpiDdSub) {
                         const ret = isFinite(lm.dailyReturnPct) ? lm.dailyReturnPct : 0;
                         const retSign = ret >= 0 ? '+' : '';
-                        kpiDdSub.innerText = 'Var. Día: ' + retSign + ret.toFixed(2) + '% • Límite: 2.50%';
+                        kpiDdSub.innerText = isKillSwitch
+                            ? ('🛑 DETENIDO: ' + (engineState.emergencyStopReason || 'Límite 2.50% alcanzado'))
+                            : ('Var. Día: ' + retSign + ret.toFixed(2) + '% • Límite: 2.50%');
+                    }
+
+                    const kpiPistasBadge = document.getElementById('kpi-pistas-badge');
+                    if (kpiPistasBadge) {
+                        kpiPistasBadge.innerText = isKillSwitch ? '🛑 PAUSADAS (DD)' : '8 / 8 ACTIVAS';
+                        kpiPistasBadge.className = isKillSwitch ? 'negative' : 'positive';
                     }
 
                     const kpiPistasSub = document.getElementById('kpi-pistas-sub');
@@ -2111,7 +2126,7 @@
                 const livePrice = (engineState && engineState.liveQuotes && engineState.liveQuotes[pos.symbol]) ?
                     parseFloat(engineState.liveQuotes[pos.symbol]) : pos.entryPrice;
                 const diff = (livePrice - pos.entryPrice);
-                const mult = pos.symbol.includes('SOL') ? 0.01 : (pos.symbol.includes('XAU') ? 1.0 : 0.10);
+                const mult = pos.symbol.includes('SOL') ? ((pos.qty && pos.qty >= 0.5) ? pos.qty : 1.0) : (pos.symbol.includes('XAU') ? 1.0 : 0.10);
                 totalPepPnlEur += (diff * mult) / 1.05;
             });
 
@@ -2132,7 +2147,7 @@
                     parseFloat(engineState.liveQuotes[pos.symbol]) : pos.entryPrice;
                 const diff = (livePrice - pos.entryPrice);
                 let mult = 1.0;
-                if (pos.symbol.includes('SOL')) mult = isAlpaca ? 1.0 : 0.01;
+                if (pos.symbol.includes('SOL')) mult = isAlpaca ? (pos.qty || 1) : ((pos.qty && pos.qty >= 0.5) ? pos.qty : 1.0);
                 else if (pos.symbol.includes('XAU')) mult = 1.0;
                 else mult = isAlpaca ? (pos.qty || 1) : 0.10;
                 const pnl = (diff * mult) / 1.05;
@@ -2233,7 +2248,7 @@
                     const diffUSD = (livePrice - pos.entryPrice);
 
                     let mult = 1.0;
-                    if (assetKey === 'SOL') mult = isAlpaca ? 1.0 : 0.01;
+                    if (assetKey === 'SOL') mult = isAlpaca ? (pos.qty || 1) : ((pos.qty && pos.qty >= 0.5) ? pos.qty : 1.0);
                     else if (assetKey === 'ORO') mult = 1.0;
                     else if (assetKey === 'TSLA' || assetKey === 'NVDA') mult = isAlpaca ? (pos.qty || 1) : 0.10;
 
@@ -2250,9 +2265,9 @@
                         const inv = pos.entryPrice * (pos.qty || 1);
                         fianzaLabel = '$' + inv.toFixed(2) + ' USD (' + (pos.qty || 1) + ' ' + (pos.unit || 'acc.') + ')';
                     } else {
-                        if (assetKey === 'ORO') fianzaLabel = '€12.45 EUR (0.01 lot)';
-                        else if (assetKey === 'SOL') fianzaLabel = '€0.85 EUR (0.01 lot)';
-                        else fianzaLabel = '€' + ((pos.entryPrice * 0.10) / 5).toFixed(2) + ' EUR (0.10 CFD)';
+                        fianzaLabel = isFinite(pos.usedMarginEur) && pos.usedMarginEur > 0
+                            ? ('Margen: €' + pos.usedMarginEur.toFixed(2) + ' EUR (' + (pos.qty || 0.1) + ' ' + (pos.unit || 'lotes') + ')')
+                            : ((pos.qty || 0.01) + ' ' + (pos.unit || 'lotes') + ' @ $' + parseFloat(pos.entryPrice || 0).toFixed(2));
                     }
 
                     const riskUSD = Math.abs(pos.entryPrice - pos.sl) * mult;
@@ -2307,9 +2322,14 @@
                 prev = noticeRow;
             }
 
-            // Inventario real detectado en las APIs de Alpaca y Pepperstone (verdad directa del broker)
+            // Inventario real detectado en brokers que aún no figura gestionado por posición en libreta (ej. T.US legacy o neto Alpaca)
+            const trackedPidSet = new Set(allPositions.map(p => String(p.positionId || p.id || '')));
+            const normAlp = s => (s || '').replace('/', '').toUpperCase();
+            const trackedAlpSymSet = new Set(allPositions.filter(p => p.broker && p.broker.includes('Alpaca')).map(p => normAlp(p.orderSymbol || p.symbol)));
+
             if ((alpacaPositions && alpacaPositions.length > 0) || (ctraderPositions && ctraderPositions.length > 0)) {
                 (alpacaPositions || []).forEach(ap => {
+                    if (trackedAlpSymSet.has(normAlp(ap.symbol))) return; // Ya gestionada arriba en libreta bajo SL/TP
                     const pl = parseFloat(ap.unrealized_pl || 0);
                     const isProfit = pl >= 0;
                     const plColor = isProfit ? 'var(--accent-green)' : 'var(--accent-red)';
@@ -2319,6 +2339,7 @@
                     row.className = 'dyn-live-row';
                     row.setAttribute('data-broker', 'alpaca');
                     row.setAttribute('data-asset', normSym);
+                    row.setAttribute('data-strat', 'rebuilt');
                     row.style.background = 'rgba(56, 189, 248, 0.04)';
                     row.style.borderLeft = '3px solid #38bdf8';
                     row.innerHTML = '<td><b style="color: #38bdf8;">🏦 Custodia Real API (Broker)</b></td>' +
@@ -2336,23 +2357,25 @@
                 });
 
                 (ctraderPositions || []).forEach(cp => {
+                    if (trackedPidSet.has(String(cp.positionId))) return; // Ya mostrada arriba bajo custodia/SL/TP
                     const symNorm = cp.symbol.includes('SOL') ? 'SOL' : (cp.symbol.includes('XAU') ? 'ORO' : cp.symbol);
                     const row = document.createElement('tr');
                     row.className = 'dyn-live-row';
                     row.setAttribute('data-broker', 'pepperstone');
                     row.setAttribute('data-asset', symNorm);
+                    row.setAttribute('data-strat', 'rebuilt');
                     row.style.background = 'rgba(251, 191, 36, 0.04)';
                     row.style.borderLeft = '3px solid #fbbf24';
-                    row.innerHTML = '<td><b style="color: #fbbf24;">🏦 Custodia Real cTrader (' + (cp.comment || 'OpenAPI') + ')</b></td>' +
+                    row.innerHTML = '<td><b style="color: #fbbf24;">🏦 Custodia Real cTrader (' + (cp.comment || 'Externa') + ')</b></td>' +
                         '<td><span class="tag tag-pepper">🏛️ Pepperstone #' + cp.positionId + '</span></td>' +
                         '<td><b>' + cp.symbol + ' (' + cp.unitsLabel + ')</b></td>' +
                         '<td>Margen: €' + (cp.usedMarginEur || 0).toFixed(2) + ' EUR</td>' +
                         '<td>Entrada: $' + parseFloat(cp.entryPrice || 0).toFixed(2) + '</td>' +
-                        '<td style="color:var(--text-dim);">ECN Live</td>' +
-                        '<td style="color:var(--text-dim);">ECN Live</td>' +
+                        '<td style="color:var(--text-dim);">Externa</td>' +
+                        '<td style="color:var(--text-dim);">Externa</td>' +
                         '<td style="color:var(--text-dim);">Swap: €' + (cp.swapEur || 0).toFixed(2) + '</td>' +
                         '<td style="font-size:11px; color:var(--text-dim);">' + fmtRoma(cp.openedAt) + '</td>' +
-                        '<td><span class="tag tag-pepper">🏛️ ABIERTA EN cTRADER</span></td>';
+                        '<td><span class="tag tag-pepper">🏛️ EN cTRADER</span></td>';
                     tbody.insertBefore(row, prev.nextSibling);
                     prev = row;
                 });
