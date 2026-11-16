@@ -213,20 +213,33 @@ DOCTRINA DE VERDAD FACTUAL PURA (CERO SUPOSICIONES):
                     let lastErr = null;
 
                     if (studioKey) {
-                        const studioUrl = `https://generativelanguage.googleapis.com/v1beta/models/${process.env.GEMINI_STUDIO_MODEL || 'gemini-2.5-flash'}:generateContent?key=${studioKey}`;
-                        try {
-                            const sRes = await fetch(studioUrl, {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify(geminiPayload)
-                            });
-                            const sJson = await sRes.json();
-                            if (sRes.ok && sJson && !sJson.error && sJson.candidates) {
-                                res.writeHead(200, { 'Content-Type': 'application/json' });
-                                return res.end(JSON.stringify(sJson));
-                            }
-                            lastErr = sJson;
-                        } catch(sErr) { lastErr = { error: { message: sErr.message } }; }
+                        const studioModels = [
+                            process.env.GEMINI_STUDIO_MODEL,
+                            'gemini-3-flash-preview',
+                            'gemini-3.5-flash-lite',
+                            'gemini-flash-lite-latest',
+                            'gemini-3.1-flash-lite-preview'
+                        ].filter((m, idx, arr) => m && arr.indexOf(m) === idx);
+
+                        for (const modelName of studioModels) {
+                            const studioUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${studioKey}`;
+                            try {
+                                const sRes = await fetch(studioUrl, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(geminiPayload)
+                                });
+                                const sJson = await sRes.json();
+                                if (sRes.ok && sJson && !sJson.error && sJson.candidates) {
+                                    res.writeHead(200, { 'Content-Type': 'application/json' });
+                                    return res.end(JSON.stringify(sJson));
+                                }
+                                lastErr = sJson;
+                                if (sRes.status === 401 || sRes.status === 403 || sJson?.error?.details?.some?.(d => d.reason === 'API_KEY_INVALID')) {
+                                    break;
+                                }
+                            } catch(sErr) { lastErr = { error: { message: sErr.message } }; }
+                        }
                     }
 
                     // 2. Intentar Vertex AI directo con GEMINI_API_KEY propio
