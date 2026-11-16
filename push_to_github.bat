@@ -1,6 +1,6 @@
 @echo off
 title Subir Kraken Cloud a GitHub - Castillo Imperial
-cd /d "C:\Users\franc\antigravity\kraken-cloud"
+cd /d "C:\Users\franc\antigravity\02_PISO2_ANASTASIA_KRAKEN\kraken-cloud"
 set "PATH=C:\Users\franc\AppData\Local\Microsoft\WinGet\Packages\Git.MinGit_Microsoft.Winget.Source_8wekyb3d8bbwe\cmd;%PATH%"
 echo ================================================================
 echo   CASTILLO IMPERIAL HOLDING - KRAKEN QUANT CLOUD PUSH

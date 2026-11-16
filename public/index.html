@@ -1982,15 +1982,6 @@
                     console.warn('[Render Direct Fetch Error]', e.message);
                 }
 
-                if (!engineState) {
-                    try {
-                        const sRes = await fetch('/trading_state.json?t=' + Date.now());
-                        if (sRes.ok) engineState = await sRes.json();
-                    } catch(e) {
-                        console.warn('[Hosting Sync Error]', e.message);
-                    }
-                }
-
                 if (engineState) {
                     latestEngineState = engineState;
                     renderDuelScoreboard(engineState);
