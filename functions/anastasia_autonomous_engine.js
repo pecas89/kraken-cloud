@@ -40,19 +40,19 @@ function loadPromotedMatrix() {
 }
 loadPromotedMatrix();
 
-// ⏱️ Las 4 Temporalidades Cuantitativas Sagradas (Mandato Pedro 16-Nov)
+// ⏱️ Las 4 Temporalidades Cuantitativas Sagradas (Mandato Pedro 16-Nov: 5m, 15m, 1H, 4H - Cero Ruido de 1m)
 const TIMEFRAMES = [
-    { code: '1Min', label: '1m' },
     { code: '5Min', label: '5m' },
     { code: '15Min', label: '15m' },
-    { code: '1Hour', label: '1H' }
+    { code: '1Hour', label: '1H' },
+    { code: '4Hour', label: '4H' }
 ];
 
 let latestEnrichedBars = {
-    NVDA: { '1m': [], '5m': [], '15m': [], '1H': [] },
-    TSLA: { '1m': [], '5m': [], '15m': [], '1H': [] },
-    XAUUSD: { '1m': [], '5m': [], '15m': [], '1H': [] },
-    SOLUSD: { '1m': [], '5m': [], '15m': [], '1H': [] }
+    NVDA: { '5m': [], '15m': [], '1H': [], '4H': [] },
+    TSLA: { '5m': [], '15m': [], '1H': [], '4H': [] },
+    XAUUSD: { '5m': [], '15m': [], '1H': [], '4H': [] },
+    SOLUSD: { '5m': [], '15m': [], '1H': [], '4H': [] }
 };
 
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || '';
@@ -285,7 +285,8 @@ async function fetchMarketQuotes() {
         });
     }
 
-    const start = new Date(Date.now() - 5 * 24 * 3600 * 1000).toISOString().split('T')[0];
+    // 25 días atrás para asegurar suficientes velas en 4H (mínimo 30-50 barras para EMA21 y ATR14)
+    const start = new Date(Date.now() - 25 * 24 * 3600 * 1000).toISOString().split('T')[0];
 
     try {
         const fetchPromises = [];
@@ -308,8 +309,8 @@ async function fetchMarketQuotes() {
                 if (!latestEnrichedBars[r.ticker]) latestEnrichedBars[r.ticker] = {};
                 latestEnrichedBars[r.ticker][r.tf] = ti.enrichBarsWithIndicators(r.bars);
                 const lastBar = r.bars[r.bars.length - 1];
-                // Priorizar la vela más fresca (1m es el precio más reciente de mercado)
-                if (r.tf === '1m' || !quotes[r.ticker]) {
+                // Priorizar la vela más fresca (5m es el precio más reciente tras eliminar 1m)
+                if (r.tf === '5m' || !quotes[r.ticker]) {
                     quotes[r.ticker] = lastBar.c;
                 }
             }
@@ -605,9 +606,9 @@ async function executeAutonomousOpen(ticker, price, analysis) {
         saveState();
 
         // 🔕 POLÍTICA TELEGRAM CERO SPAM (Mandato Don Pedro):
-        // Micro-scalping en 1m y 5m se opera en silencio en la nube (visibles en terminal web y logs).
-        // A Telegram solo se envían disparos institucionales de 15m/1H o con Score de alta convicción (>= 85).
-        const isInstitutionalTf = (analysis.timeframe === '15m' || analysis.timeframe === '1H');
+        // Scalping rápido en 5m se opera en silencio en la nube (visibles en terminal web y logs).
+        // A Telegram solo se envían disparos institucionales de 15m, 1H, 4H o con Score de alta convicción (>= 85).
+        const isInstitutionalTf = (analysis.timeframe === '15m' || analysis.timeframe === '1H' || analysis.timeframe === '4H');
         const isHighConviction = (analysis.score >= 85);
         if (isInstitutionalTf || isHighConviction) {
             const msg = `⚔️ <b>[DUELO EN VIVO • DÍA DE 15 • HEAD-TO-HEAD]</b>\n` +
@@ -930,7 +931,7 @@ async function manageOpenPositions(currentQuotes) {
                 pos.realizedPartialPnl = (pos.realizedPartialPnl || 0) + profit1;
                 console.log(`🐬🎯 [DELFÍN 4x4 • ESCALÓN 1/4] ${pos.symbol}: +0.75 ATR ($${pos.tp1})! 25% cobrado (+$$${profit1.toFixed(2)}).`);
 
-                if (pos.timeframe === '15m' || pos.timeframe === '1H' || Math.abs(profit1) >= 2.0) {
+                if (pos.timeframe === '15m' || pos.timeframe === '1H' || pos.timeframe === '4H' || Math.abs(profit1) >= 2.0) {
                     const msg = `🐬🎯 <b>[DELFÍN ESCALÓN 1/4 COBRADO]</b>\n` +
                         `💰 <b>${pos.symbol} superó +0.75 ATR ($${pos.tp1.toFixed(2)})</b>\n` +
                         `✅ <b>25% asegurado en caja:</b> +$${profit1.toFixed(2)} ${pos.currency || 'USD'}\n` +
@@ -948,7 +949,7 @@ async function manageOpenPositions(currentQuotes) {
                 pos.trailingStopMovedToBreakeven = true;
                 console.log(`🐬🛡️ [DELFÍN 4x4 • ESCALÓN 2/4] ${pos.symbol}: +1.50 ATR ($${pos.tp2})! 50% cobrado y SL a Breakeven ($${pos.entryPrice}).`);
 
-                if (pos.timeframe === '15m' || pos.timeframe === '1H' || Math.abs(profit2) >= 2.0) {
+                if (pos.timeframe === '15m' || pos.timeframe === '1H' || pos.timeframe === '4H' || Math.abs(profit2) >= 2.0) {
                     const msg = `🐬🛡️ <b>[DELFÍN ESCALÓN 2/4 • CAPITAL BLINDADO]</b>\n` +
                         `💰 <b>${pos.symbol} superó +1.50 ATR ($${pos.tp2.toFixed(2)})</b>\n` +
                         `✅ <b>Otro 25% cobrado (Total 50% en ganancias)</b>\n` +
@@ -966,7 +967,7 @@ async function manageOpenPositions(currentQuotes) {
                 pos.sl = pos.tp1; // Subir SL a asegurar ganancia mínima de +0.75 ATR
                 console.log(`🐬🚀 [DELFÍN 4x4 • ESCALÓN 3/4] ${pos.symbol}: +2.25 ATR ($${pos.tp3})! 75% cobrado y SL en ganancia ($${pos.sl}).`);
 
-                if (pos.timeframe === '15m' || pos.timeframe === '1H' || Math.abs(profit3) >= 2.0) {
+                if (pos.timeframe === '15m' || pos.timeframe === '1H' || pos.timeframe === '4H' || Math.abs(profit3) >= 2.0) {
                     const msg = `🐬🚀 <b>[DELFÍN ESCALÓN 3/4 • GANANCIA BLOQUEADA]</b>\n` +
                         `💰 <b>${pos.symbol} superó +2.25 ATR ($${pos.tp3.toFixed(2)})</b>\n` +
                         `✅ <b>75% del trade cobrado en caja</b>\n` +
@@ -992,7 +993,7 @@ async function manageOpenPositions(currentQuotes) {
                 pos.trailingStopMovedToBreakeven = true;
                 console.log(`🔒 [TRAILING A BREAKEVEN] ${pos.symbol}: Stop Loss movido a $${pos.entryPrice} (Riesgo Cero).`);
 
-                if (pos.timeframe === '15m' || pos.timeframe === '1H') {
+                if (pos.timeframe === '15m' || pos.timeframe === '1H' || pos.timeframe === '4H') {
                     const beMsg = `🇷🇺👑 <b>[Anastasia CIO • BLINDAJE DE CAPITAL]</b>\n` +
                         `🛡️ <b>${pos.symbol} superó +1.5 ATR de ganancia</b>\n` +
                         `He movido el Stop Loss al precio de entrada ($${pos.entryPrice}).\n` +
@@ -1068,8 +1069,8 @@ async function manageOpenPositions(currentQuotes) {
             if (isAlpaca || (config && config.currency === 'USD')) engineState.dailyRealizedPnlUSD += pos.pnl;
             else engineState.dailyRealizedPnlEUR += pos.pnl;
 
-            // Notificación a Pedro del cierre (Solo 15m/1H o PnL relevante >= $2.00 para evitar spam de micro-scalp)
-            const shouldNotifyClose = (pos.timeframe === '15m' || pos.timeframe === '1H' || Math.abs(pos.pnl) >= 2.0);
+            // Notificación a Pedro del cierre (Solo 15m/1H/4H o PnL relevante >= $2.00 para evitar spam)
+            const shouldNotifyClose = (pos.timeframe === '15m' || pos.timeframe === '1H' || pos.timeframe === '4H' || Math.abs(pos.pnl) >= 2.0);
             if (shouldNotifyClose) {
                 const isProfit = pos.pnl >= 0;
                 const icon = isProfit ? '💰' : '🛡️';
