@@ -380,11 +380,16 @@ async function fetchMarketQuotes() {
 // 📊 MATRIZ CUANTITATIVA: AUDITORÍA DE WIN RATE Y PNL (MANDATO DE PEDRO)
 // ------------------------------------------------------------------------------
 function computePerformanceStats() {
-    const history = engineState.closedTradesHistory || [];
+    // [CLAUDE v2.2] Los cierres que el broker NO confirmó no cuentan: su PnL es inventado (la posición seguía abierta)
+    const allHistory = engineState.closedTradesHistory || [];
+    const history = allHistory.filter(t => t.brokerCloseExecuted !== false);
+    const excludedFailedCloses = allHistory.length - history.length;
     function calc(trades) {
         let wins = 0, losses = 0, bes = 0, grossProfit = 0, grossLoss = 0, netPnlUSD = 0, netPnlEUR = 0;
+        let rTrades = 0, sumR = 0; // [CLAUDE v2.2] R = PnL / riesgo inicial: única forma justa de comparar 1 acción vs 0,1 CFD
         trades.forEach(t => {
             const pnl = parseFloat(t.pnl) || 0;
+            if (typeof t.rMultiple === 'number' && isFinite(t.rMultiple)) { rTrades++; sumR += t.rMultiple; }
             const isUSD = (t.currency === 'USD') || (t.broker && t.broker.includes('Alpaca'));
             const pnlUSD = isUSD ? pnl : pnl * 1.05;
             const pnlEUR = isUSD ? pnl / 1.05 : pnl;
@@ -404,11 +409,15 @@ function computePerformanceStats() {
             grossLoss: parseFloat(grossLoss.toFixed(2)),
             netPnlUSD: parseFloat(netPnlUSD.toFixed(2)),
             netPnlEUR: parseFloat(netPnlEUR.toFixed(2)),
-            profitFactor
+            profitFactor,
+            rTrades,
+            sumR: parseFloat(sumR.toFixed(2)),
+            avgR: rTrades > 0 ? parseFloat((sumR / rTrades).toFixed(3)) : null
         };
     }
 
     engineState.performanceStats = {
+        excludedFailedCloses,
         global: calc(history),
         byBroker: {
             alpaca: calc(history.filter(t => t.broker && t.broker.includes('Alpaca'))),
@@ -423,7 +432,7 @@ function computePerformanceStats() {
         // [CLAUDE v2] Clasificación por stratCode (antes por nombre: "Pista 10" contaba como P1, "Gap & Go (apertura)" como P7)
         byStrategy: (() => {
             const out = {};
-            ['p1','p2','p3','p4','p5','p6','p7','p8','p9','p10','p11','p12','rebuilt'].forEach(c => {
+            ['p1','p2','p3','p4','p5','p6','p7','p8','p9','p10','p11','p12','custodia','rebuilt'].forEach(c => {
                 out[c] = calc(history.filter(t => classifyStratCodeEngine(t) === c));
             });
             return out;
@@ -442,6 +451,7 @@ function classifyStratCodeEngine(t) {
     if (t.stratCode) return String(t.stratCode).toLowerCase();
     const s = (t.strategy || '').toLowerCase();
     if (s.includes('reconstruido')) return 'rebuilt';
+    if (s.includes('custodia')) return 'custodia'; // [CLAUDE v2.2] adoptadas tras reinicio: estrategia de origen desconocida
     const m = s.match(/pista\s*(\d{1,2})\b/);
     if (m) return 'p' + m[1];
     if (s.includes('delfín') || s.includes('delfin')) return 'p1';
@@ -631,7 +641,11 @@ async function executeAutonomousOpen(ticker, price, analysis) {
     }
 
     // 2. DISPARO A PEPPERSTONE cTRADER - Mínimo volumen (0.01 micro-lotes / 0.10 CFD)
-    try {
+    // [CLAUDE v2.2] Oro en Pepperstone en pausa: el motor gestiona con precios del GLD (~$340) una posición de oro al contado
+    // (~$4000). SL/TP, breakeven y PnL salían en la escala equivocada. Se reactiva con KRAKEN_PEP_GOLD=on cuando haya cotización spot.
+    if (ticker === 'XAUUSD' && process.env.KRAKEN_PEP_GOLD !== 'on') {
+        console.log('⏸️ [PEPPERSTONE ORO] En pausa (escala GLD vs spot). Solo Alpaca GLD.');
+    } else try {
         const pepRes = await pepperstoneService.processIncomingSignal({
             action: 'BUY',
             ticker: config.pepperstoneSymbol,
@@ -939,7 +953,7 @@ async function syncBrokerReality() {
     try {
         const [acc, alpPositions] = await Promise.all([
             alpacaService.getAccount().catch(() => null),
-            alpacaService.getPositions().catch(() => [])
+            alpacaService.getPositions().catch(() => null) // [CLAUDE v2.2] null = Alpaca no respondió (no es "cero posiciones")
         ]);
         let pepAcc = null;
         if (acc && isFinite(acc.portfolioValue)) {
@@ -956,6 +970,36 @@ async function syncBrokerReality() {
         const alpEquity = acc ? (acc.equity || acc.portfolioValue || 0) : null;
         const alpLastEq = acc ? (acc.lastEquity || acc.portfolioValue || 0) : null;
         const pepBalEur = (pepAcc && isFinite(pepAcc.balance)) ? pepAcc.balance : null;
+
+        // [CLAUDE v2.2] VERDAD DEL BROKER: resultado real desde el inicio de la demo y drawdown real desde el máximo.
+        // El marcador del panel debe salir de aquí, no de la libreta del motor.
+        try {
+            // Saldo al reseteo del laboratorio (12-nov), NO el de apertura de la cuenta: sin dato, se muestra 'falta saldo inicial'
+            const startAlp = parseFloat(process.env.KRAKEN_ALPACA_START_USD || 'NaN');
+            const startPep = parseFloat(process.env.KRAKEN_PEP_START_EUR || 'NaN');
+            if (!engineState.peakEquity) engineState.peakEquity = {};
+            if (alpEquity > 0) engineState.peakEquity.alpaca = Math.max(engineState.peakEquity.alpaca || 0, alpEquity);
+            if (pepBalEur > 0) engineState.peakEquity.pepperstone = Math.max(engineState.peakEquity.pepperstone || 0, pepBalEur);
+            const ps = engineState.performanceStats || {};
+            const ledAlp = ps.byBroker && ps.byBroker.alpaca ? ps.byBroker.alpaca.netPnlUSD : null;
+            const ledPep = ps.byBroker && ps.byBroker.pepperstone ? ps.byBroker.pepperstone.netPnlEUR : null;
+            const alpReal = (alpEquity > 0 && isFinite(startAlp)) ? alpEquity - startAlp : null;
+            const pepReal = (pepBalEur > 0 && isFinite(startPep)) ? pepBalEur - startPep : null;
+            const dd = (cur, peak) => (cur > 0 && peak > 0) ? parseFloat((((peak - cur) / peak) * 100).toFixed(2)) : null;
+            engineState.brokerTruth = {
+                checkedAt: new Date().toISOString(),
+                alpaca: {
+                    start: isFinite(startAlp) ? startAlp : null, equity: alpEquity, realPnl: alpReal !== null ? parseFloat(alpReal.toFixed(2)) : null,
+                    ledgerPnl: ledAlp, gap: (alpReal !== null && ledAlp !== null) ? parseFloat((alpReal - ledAlp).toFixed(2)) : null,
+                    drawdownFromPeakPct: dd(alpEquity, engineState.peakEquity.alpaca), currency: 'USD'
+                },
+                pepperstone: {
+                    start: isFinite(startPep) ? startPep : null, balance: pepBalEur, realPnl: pepReal !== null ? parseFloat(pepReal.toFixed(2)) : null,
+                    ledgerPnl: ledPep, gap: (pepReal !== null && ledPep !== null) ? parseFloat((pepReal - ledPep).toFixed(2)) : null,
+                    drawdownFromPeakPct: dd(pepBalEur, engineState.peakEquity.pepperstone), currency: 'EUR'
+                }
+            };
+        } catch (e) { console.warn('[brokerTruth]', e.message); }
         let dailyChangeUsd = 0;
         let baseEqUsd = 0;
         if (alpEquity && alpLastEq && alpLastEq > 0) {
@@ -1033,6 +1077,21 @@ async function syncBrokerReality() {
             if (engineState.openPositions.length !== beforeLen) {
                 console.log(`♻️ [SYNC cTrader] Limpiadas ${beforeLen - engineState.openPositions.length} posiciones ya cerradas en servidor cTrader.`);
             }
+        }
+
+        // [CLAUDE v2.2] Posiciones Alpaca recuperadas de Firestore: si el broker ya no tiene ese símbolo, se cerraron mientras el motor estaba caído
+        if (Array.isArray(alpPositions)) {
+            const alpQtyBySym = {};
+            alpPositions.forEach(p => { alpQtyBySym[String(p.symbol).replace('/', '')] = parseFloat(p.qty) || 0; });
+            const before = engineState.openPositions.length;
+            engineState.openPositions = engineState.openPositions.filter(op => {
+                if (!op.restoredFromFirestore || !(op.broker || '').includes('Alpaca')) return true;
+                const sym = String(op.orderSymbol || op.symbol).replace('/', '');
+                const ext = (engineState.externalQty && parseFloat(engineState.externalQty[sym])) || 0;
+                return ((alpQtyBySym[sym] || 0) - ext) > 0.0001;
+            });
+            if (engineState.openPositions.length !== before) console.log(`♻️ [SYNC Alpaca] Descartadas ${before - engineState.openPositions.length} posiciones recuperadas que ya no existen en Alpaca.`);
+            if (pepReconOk) engineState.openPositions.forEach(op => { delete op.restoredFromFirestore; });
         }
 
         // Adoptar posiciones reales del broker que falten tras reinicios ANTES del cálculo de divergencias
@@ -1300,8 +1359,15 @@ async function manageOpenPositions(currentQuotes) {
         let closeReason = '';
         let profitAmount = 0.0;
 
+        // [CLAUDE v2.2] Cierre pendiente: el broker no confirmó el cierre anterior -> reintentar ya, sin reevaluar SL/TP
+        if (pos.pendingClose) {
+            positionClosed = true;
+            closeReason = pos.pendingClose.reason || 'Reintento de cierre';
+            profitAmount = (currentPrice - pos.entryPrice) * pos.qty;
+        }
+
         // [CLAUDE v2] P10-P12 nunca duermen con la posición abierta: cierre a las 15:55 de Nueva York
-        if (pos.closeAtSessionEnd && !(pos.symbol || '').includes('SOL')) {
+        if (!positionClosed && pos.closeAtSessionEnd && !(pos.symbol || '').includes('SOL')) {
             const ny = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour12: false, hour: '2-digit', minute: '2-digit' }).formatToParts(new Date()).reduce((a, x) => (a[x.type] = x.value, a), {});
             const nyMins = (+ny.hour % 24) * 60 + (+ny.minute);
             if (nyMins >= 955) {
@@ -1312,7 +1378,7 @@ async function manageOpenPositions(currentQuotes) {
         }
 
         // A) LÓGICA ESPECIAL PISTA 1: ESCALERA DELFÍN 4X4 (TP ESCALONADO DINÁMICO)
-        if (pos.isDelfin4x4) {
+        if (!positionClosed && pos.isDelfin4x4) {
             const tranches = pos.tranchesClosed || 0;
             const trancheQty = (pos.initialQty || pos.qty || 1) * 0.25;
 
@@ -1467,8 +1533,22 @@ async function manageOpenPositions(currentQuotes) {
                 console.log(`✅ [CIERRE REAL EN BROKER] ${pos.symbol} (${pos.broker}): ${JSON.stringify(closeRes)}`);
             } catch(closeErr) {
                 pos.closeError = closeErr.message;
-                console.error(`❌ [CIERRE REAL FALLÓ] ${pos.symbol} (${pos.broker}): ${closeErr.message} — se anota en libreta pero el broker puede seguir abierto.`);
+                console.error(`❌ [CIERRE REAL FALLÓ] ${pos.symbol} (${pos.broker}): ${closeErr.message} — la posición sigue ABIERTA y se reintenta.`);
             }
+
+            // [CLAUDE v2.2] Un cierre que el broker no confirmó NO se anota como cerrado:
+            // antes quedaba "cerrado" en la libreta y abierto en el broker (luego volvía como "Custodia" y se contaba dos veces).
+            if (!pos.brokerCloseExecuted) {
+                pos.closeRetries = (pos.closeRetries || 0) + 1;
+                if (!pos.pendingClose) pos.pendingClose = { reason: closeReason, firstAt: new Date().toISOString() };
+                pos.pendingClose.lastError = pos.closeError || 'desconocido';
+                if (pos.closeRetries === 1 || pos.closeRetries % 20 === 0) {
+                    notifyPedro(`⚠️ <b>[ANASTASIA]</b> No pude cerrar ${pos.symbol} en ${pos.broker} (intento ${pos.closeRetries}): ${pos.closeError || 'desconocido'}. Sigue abierta y reintento cada ciclo.`).catch(() => {});
+                }
+                remainingPositions.push(pos);
+                continue;
+            }
+            delete pos.pendingClose;
 
             console.log(`\n🎯 [CIERRE AUTÓNOMO] Posición ${pos.symbol} cerrada: ${closeReason} | PnL: $${profitAmount.toFixed(pnlDecimals)}`);
 

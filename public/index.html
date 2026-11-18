@@ -883,12 +883,9 @@
                     <span>🏛️ Pepperstone: <b id="pepper-balance">Cargando...</b></span>
                 </div>
                 <div class="stat-pill" id="header-drawdown-pill" style="border-color: rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.08);">
-                    <span>🛡️ Drawdown: <b id="header-drawdown-status" style="color: #34d399;">--% / 2.50%</b></span>
+                    <span>🛡️ Var. día: <b id="header-drawdown-status" style="color: #34d399;">--% / 2.50%</b></span>
                 </div>
                 
-                <button class="btn-header-action btn-header-customizer" onclick="toggleCustomizerModal()">
-                    <span>🎨</span> Personalizar Web
-                </button>
 
                 <div class="stat-pill" id="clock-pill">
                     <span>⏰ Carmagnola: <b id="local-clock">--:--:--</b></span>
@@ -930,7 +927,7 @@
 
             <div class="kpi-card">
                 <div class="kpi-label">
-                    <span>🛡️ Control de Drawdown</span>
+                    <span>🛡️ Pérdida del día (freno 2,5%)</span>
                     <span class="positive" id="kpi-dd-badge">🟢 SEGURO</span>
                 </div>
                 <div class="kpi-value" id="kpi-current-dd">--% / 2.50%</div>
@@ -940,7 +937,7 @@
             <div class="kpi-card">
                 <div class="kpi-label">
                     <span>⚡ Pistas &amp; Marcos</span>
-                    <span class="positive" id="kpi-pistas-badge">8 / 8 ACTIVAS</span>
+                    <span class="positive" id="kpi-pistas-badge">12 / 12 ACTIVAS</span>
                 </div>
                 <div class="kpi-value" id="kpi-pistas-value" style="color: var(--accent-cyan);">5m • 15m • 1H • 4H</div>
                 <div class="kpi-sub" id="kpi-pistas-sub">Escaneando 4 activos • Cuentas Demo &amp; Paper</div>
@@ -958,6 +955,8 @@
             <span id="duelo-updated" style="font-size: 12px; color: var(--text-dim); font-family: 'JetBrains Mono', monospace;">esperando datos del motor...</span>
         </div>
 
+        <!-- [CLAUDE v2.2] La verdad está en el saldo del broker; la libreta del motor se compara contra ella -->
+        <div id="broker-truth" style="margin-bottom: 16px; padding: 14px 16px; border-radius: 14px; border: 1px solid rgba(251,191,36,0.35); background: rgba(251,191,36,0.06); font-size: 12px; font-family: 'JetBrains Mono', monospace;">Cargando verdad del broker...</div>
         <div id="duelo-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); gap: 16px; margin-bottom: 28px;">
             <div class="duelo-card" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px; padding: 18px;">
                 <div style="font-size: 13px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; color: var(--accent-gold); margin-bottom: 12px;">🏦 Duelo de Brokers</div>
@@ -996,7 +995,7 @@
                     <b id="player-TSLA-tfs" style="font-size: 11px;">5m -- | 15m -- | 1H -- | 4H --</b>
                 </div>
                 <div class="player-row">
-                    <span>Mejor Estrategia:</span>
+                    <span>Señal más fuerte ahora:</span>
                     <b id="player-TSLA-best" style="color: var(--accent-cyan);">Calculando...</b>
                 </div>
                 <div class="player-row">
@@ -1023,7 +1022,7 @@
                     <b id="player-NVDA-tfs" style="font-size: 11px;">5m -- | 15m -- | 1H -- | 4H --</b>
                 </div>
                 <div class="player-row">
-                    <span>Mejor Estrategia:</span>
+                    <span>Señal más fuerte ahora:</span>
                     <b id="player-NVDA-best" style="color: var(--accent-cyan);">Calculando...</b>
                 </div>
                 <div class="player-row">
@@ -1041,7 +1040,7 @@
                 <div class="player-top">
                     <div>
                         <div class="player-symbol">ORO (XAU / GLD)</div>
-                        <div class="player-name">Spot Gold / ETF Trust</div>
+                        <div class="player-name">Precio GLD (ETF Alpaca) • Pepperstone oro en pausa</div>
                     </div>
                     <div class="player-badge" id="player-ORO-price">$--</div>
                 </div>
@@ -1050,7 +1049,7 @@
                     <b id="player-ORO-tfs" style="font-size: 11px;">5m -- | 15m -- | 1H -- | 4H --</b>
                 </div>
                 <div class="player-row">
-                    <span>Mejor Estrategia:</span>
+                    <span>Señal más fuerte ahora:</span>
                     <b id="player-ORO-best" style="color: var(--accent-gold);">Calculando...</b>
                 </div>
                 <div class="player-row">
@@ -1077,7 +1076,7 @@
                     <b id="player-SOL-tfs" style="font-size: 11px;">5m -- | 15m -- | 1H -- | 4H --</b>
                 </div>
                 <div class="player-row">
-                    <span>Mejor Estrategia:</span>
+                    <span>Señal más fuerte ahora:</span>
                     <b id="player-SOL-best" style="color: var(--accent-purple);">Calculando...</b>
                 </div>
                 <div class="player-row">
@@ -1139,7 +1138,7 @@
             <div class="section-title">
                 <span>📊 Matriz de Batalla Cuantitativa: Análisis por Estrategia</span>
             </div>
-            <span style="font-size: 12px; color: var(--accent-cyan); font-family: 'JetBrains Mono', monospace;">8 Pistas en Vivo (5m • 15m • 1H • 4H)</span>
+            <span style="font-size: 12px; color: var(--accent-cyan); font-family: 'JetBrains Mono', monospace;">12 Pistas en Vivo (5m • 15m • 1H • 4H)</span>
         </div>
 
         <div class="strategies-grid" id="strategies-scorecard-grid">
@@ -1511,6 +1510,7 @@
             if (t.stratCode) return String(t.stratCode).toLowerCase(); // [CLAUDE v2] etiqueta del motor primero
             const s = (t.strategy || '').toLowerCase();
             if (s.includes('reconstruido')) return 'rebuilt';
+            if (s.includes('custodia')) return 'custodia'; // [CLAUDE v2.2] adoptada tras reinicio: estrategia desconocida
             const mP = s.match(/pista\s*(\d{1,2})\b/); // "pista 10" ya no cae en "pista 1"
             if (mP) return 'p' + mP[1];
             if (s.includes('delfín') || s.includes('delfin') || s.includes('pista 1')) return 'p1';
@@ -1991,7 +1991,15 @@
                     pf: gl > 0 ? (gp / gl) : (gp > 0 ? 99.9 : 0),
                     real
                 };
-            }).sort((a, b) => b.pnl - a.pnl);
+            // [CLAUDE v2.2] Orden por R (riesgo): 1 acción en Alpaca vs 0,1 CFD en Pepperstone no se comparan en euros
+            }).sort((a, b) => {
+                const ra = (typeof a.rMultiple === 'number') ? a.rMultiple : null;
+                const rb = (typeof b.rMultiple === 'number') ? b.rMultiple : null;
+                if (ra !== null && rb !== null) return rb - ra;
+                if (ra !== null) return -1;
+                if (rb !== null) return 1;
+                return b.pnl - a.pnl;
+            });
         }
 
         function duelRowHtml(s, rank) {
@@ -2011,15 +2019,38 @@
                 '</div></div>';
         }
 
+        function renderBrokerTruth(engineState) {
+            const el = document.getElementById('broker-truth');
+            if (!el) return;
+            const bt = engineState && engineState.brokerTruth;
+            if (!bt) { el.innerHTML = '⏳ El motor aún no publicó la verdad del broker (llega con la v2.2).'; return; }
+            const f = (v, cur) => (v === null || v === undefined || !isFinite(v)) ? 'n/d' : ((v >= 0 ? '+' : '') + (cur === 'USD' ? '$' : '€') + Number(v).toFixed(2));
+            const col = v => (v === null || !isFinite(v)) ? 'var(--text-dim)' : (v >= 0 ? 'var(--accent-green)' : 'var(--accent-red)');
+            const line = (name, b) => {
+                if (!b) return '';
+                const startTxt = (b.start === null || b.start === undefined) ? '<span style="color: var(--accent-red);">falta saldo al reseteo del 12-nov (variable en Render)</span>' : ('inicio ' + (b.currency === 'USD' ? '$' : '€') + Number(b.start).toLocaleString('es-ES'));
+                return '<div style="display: flex; flex-wrap: wrap; gap: 14px; margin-top: 6px;">' +
+                    '<b style="min-width: 150px;">' + name + '</b>' +
+                    '<span>REAL broker: <b style="color: ' + col(b.realPnl) + ';">' + f(b.realPnl, b.currency) + '</b> (' + startTxt + ')</span>' +
+                    '<span>Libreta motor: <b style="color: ' + col(b.ledgerPnl) + ';">' + f(b.ledgerPnl, b.currency) + '</b></span>' +
+                    '<span>Diferencia sin explicar: <b style="color: ' + ((b.gap !== null && Math.abs(b.gap) > 5) ? 'var(--accent-red)' : 'var(--accent-green)') + ';">' + f(b.gap, b.currency) + '</b></span>' +
+                    '<span>Drawdown real desde máximo: <b>' + (b.drawdownFromPeakPct === null || b.drawdownFromPeakPct === undefined ? 'n/d' : b.drawdownFromPeakPct.toFixed(2) + '%') + '</b></span>' +
+                    '</div>';
+            };
+            el.innerHTML = '<div style="font-weight: 800; color: var(--accent-gold); font-family: inherit;">💰 VERDAD DEL BROKER • el dinero real manda sobre la libreta</div>' +
+                line('🦙 Alpaca Paper', bt.alpaca) + line('🏛️ Pepperstone Demo', bt.pepperstone);
+        }
+
         function renderDuelScoreboard(engineState) {
             if (!engineState) return;
             const list = engineState.closedTradesHistory || [];
 
             const brokers = computeDuelStats(list, t => (t.broker || '').includes('Alpaca') ? '🦙 Alpaca Paper' : '🏛️ Pepperstone');
-            const strats = computeDuelStats(list, t => {
-                if (t.rebuiltFromFills) return '♻️ Reconstruidos';
-                return (t.strategy || 'Desconocida').split(':')[0].replace(/^Pista /, 'P');
-            });
+            const STRAT_LABELS = { p1:'P1 Delfín', p2:'P2 Base', p3:'P3 TimeMachine', p4:'P4 VWAP', p5:'P5 SuperTrend', p6:'P6 RSI-2', p7:'P7 ORB-30', p8:'P8 Squeeze', p9:'P9 Hermanas', p10:'P10 Delfín E', p11:'P11 Gap&Go', p12:'P12 VWAP rebote' };
+            // [CLAUDE v2.2] Solo estrategias reales en el ranking; Custodia y Reconstruidos van aparte, en gris
+            const stratList = list.filter(t => { const c = classifyStratCode(t); return STRAT_LABELS[c]; });
+            const otherList = list.filter(t => !STRAT_LABELS[classifyStratCode(t)]);
+            const strats = computeDuelStats(stratList, t => STRAT_LABELS[classifyStratCode(t)]);
             const assets = computeDuelStats(list, t => {
                 const s = (t.symbol || '?');
                 if (s.includes('XAU') || s === 'GLD') return '🥇 Oro';
@@ -2034,13 +2065,21 @@
             const elS = document.getElementById('duelo-strategies');
             const elA = document.getElementById('duelo-assets');
             if (elB) elB.innerHTML = brokers.length ? brokers.map(duelRowHtml).join('') : empty;
-            if (elS) elS.innerHTML = strats.length ? strats.map(duelRowHtml).join('') : empty;
+            if (elS) {
+                let h = strats.length ? strats.map(duelRowHtml).join('') : empty;
+                if (otherList.length) {
+                    const o = computeDuelStats(otherList, () => 'x')[0];
+                    h += '<div style="margin-top: 8px; font-size: 11px; color: var(--text-dim);">Fuera del ranking: ' + o.n + ' trades de Custodia / Reconstruidos (estrategia de origen desconocida) • ' + (o.pnl >= 0 ? '+' : '') + '€' + o.pnl.toFixed(2) + '</div>';
+                }
+                elS.innerHTML = h;
+            }
             if (elA) elA.innerHTML = assets.length ? assets.map(duelRowHtml).join('') : empty;
 
             const upd = document.getElementById('duelo-updated');
             if (upd) {
-                const totalReal = list.filter(t => t.brokerCloseExecuted).length;
-                upd.innerText = list.length + ' trades reales cerrados (' + totalReal + ' con cierre confirmado en broker) • PnL en ≈ EUR';
+                const excl = (engineState.closedTradesHistoryAll || list).length - list.length;
+                upd.innerText = list.length + ' trades con cierre confirmado en broker' + (excl ? ' (' + excl + ' con cierre fallido excluidos)' : '') + ' • ordenado por R';
+                renderBrokerTruth(engineState);
             }
         }
 
@@ -2061,6 +2100,10 @@
                 }
 
                 if (engineState) {
+                    // [CLAUDE v2.2] Los cierres que el broker no confirmó no cuentan en ninguna estadística
+                    const _allClosed = engineState.closedTradesHistory || [];
+                    engineState.closedTradesHistoryAll = _allClosed;
+                    engineState.closedTradesHistory = _allClosed.filter(t => t.brokerCloseExecuted !== false);
                     latestEngineState = engineState;
                     renderDuelScoreboard(engineState);
                     if (engineState.closedTradesHistory) {
@@ -2129,13 +2172,13 @@
 
                     const kpiPistasBadge = document.getElementById('kpi-pistas-badge');
                     if (kpiPistasBadge) {
-                        kpiPistasBadge.innerText = isKillSwitch ? '🛑 PAUSADAS (DD)' : '8 / 8 ACTIVAS';
+                        kpiPistasBadge.innerText = isKillSwitch ? '🛑 PAUSADAS (DD)' : '12 / 12 ACTIVAS';
                         kpiPistasBadge.className = isKillSwitch ? 'negative' : 'positive';
                     }
 
                     const kpiPistasSub = document.getElementById('kpi-pistas-sub');
                     if (kpiPistasSub) {
-                        kpiPistasSub.innerText = (engineState.totalScans || 0) + ' escaneos • ' + ((engineState.closedTradesHistory || []).length) + ' trades auditados';
+                        kpiPistasSub.innerText = (engineState.totalScans || 0) + ' escaneos • ' + ((engineState.closedTradesHistory || []).length) + ' trades confirmados';
                     }
 
                     // Actualizar burbuja inicial del chat si sigue sin mensajes enviados
@@ -2464,7 +2507,7 @@
             }
 
             // 2. RENDERIZADO DE OPERACIONES CERRADAS (HISTORIAL AUDITADO EN VIVO)
-            const closedList = (engineState && engineState.closedTradesHistory) ? engineState.closedTradesHistory : [];
+            const closedList = (engineState && (engineState.closedTradesHistoryAll || engineState.closedTradesHistory)) || [];
             const existingClosedDyn = document.querySelectorAll('.dyn-closed-row');
             existingClosedDyn.forEach(r => r.remove());
 
@@ -2523,7 +2566,7 @@
                         '<td>' + (c.tp ? ('$' + parseFloat(c.tp).toFixed(priceDecimals)) : '—') + '</td>' +
                         '<td class="' + pnlClass + '"><b style="color: ' + pnlColor + ';">' + pnlText + '</b></td>' +
                         '<td style="font-size: 11px; color: var(--text-dim); white-space: nowrap;">' + fmtRoma(c.openedAt) + ' → ' + fmtRoma(c.closedAt) + '</td>' +
-                        '<td>' + (c.brokerCloseExecuted === true ? '✅' : (c.brokerCloseExecuted === false ? '<span class="tag tag-sl" title="' + (c.closeError || '') + '">⚠️ Falló cierre</span>' : '📝')) + '</td>';
+                        '<td>' + (c.brokerCloseExecuted === true ? '✅' : (c.brokerCloseExecuted === false ? '<span class="tag tag-sl" title="' + (c.closeError || '') + '">⚠️ Falló cierre • no cuenta</span>' : '📝')) + '</td>';
 
                     tbody.insertBefore(row, prevClosed.nextSibling);
                     prevClosed = row;
