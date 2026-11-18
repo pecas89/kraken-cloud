@@ -79,6 +79,7 @@ async function getPositions() {
         currentPrice: parseFloat(p.current_price),
         marketValue: parseFloat(p.market_value),
         unrealizedPnl: parseFloat(p.unrealized_pl),
+        unrealizedIntradayPnl: parseFloat(p.unrealized_intraday_pl), // [CLAUDE v2] solo lo de HOY, para conciliar con el cambio de saldo del día
         unrealizedPnlPct: parseFloat(p.unrealized_plpc) * 100,
         changeToday: parseFloat(p.change_today) * 100
     })) : [];

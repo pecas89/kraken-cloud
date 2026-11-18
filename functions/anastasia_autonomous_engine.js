@@ -62,6 +62,10 @@ const STATE_FILE = path.join(__dirname, 'anastasia_trading_state.json');
 // Matriz de los 4 Activos Sagrados (DUELO HEAD-TO-HEAD: AMBOS BROKERS EN LAS 4 ACCIONES)
 // [FIX CLAUDE 18-NOV] Laboratorio: hasta 10 estrategias x 4 marcos por símbolo
 const MAX_ALPACA_SUBPOS_PER_SYMBOL = 40;
+// [CLAUDE v2] Salidas: 'STD' = stop + breakeven + objetivo | 'STEP' = escalera de stops de Pedro (objetivo en 4 escalones; el stop sube al escalón anterior)
+// Las dos patas de cada señal (duelPairId) usan salidas distintas: así se comparan sobre las MISMAS entradas.
+const EXIT_MODE_BY_BROKER = { alpaca: 'STEP', pepperstone: 'STD' };
+const ENGINE_VERSION = 'v2-2026-11-18';
 
 const ASSETS_CONFIG = {
     NVDA: {
@@ -130,7 +134,9 @@ let engineState = {
         SOLUSD: { score: 0, pez: '🐡 PEZ GLOBO', price: 0, time: null }
     },
     closedCooldowns: {},
-    lastSignalBarTime: {}
+    lastSignalBarTime: {},
+    externalQty: { TSLA: 1 },
+    lastDailyReconciliationDate: null
 };
 
 // Cargar estado persistente si existe y depurar restos legados
@@ -138,6 +144,7 @@ if (fs.existsSync(STATE_FILE)) {
     try {
         const saved = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
         engineState = { ...engineState, ...saved, running: true };
+        if (!engineState.externalQty) engineState.externalQty = { TSLA: 1 };
         if (Array.isArray(engineState.closedTradesHistory)) {
             engineState.closedTradesHistory.forEach(t => {
                 if (t && typeof t.broker === 'string' && t.broker.includes('200')) {
@@ -310,19 +317,20 @@ async function fetchMarketQuotes() {
 
     // 25 días atrás para asegurar suficientes velas en 4H (mínimo 30-50 barras para EMA21 y ATR14)
     // MANDATO VERDAD FACTUAL: usar feed=iex + sort=desc + reverse() para obtener siempre las ÚLTIMAS 50 velas reales hasta HOY (nunca velas viejas).
-    const start = new Date(Date.now() - 25 * 24 * 3600 * 1000).toISOString();
+    // [CLAUDE v2] 300 velas por marco (antes 50: EMA 50/200 y la P9 no tenían historia suficiente)
+    const start = new Date(Date.now() - 400 * 24 * 3600 * 1000).toISOString();
 
     try {
         const fetchPromises = [];
         TIMEFRAMES.forEach(tf => {
             fetchPromises.push(
-                fetchBarsUrl(`https://data.alpaca.markets/v2/stocks/NVDA/bars?timeframe=${tf.code}&limit=50&start=${encodeURIComponent(start)}&sort=desc&feed=iex`)
+                fetchBarsUrl(`https://data.alpaca.markets/v2/stocks/NVDA/bars?timeframe=${tf.code}&limit=300&start=${encodeURIComponent(start)}&sort=desc&feed=iex`)
                     .then(data => ({ ticker: 'NVDA', tf: tf.label, bars: (data?.bars || []).slice().reverse() })),
-                fetchBarsUrl(`https://data.alpaca.markets/v2/stocks/TSLA/bars?timeframe=${tf.code}&limit=50&start=${encodeURIComponent(start)}&sort=desc&feed=iex`)
+                fetchBarsUrl(`https://data.alpaca.markets/v2/stocks/TSLA/bars?timeframe=${tf.code}&limit=300&start=${encodeURIComponent(start)}&sort=desc&feed=iex`)
                     .then(data => ({ ticker: 'TSLA', tf: tf.label, bars: (data?.bars || []).slice().reverse() })),
-                fetchBarsUrl(`https://data.alpaca.markets/v2/stocks/GLD/bars?timeframe=${tf.code}&limit=50&start=${encodeURIComponent(start)}&sort=desc&feed=iex`)
+                fetchBarsUrl(`https://data.alpaca.markets/v2/stocks/GLD/bars?timeframe=${tf.code}&limit=300&start=${encodeURIComponent(start)}&sort=desc&feed=iex`)
                     .then(data => ({ ticker: 'XAUUSD', tf: tf.label, bars: (data?.bars || []).slice().reverse() })),
-                fetchBarsUrl(`https://data.alpaca.markets/v1beta3/crypto/us/bars?symbols=SOL/USD&timeframe=${tf.code}&limit=50&start=${encodeURIComponent(start)}&sort=desc`)
+                fetchBarsUrl(`https://data.alpaca.markets/v1beta3/crypto/us/bars?symbols=SOL/USD&timeframe=${tf.code}&limit=300&start=${encodeURIComponent(start)}&sort=desc`)
                     .then(data => ({ ticker: 'SOLUSD', tf: tf.label, bars: (data?.bars?.['SOL/USD'] || []).slice().reverse() }))
             );
         });
@@ -571,6 +579,7 @@ async function executeAutonomousOpen(ticker, price, analysis) {
                 fillPrice: realAlpacaFill || alpacaEntry,
                 sl: alpacaSl,
                 tp: alpacaTp,
+                initialRiskPerUnit: parseFloat(Math.abs(alpacaEntry - alpacaSl).toFixed(priceDecimals)),
                 isDelfin4x4: false, // [FIX CLAUDE 18-NOV] los escalones 25% nunca se vendían en el broker: la ganancia parcial era solo de libreta. Pendiente v2 (ventas fraccionadas reales).
                 tp1: analysis.isDelfin4x4 ? parseFloat((alpacaEntry + atr * 0.75).toFixed(priceDecimals)) : null,
                 tp2: analysis.isDelfin4x4 ? parseFloat((alpacaEntry + atr * 1.50).toFixed(priceDecimals)) : null,
@@ -584,6 +593,10 @@ async function executeAutonomousOpen(ticker, price, analysis) {
                 indicators: analysis.indicators || null,
                 signalReason: analysis.signalReason || '',
                 timeframe: analysis.timeframe || '5m',
+                stratCode: analysis.stratCode || null, // [CLAUDE v2] etiquetas para el informe
+                strategyVersion: analysis.strategyVersion || ENGINE_VERSION,
+                exitMode: EXIT_MODE_BY_BROKER.alpaca,
+                closeAtSessionEnd: !!analysis.closeAtSessionEnd,
                 status: 'OPEN',
                 openedAt: new Date().toISOString(),
                 trailingStopMovedToBreakeven: false
@@ -632,6 +645,7 @@ async function executeAutonomousOpen(ticker, price, analysis) {
                 fillPrice: pepEntry,
                 sl: pepSl,
                 tp: pepTp,
+                initialRiskPerUnit: parseFloat(Math.abs(pepEntry - pepSl).toFixed(priceDecimals)),
                 brokerSltpBound: !!pepRes.order.brokerSltpBound,
                 isDelfin4x4: false, // [FIX CLAUDE 18-NOV] los escalones 25% nunca se vendían en el broker: la ganancia parcial era solo de libreta. Pendiente v2 (ventas fraccionadas reales).
                 tp1: analysis.isDelfin4x4 ? parseFloat((pepEntry + atr * 0.75).toFixed(priceDecimals)) : null,
@@ -646,6 +660,10 @@ async function executeAutonomousOpen(ticker, price, analysis) {
                 indicators: analysis.indicators || null,
                 signalReason: analysis.signalReason || '',
                 timeframe: analysis.timeframe || '5m',
+                stratCode: analysis.stratCode || null, // [CLAUDE v2] etiquetas para el informe
+                strategyVersion: analysis.strategyVersion || ENGINE_VERSION,
+                exitMode: EXIT_MODE_BY_BROKER.pepperstone,
+                closeAtSessionEnd: !!analysis.closeAtSessionEnd,
                 status: 'OPEN',
                 openedAt: new Date().toISOString(),
                 trailingStopMovedToBreakeven: false
@@ -780,6 +798,17 @@ function adoptUnmanagedBrokerPositions(alpPositions, pepRealPositions) {
         if (!(entry > 0)) return;
         const decimals = ticker.includes('SOL') ? 4 : 2;
         const atr = getLiveAtrForTicker(ticker, entry);
+        // [FIX CLAUDE v2] Ninguna estrategia vende en corto y manageOpenPositions solo gestiona compras:
+        // un corto en Pepperstone no se adopta (se gestionaría al revés). Solo aviso, igual que en Alpaca.
+        if (td.tradeSide === 2) {
+            const key = `SHORT_ALERT_PEP_${pid}_${romeDateStr()}`;
+            if (!engineState.closedCooldowns) engineState.closedCooldowns = {};
+            if (!engineState.closedCooldowns[key]) {
+                engineState.closedCooldowns[key] = Date.now();
+                notifyPedro(`🚨 <b>[ANASTASIA]</b> Corto inesperado en Pepperstone: ${ticker} (posición ${pid}). No se adopta. Revisar y cerrar a mano.`).catch(() => {});
+            }
+            return;
+        }
         const cfg = ASSETS_CONFIG[ticker];
         engineState.openPositions.push({
             id: pid,
@@ -797,6 +826,7 @@ function adoptUnmanagedBrokerPositions(alpPositions, pepRealPositions) {
             currency: 'EUR',
             side: td.tradeSide === 2 ? 'SELL' : 'BUY',
             entryPrice: entry,
+            initialRiskPerUnit: parseFloat((atr * 1.5).toFixed(decimals)),
             sl: parseFloat((entry - atr * 1.5).toFixed(decimals)),
             tp: parseFloat((entry + atr * 3.0).toFixed(decimals)),
             breakevenTrigger: parseFloat((entry + atr * 1.5).toFixed(decimals)),
@@ -820,8 +850,6 @@ function adoptUnmanagedBrokerPositions(alpPositions, pepRealPositions) {
         const engineQtyForSym = engineState.openPositions
             .filter(op => op.broker && op.broker.includes('Alpaca') && normSym(op.orderSymbol || op.symbol) === normSym(ap.symbol))
             .reduce((sum, op) => sum + (parseFloat(op.qty) || 0), 0);
-        if (Math.abs(engineQtyForSym - parseFloat(ap.qty || 0)) <= 0.001) return;
-        if (engineQtyForSym > 0) return; // Evitar duplicar si ya existen sub-órdenes registradas
 
         // [FIX CLAUDE 18-NOV] Ninguna estrategia vende en corto: un corto en Alpaca es un error, no se adopta como compra
         if (!(parseFloat(ap.qty || 0) > 0)) {
@@ -833,10 +861,22 @@ function adoptUnmanagedBrokerPositions(alpPositions, pepRealPositions) {
             }
             return;
         }
+
+        // [REGLA externalQty 18-NOV] Descontar posición externa editable (brokerQty - externalQty[símbolo])
+        const extQty = (engineState.externalQty && engineState.externalQty[ap.symbol])
+            ? (parseFloat(engineState.externalQty[ap.symbol]) || 0)
+            : 0;
+        const brokerQtyForEngine = Math.max(0, parseFloat(ap.qty || 0) - extQty);
+        const qtyToAdopt = brokerQtyForEngine - engineQtyForSym;
+
+        if (qtyToAdopt <= 0.001) return; // Si lo que queda no está por encima del libro, no se adopta
+
         const entry = parseFloat(ap.avgEntryPrice) || (engineState.liveQuotes && engineState.liveQuotes[ticker]) || 0;
         if (!(entry > 0)) return;
         const decimals = ticker.includes('SOL') ? 4 : 2;
         const atr = getLiveAtrForTicker(ticker, entry);
+        const slPrice = parseFloat((entry - atr * 1.5).toFixed(decimals));
+        const initialRiskPerUnit = parseFloat(Math.abs(entry - slPrice).toFixed(decimals));
         engineState.openPositions.push({
             id: `ALP-CUST-${ap.symbol}`,
             broker: 'Alpaca Markets Paper Algorithmic',
@@ -844,13 +884,14 @@ function adoptUnmanagedBrokerPositions(alpPositions, pepRealPositions) {
             account: 'PA35UQ22S',
             symbol: ticker,
             orderSymbol: cfg.alpacaSymbol,
-            qty: parseFloat(ap.qty),
-            initialQty: parseFloat(ap.qty),
+            qty: parseFloat(qtyToAdopt.toFixed(decimals)),
+            initialQty: parseFloat(qtyToAdopt.toFixed(decimals)),
             unit: ticker.includes('SOL') ? 'SOL' : 'acción',
             currency: 'USD',
             side: 'BUY',
             entryPrice: entry,
-            sl: parseFloat((entry - atr * 1.5).toFixed(decimals)),
+            initialRiskPerUnit: initialRiskPerUnit,
+            sl: slPrice,
             tp: parseFloat((entry + atr * 3.0).toFixed(decimals)),
             breakevenTrigger: parseFloat((entry + atr * 1.5).toFixed(decimals)),
             pez: '🛡️ CUSTODIA',
@@ -997,8 +1038,31 @@ async function syncBrokerReality() {
             const realKey = Object.keys(realAlpaca).find(k => norm(k) === sym);
             const eng = engKey ? engineAlpaca[engKey] : 0;
             const real = realKey ? realAlpaca[realKey] : 0;
-            if (Math.abs(eng - real) > 0.0001) {
-                divergences.push({ symbol: sym, engineQty: eng, brokerQty: real });
+            const extQty = (engineState.externalQty && engineState.externalQty[sym])
+                ? (parseFloat(engineState.externalQty[sym]) || 0)
+                : 0;
+            const brokerQtyForEngine = Math.max(0, real - extQty);
+
+            if (extQty > 0) {
+                divergences.push({
+                    symbol: sym,
+                    engineQty: eng,
+                    brokerQty: real,
+                    brokerQtyForEngine,
+                    externalQty: extQty,
+                    type: 'POSICION_EXTERNA',
+                    note: `Posición externa (${extQty} ud)`
+                });
+            }
+
+            if (Math.abs(eng - brokerQtyForEngine) > 0.0001) {
+                divergences.push({
+                    symbol: sym,
+                    engineQty: eng,
+                    brokerQty: real,
+                    brokerQtyForEngine,
+                    diff: Math.abs(eng - brokerQtyForEngine)
+                });
             }
         });
 
@@ -1216,6 +1280,17 @@ async function manageOpenPositions(currentQuotes) {
         let closeReason = '';
         let profitAmount = 0.0;
 
+        // [CLAUDE v2] P10-P12 nunca duermen con la posición abierta: cierre a las 15:55 de Nueva York
+        if (pos.closeAtSessionEnd && !(pos.symbol || '').includes('SOL')) {
+            const ny = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour12: false, hour: '2-digit', minute: '2-digit' }).formatToParts(new Date()).reduce((a, x) => (a[x.type] = x.value, a), {});
+            const nyMins = (+ny.hour % 24) * 60 + (+ny.minute);
+            if (nyMins >= 955) {
+                positionClosed = true;
+                closeReason = '⏰ Cierre de sesión (15:55 NY)';
+                profitAmount = (currentPrice - pos.entryPrice) * pos.qty;
+            }
+        }
+
         // A) LÓGICA ESPECIAL PISTA 1: ESCALERA DELFÍN 4X4 (TP ESCALONADO DINÁMICO)
         if (pos.isDelfin4x4) {
             const tranches = pos.tranchesClosed || 0;
@@ -1283,7 +1358,31 @@ async function manageOpenPositions(currentQuotes) {
         }
 
         // B) GESTIÓN ESTÁNDAR PARA NO-DELFÍN (PISTAS 2..8 / CUSTODIA)
-        if (!pos.isDelfin4x4) {
+        // [CLAUDE v2] Escalera de stops de Pedro: el recorrido hasta el objetivo se divide en 4 escalones.
+        // Al tocar el escalón k, el stop sube al escalón k-1 (el 1º lo lleva a la entrada). En el 4º se cierra todo.
+        if (!positionClosed && !pos.isDelfin4x4 && pos.exitMode === 'STEP' && pos.tp > pos.entryPrice) {
+            const stepD = (pos.tp - pos.entryPrice) / 4;
+            let step = pos.stepReached || 0;
+            while (step < 4 && currentPrice >= pos.entryPrice + stepD * (step + 1)) step++;
+            if (step >= 4) {
+                positionClosed = true;
+                closeReason = '🪜 Escalera completada (objetivo) 🎯';
+                profitAmount = (currentPrice - pos.entryPrice) * pos.qty;
+            } else if (step > (pos.stepReached || 0)) {
+                pos.stepReached = step;
+                const newSl = pos.entryPrice + stepD * (step - 1);
+                if (newSl > pos.sl) {
+                    pos.sl = parseFloat(newSl.toFixed(4));
+                    pos.trailingStopMovedToBreakeven = true;
+                    console.log(`🪜 [ESCALERA ${step}/4] ${pos.symbol} (${pos.broker}): stop sube a ${pos.sl}`);
+                    if (pos.broker && pos.broker.includes('Pepperstone') && (pos.positionId || pos.id) && pepperstoneService.amendPositionSLTPViaOpenAPI) {
+                        pepperstoneService.amendPositionSLTPViaOpenAPI(pos.positionId || pos.id, pos.sl, pos.tp).catch(() => {});
+                    }
+                }
+            }
+        }
+
+        if (!pos.isDelfin4x4 && !positionClosed && pos.exitMode !== 'STEP') {
             // 1. Verificación de Trailing Stop a Breakeven (+1.5 ATR)
             if (!pos.trailingStopMovedToBreakeven && currentPrice >= pos.breakevenTrigger) {
                 pos.sl = pos.entryPrice; // Movemos SL al precio de entrada (Riesgo Cero)
@@ -1367,6 +1466,11 @@ async function manageOpenPositions(currentQuotes) {
             }
             pos.pnl = parseFloat(profitAmount.toFixed(pnlDecimals));
             pos.closeReason = closeReason;
+            if (pos.initialRiskPerUnit > 0 && pos.qty > 0) {
+                pos.rMultiple = parseFloat((pos.pnl / (pos.initialRiskPerUnit * pos.qty)).toFixed(2));
+            } else {
+                pos.rMultiple = null;
+            }
 
             // Cooldown anti-churn: registrar marca de tiempo para evitar reaperturas instantáneas
             if (!engineState.closedCooldowns) engineState.closedCooldowns = {};
@@ -1427,6 +1531,100 @@ async function manageOpenPositions(currentQuotes) {
 }
 
 // ------------------------------------------------------------------------------
+// 📋 CONCILIACIÓN DIARIA 22:30 ROMA (AUDITORÍA PASIVA Y ALERTA TELEGRAM)
+// ------------------------------------------------------------------------------
+async function checkDailyReconciliationAt2230() {
+    const d = romeNow();
+    // Ventana de 5 minutos a las 22:30 Roma
+    if (d.getHours() === 22 && d.getMinutes() >= 30 && d.getMinutes() < 35) {
+        const todayStr = romeDateStr(d);
+        if (engineState.lastDailyReconciliationDate === todayStr) return;
+
+        try {
+            console.log(`[CONCILIACIÓN 22:30 ROMA] Iniciando control de libro vs Alpaca (${todayStr})...`);
+            const [acc, alpPositions] = await Promise.all([
+                alpacaService.getAccount().catch(() => null),
+                alpacaService.getPositions().catch(() => null)
+            ]);
+
+            if (!acc || !Array.isArray(alpPositions)) {
+                console.warn('[CONCILIACIÓN 22:30 ROMA] Alpaca offline o error de cuenta');
+                return; // [FIX CLAUDE v2] no se marca el día: reintenta en el próximo ciclo dentro de la ventana
+            }
+            engineState.lastDailyReconciliationDate = todayStr;
+            saveState();
+
+            const symbols = ['TSLA', 'NVDA', 'SOLUSD', 'GLD'];
+            const qtyDiscrepancies = [];
+
+            symbols.forEach(sym => {
+                const bookQty = engineState.openPositions
+                    .filter(p => (p.broker || '').includes('Alpaca') && (p.orderSymbol === sym || p.symbol === sym))
+                    .reduce((sum, p) => sum + (parseFloat(p.qty) || 0), 0);
+
+                const alpReal = (alpPositions || []).find(p => p.symbol === sym || p.symbol === sym.replace('/', ''));
+                const realQty = alpReal ? parseFloat(alpReal.qty || 0) : 0;
+
+                const extQty = (engineState.externalQty && engineState.externalQty[sym])
+                    ? (parseFloat(engineState.externalQty[sym]) || 0)
+                    : 0;
+                const brokerQtyForEngine = Math.max(0, realQty - extQty);
+
+                const diff = Math.abs(bookQty - brokerQtyForEngine);
+                if (diff > 0.001) {
+                    qtyDiscrepancies.push(`• <b>${sym}:</b> Libro = ${bookQty} | Broker Motor = ${brokerQtyForEngine} (Total: ${realQty}, Externa: ${extQty}) (Δ ${diff.toFixed(3)}) ⚠️`);
+                } else if (extQty > 0) {
+                    qtyDiscrepancies.push(`• <b>${sym}:</b> Libro = ${bookQty} | Broker Motor = ${brokerQtyForEngine} (Externa: ${extQty}) ✅`);
+                }
+            });
+
+            // Comparar cambio de saldo de Alpaca con (P&L cerrado del día + P&L no realizado de posiciones abiertas, sumando externas)
+            const todayTrades = (engineState.closedTradesHistory || []).filter(t =>
+                t.closedAt && romeDateStr(new Date(t.closedAt)) === todayStr && (t.broker || '').includes('Alpaca')
+            );
+            const closedPnlDay = todayTrades.reduce((sum, t) => sum + (parseFloat(t.pnl) || 0), 0);
+
+            // P&L no realizado de TODAS las posiciones abiertas en Alpaca (incluye las externas)
+            const unrealizedPnlDay = (alpPositions || []).reduce((sum, p) => {
+                const u = parseFloat(p.unrealizedIntradayPnl ?? p.unrealizedPnl ?? 0); // [CLAUDE v2] intradía: el saldo de ayer ya incluye lo de días anteriores
+                return sum + (isFinite(u) ? u : 0);
+            }, 0);
+
+            const totalTheorPnlDay = closedPnlDay + unrealizedPnlDay;
+
+            const equity = parseFloat(acc.equity || 0);
+            const lastEquity = parseFloat(acc.lastEquity || equity);
+            const brokerEquityChange = equity - lastEquity;
+            const pnlDiff = Math.abs(totalTheorPnlDay - brokerEquityChange);
+
+            let pnlDiscrepancy = null;
+            if (pnlDiff > 5.0) {
+                pnlDiscrepancy = `• <b>P&L Día vs Saldo:</b> Teórico $${totalTheorPnlDay.toFixed(2)} (Cerrado $${closedPnlDay.toFixed(2)} + No Realizado $${unrealizedPnlDay.toFixed(2)}) | Cambio Saldo Broker = $${brokerEquityChange.toFixed(2)} (Δ $${pnlDiff.toFixed(2)} USD)`;
+            }
+
+            const hasAlert = qtyDiscrepancies.some(q => q.includes('⚠️')) || pnlDiscrepancy;
+            if (hasAlert || qtyDiscrepancies.length > 0) {
+                let msg = `📋 <b>[CONCILIACIÓN DIARIA 22:30 ROMA]</b>\n`;
+                msg += `Fecha: <code>${todayStr}</code>\n\n`;
+                if (qtyDiscrepancies.length > 0) {
+                    msg += `<b>Diferencias en Posiciones:</b>\n` + qtyDiscrepancies.join('\n') + `\n\n`;
+                }
+                if (pnlDiscrepancy) {
+                    msg += `<b>Diferencia en Saldo:</b>\n${pnlDiscrepancy}\n\n`;
+                }
+                msg += `<i>Auditoría pasiva. No se cerró ni adoptó nada automáticamente.</i>`;
+                await notifyPedro(msg).catch(() => {});
+                console.log(`[CONCILIACIÓN 22:30 ROMA] Reporte emitido a Telegram.`);
+            } else {
+                console.log(`[CONCILIACIÓN 22:30 ROMA] ✅ Todo conciliado exactamente (0 diferencias).`);
+            }
+        } catch(err) {
+            console.error('[CONCILIACIÓN 22:30 ROMA ERROR]', err.message);
+        }
+    }
+}
+
+// ------------------------------------------------------------------------------
 // 🔄 CICLO CUANTITATIVO PERPETUO DE ANASTASIA
 // ------------------------------------------------------------------------------
 async function runAutonomousCycle() {
@@ -1443,6 +1641,9 @@ async function runAutonomousCycle() {
     if (engineState.totalScans % 10 === 1) {
         await syncBrokerReality();
     }
+
+    // [FIX CLAUDE 18-NOV] Conciliación diaria a las 22:30 Roma
+    await checkDailyReconciliationAt2230();
 
     // 1. Gestionar posiciones abiertas existentes (Trailing BE, TP, SL)
     await manageOpenPositions(quotes);
