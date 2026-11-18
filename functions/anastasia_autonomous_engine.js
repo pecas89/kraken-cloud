@@ -382,8 +382,12 @@ async function fetchMarketQuotes() {
 function computePerformanceStats() {
     // [CLAUDE v2.2] Los cierres que el broker NO confirmó no cuentan: su PnL es inventado (la posición seguía abierta)
     const allHistory = engineState.closedTradesHistory || [];
-    const history = allHistory.filter(t => t.brokerCloseExecuted !== false);
-    const excludedFailedCloses = allHistory.length - history.length;
+    const confirmed = allHistory.filter(t => t.brokerCloseExecuted !== false);
+    const excludedFailedCloses = allHistory.length - confirmed.length;
+    // [CLAUDE v2.2] PUNTO CERO DEL LABORATORIO: solo cuentan operaciones abiertas por el motor v2+ (llevan strategyVersion).
+    // Así las 12 estrategias compiten en igualdad: mismo código, mismas reglas, sin arrastrar los errores de antes.
+    const history = confirmed.filter(t => !!t.strategyVersion);
+    const excludedPreV2 = confirmed.length - history.length;
     function calc(trades) {
         let wins = 0, losses = 0, bes = 0, grossProfit = 0, grossLoss = 0, netPnlUSD = 0, netPnlEUR = 0;
         let rTrades = 0, sumR = 0; // [CLAUDE v2.2] R = PnL / riesgo inicial: única forma justa de comparar 1 acción vs 0,1 CFD
@@ -418,6 +422,8 @@ function computePerformanceStats() {
 
     engineState.performanceStats = {
         excludedFailedCloses,
+        excludedPreV2,
+        labEpochNote: 'Solo operaciones del motor v2+ (desde el 18-nov 23:50)',
         global: calc(history),
         byBroker: {
             alpaca: calc(history.filter(t => t.broker && t.broker.includes('Alpaca'))),
