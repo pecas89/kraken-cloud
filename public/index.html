@@ -860,20 +860,7 @@
 </head>
 <body>
     <div class="container">
-        <!-- SELECTOR PLENARIO DEL EDIFICIO (CASTILLO IMPERIAL HOLDING) -->
-        <div class="plenary-bar">
-            <div style="display: flex; align-items: center; gap: 8px; font-weight: 800; color: #fff; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">
-                <span>🏛️ CASTILLO IMPERIAL:</span>
-            </div>
-            <div class="plenary-chips">
-                <a href="https://zabor-app.web.app" class="plenary-chip" title="Piso 1: Lucero (Gastronomía & TPV)">🌟 P1 Zabor</a>
-                <a href="https://kraken-trading-cloud.web.app" class="plenary-chip active" title="Piso 2: Anastasia (Kraken Quant Fund)">🇷🇺 P2 Kraken (Quant)</a>
-                <a href="https://gmb-la-loggia-p3.web.app" class="plenary-chip" title="Piso 3: Fiona (GMB Industrial)">🇨🇳 P3 GMB</a>
-                <a href="https://dinastia-castillo-p4.web.app" class="plenary-chip" title="Piso 4: Juanita (Dinastía & Familia)">🇵🇪 P4 Familia</a>
-                <a href="https://pedro-castillo-p5.web.app" class="plenary-chip" title="Piso 5: Amira (Despacho Pedro)">🕌 P5 Despacho</a>
-                <a href="https://valentina-holding-p6.web.app" class="plenary-chip" title="Piso 6: Valentina (Alto Mando)">👑 P6 Valentina</a>
-            </div>
-        </div>
+        <!-- [CLAUDE v2] Regla de Pedro: cada reina solo ve su piso. Sin enlaces a otros pisos (solo Valentina y Amira ven el edificio). -->
 
         <!-- HEADER MINIMALISTA -->
         <header>
@@ -1251,6 +1238,54 @@
                 <div class="strategy-metric-row"><span>Flotante:</span> <b id="strat-p8-pnl">€0.00 EUR</b></div>
                 <div class="strategy-metric-row"><span>Cerradas:</span> <b id="strat-p8-closed">--</b></div>
             </div>
+
+            <!-- [CLAUDE v2] P9 -->
+            <div class="strategy-card" style="border-left: 3px solid #f472b6; cursor: pointer;" onclick="filterTable('p9')">
+                <div class="strategy-top">
+                    <span class="strategy-title" style="color: #f472b6;">🐙 Pista 9: 26 Hermanas</span>
+                    <span class="strategy-badge" style="background: rgba(244, 114, 182, 0.15); color: #f472b6; border: 1px solid #f472b6;">V55 de Pedro 🐙</span>
+                </div>
+                <div class="strategy-metric-row"><span>Activos:</span> <b>TSLA, NVDA, ORO, SOL</b></div>
+                <div class="strategy-metric-row"><span>Abiertas:</span> <b id="strat-p9-count">0 en vivo</b></div>
+                <div class="strategy-metric-row"><span>Flotante:</span> <b id="strat-p9-pnl">€0.00 EUR</b></div>
+                <div class="strategy-metric-row"><span>Cerradas:</span> <b id="strat-p9-closed">--</b></div>
+            </div>
+
+            <!-- [CLAUDE v2] P10 -->
+            <div class="strategy-card" style="border-left: 3px solid #60a5fa; cursor: pointer;" onclick="filterTable('p10')">
+                <div class="strategy-top">
+                    <span class="strategy-title" style="color: #60a5fa;">🐬 Pista 10: Delfín E</span>
+                    <span class="strategy-badge" style="background: rgba(96, 165, 250, 0.15); color: #60a5fa; border: 1px solid #60a5fa;">Mañana NY • cierre 15:55</span>
+                </div>
+                <div class="strategy-metric-row"><span>Activos:</span> <b>TSLA, NVDA, ORO</b></div>
+                <div class="strategy-metric-row"><span>Abiertas:</span> <b id="strat-p10-count">0 en vivo</b></div>
+                <div class="strategy-metric-row"><span>Flotante:</span> <b id="strat-p10-pnl">€0.00 EUR</b></div>
+                <div class="strategy-metric-row"><span>Cerradas:</span> <b id="strat-p10-closed">--</b></div>
+            </div>
+
+            <!-- [CLAUDE v2] P11 -->
+            <div class="strategy-card" style="border-left: 3px solid #fb923c; cursor: pointer;" onclick="filterTable('p11')">
+                <div class="strategy-top">
+                    <span class="strategy-title" style="color: #fb923c;">🚀 Pista 11: Gap &amp; Go</span>
+                    <span class="strategy-badge" style="background: rgba(251, 146, 60, 0.15); color: #fb923c; border: 1px solid #fb923c;">Apertura • 5m/15m</span>
+                </div>
+                <div class="strategy-metric-row"><span>Activos:</span> <b>TSLA, NVDA, ORO</b></div>
+                <div class="strategy-metric-row"><span>Abiertas:</span> <b id="strat-p11-count">0 en vivo</b></div>
+                <div class="strategy-metric-row"><span>Flotante:</span> <b id="strat-p11-pnl">€0.00 EUR</b></div>
+                <div class="strategy-metric-row"><span>Cerradas:</span> <b id="strat-p11-closed">--</b></div>
+            </div>
+
+            <!-- [CLAUDE v2] P12 -->
+            <div class="strategy-card" style="border-left: 3px solid #22d3ee; cursor: pointer;" onclick="filterTable('p12')">
+                <div class="strategy-top">
+                    <span class="strategy-title" style="color: #22d3ee;">🌊 Pista 12: Rebote VWAP</span>
+                    <span class="strategy-badge" style="background: rgba(34, 211, 238, 0.15); color: #22d3ee; border: 1px solid #22d3ee;">Mañana NY • cierre 15:55</span>
+                </div>
+                <div class="strategy-metric-row"><span>Activos:</span> <b>TSLA, NVDA, ORO</b></div>
+                <div class="strategy-metric-row"><span>Abiertas:</span> <b id="strat-p12-count">0 en vivo</b></div>
+                <div class="strategy-metric-row"><span>Flotante:</span> <b id="strat-p12-pnl">€0.00 EUR</b></div>
+                <div class="strategy-metric-row"><span>Cerradas:</span> <b id="strat-p12-closed">--</b></div>
+            </div>
         </div>
 
         
@@ -1266,7 +1301,7 @@
                     </span>
                 </div>
                 <div class="filter-group">
-                    <button class="filter-btn active" id="btn-mat-scorecard" onclick="switchMatrixTab('scorecard')">⚡ Scorecard P1-P8 (Día/Sem/Mes)</button>
+                    <button class="filter-btn active" id="btn-mat-scorecard" onclick="switchMatrixTab('scorecard')">⚡ Scorecard P1-P12 (Día/Sem/Mes)</button>
                     <button class="filter-btn" id="btn-mat-strat" onclick="switchMatrixTab('strat')">🎯 Por Estrategia</button>
                     <button class="filter-btn" id="btn-mat-asset" onclick="switchMatrixTab('asset')">📈 Por Activo</button>
                     <button class="filter-btn" id="btn-mat-broker" onclick="switchMatrixTab('broker')">🏛️ Por Broker</button>
@@ -1392,6 +1427,10 @@
                     <button class="filter-btn" onclick="filterTable('p6')" style="color: #f59e0b; border-color: rgba(245, 158, 11, 0.4);">🎯 P6 RSI-2</button>
                     <button class="filter-btn" onclick="filterTable('p7')" style="color: #a78bfa; border-color: rgba(167, 139, 250, 0.4);">🚪 P7 ORB-30</button>
                     <button class="filter-btn" onclick="filterTable('p8')" style="color: #34d399; border-color: rgba(52, 211, 153, 0.4);">🗜️ P8 Squeeze</button>
+                    <button class="filter-btn" onclick="filterTable('p9')" style="color: #f472b6; border-color: rgba(244, 114, 182, 0.4);">🐙 P9 Hermanas</button>
+                    <button class="filter-btn" onclick="filterTable('p10')" style="color: #60a5fa; border-color: rgba(96, 165, 250, 0.4);">🐬 P10 Delfín E</button>
+                    <button class="filter-btn" onclick="filterTable('p11')" style="color: #fb923c; border-color: rgba(251, 146, 60, 0.4);">🚀 P11 Gap&amp;Go</button>
+                    <button class="filter-btn" onclick="filterTable('p12')" style="color: #22d3ee; border-color: rgba(34, 211, 238, 0.4);">🌊 P12 VWAP</button>
                     <span style="color: var(--border); display: flex; align-items: center;">|</span>
                     <button class="filter-btn" onclick="filterTable('TSLA')">🚗 TSLA</button>
                     <button class="filter-btn" onclick="filterTable('NVDA')">💚 NVDA</button>
@@ -1469,8 +1508,11 @@
 
         function classifyStratCode(t) {
             if (t.rebuiltFromFills) return 'rebuilt';
+            if (t.stratCode) return String(t.stratCode).toLowerCase(); // [CLAUDE v2] etiqueta del motor primero
             const s = (t.strategy || '').toLowerCase();
             if (s.includes('reconstruido')) return 'rebuilt';
+            const mP = s.match(/pista\s*(\d{1,2})\b/); // "pista 10" ya no cae en "pista 1"
+            if (mP) return 'p' + mP[1];
             if (s.includes('delfín') || s.includes('delfin') || s.includes('pista 1')) return 'p1';
             if (s.includes('base') || s.includes('tibur') || s.includes('pista 2')) return 'p2';
             if (s.includes('timemachine') || s.includes('pista 3')) return 'p3';
@@ -1539,6 +1581,10 @@
                 p6: '🎯 Pista 6: Reversión RSI-2',
                 p7: '🚪 Pista 7: Ruptura ORB-30',
                 p8: '🗜️ Pista 8: TTM Squeeze',
+                p9: '🐙 Pista 9: 26 Hermanas',
+                p10: '🐬 Pista 10: Delfín E',
+                p11: '🚀 Pista 11: Gap & Go',
+                p12: '🌊 Pista 12: Rebote VWAP',
                 rebuilt: '♻️ Reconstruidos Broker (Alpaca)'
             };
 
@@ -1721,7 +1767,11 @@
                 { k: 'p5', label: '⚡ Pista 5: SuperTrend Ribbon', setup: 'Anti-Caídas 9/21 • Momentum', color: '#ec4899' },
                 { k: 'p6', label: '🎯 Pista 6: Reversión RSI-2', setup: 'Larry Connors RSI-2 + Bollinger', color: '#f59e0b' },
                 { k: 'p7', label: '🚪 Pista 7: Ruptura ORB-30', setup: 'Rango Apertura Wall St (30m)', color: '#a78bfa' },
-                { k: 'p8', label: '🗜️ Pista 8: TTM Squeeze', setup: 'Bollinger dentro de Keltner', color: '#34d399' }
+                { k: 'p8', label: '🗜️ Pista 8: TTM Squeeze', setup: 'Bollinger dentro de Keltner', color: '#34d399' },
+                { k: 'p9', label: '🐙 Pista 9: 26 Hermanas', setup: 'KRAKEN V55 de Pedro (solo largos)', color: '#f472b6' },
+                { k: 'p10', label: '🐬 Pista 10: Delfín E', setup: 'P1 mejorada • 9:45-11:30 NY • cierre 15:55', color: '#60a5fa' },
+                { k: 'p11', label: '🚀 Pista 11: Gap & Go', setup: 'Gap ≥0.5% + 1ª vela verde • cierre 15:55', color: '#fb923c' },
+                { k: 'p12', label: '🌊 Pista 12: Rebote VWAP', setup: 'Toque VWAP mañana • cierre 15:55', color: '#22d3ee' }
             ];
             const elStratBody = document.getElementById('mat-body-strat');
             if (elStratBody) {
@@ -1734,6 +1784,13 @@
                 if (reb.total > 0) {
                     html += renderStatRow('♻️ Reconstruidos Broker', 'Fills iniciales Alpaca (sin etiqueta)', '#94a3b8', reb);
                 }
+                // [CLAUDE v2] Duelo de salidas sobre las mismas señales
+                const bx = (ps && ps.byExitMode) ? ps.byExitMode : {};
+                const dStep = bx.STEP || calcFallback(history.filter(t => t.exitMode === 'STEP'));
+                const dStd = bx.STD || calcFallback(history.filter(t => t.exitMode === 'STD'));
+                html += '<tr><td colspan="10" style="padding-top: 10px; color: #94a3b8; font-weight: 800; font-size: 11px;">⚖️ DUELO DE SALIDAS (desde v2)</td></tr>';
+                html += renderStatRow('🪜 Escalera de Pedro (Alpaca)', 'TP en 4 escalones • stop sube cada escalón', '#fbbf24', dStep);
+                html += renderStatRow('🎯 Salida normal (Pepperstone)', 'SL / TP fijos', '#94a3b8', dStd);
                 elStratBody.innerHTML = html;
             }
 
@@ -1879,7 +1936,7 @@
                     r.style.display = '';
                 } else if (activeFilterCriteria === 'alpaca' || activeFilterCriteria === 'pepperstone') {
                     r.style.display = rBroker === activeFilterCriteria ? '' : 'none';
-                } else if (['p1','p2','p3','p4','p5','p6','p7','p8','rebuilt'].includes(activeFilterCriteria)) {
+                } else if (['p1','p2','p3','p4','p5','p6','p7','p8','p9','p10','p11','p12','rebuilt'].includes(activeFilterCriteria)) {
                     r.style.display = rStrat === activeFilterCriteria ? '' : 'none';
                 } else if (activeFilterCriteria === 'ORO') {
                     r.style.display = (rAsset === 'ORO' || rAsset === 'GLD' || rAsset === 'XAUUSD') ? '' : 'none';
@@ -2147,7 +2204,9 @@
                 p1: { count: 0, pnlEur: 0 }, p2: { count: 0, pnlEur: 0 },
                 p3: { count: 0, pnlEur: 0 }, p4: { count: 0, pnlEur: 0 },
                 p5: { count: 0, pnlEur: 0 }, p6: { count: 0, pnlEur: 0 },
-                p7: { count: 0, pnlEur: 0 }, p8: { count: 0, pnlEur: 0 }
+                p7: { count: 0, pnlEur: 0 }, p8: { count: 0, pnlEur: 0 },
+                p9: { count: 0, pnlEur: 0 }, p10: { count: 0, pnlEur: 0 },
+                p11: { count: 0, pnlEur: 0 }, p12: { count: 0, pnlEur: 0 }
             };
 
             const allEnginePositions = (engineState && engineState.openPositions) ? engineState.openPositions : [];
@@ -2167,7 +2226,7 @@
                 stratMetrics[code].pnlEur += pnl;
             });
 
-            ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8'].forEach(c => {
+            ['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7', 'p8', 'p9', 'p10', 'p11', 'p12'].forEach(c => {
                 const elCount = document.getElementById('strat-' + c + '-count');
                 const elPnl = document.getElementById('strat-' + c + '-pnl');
                 if (elCount) elCount.innerText = stratMetrics[c].count + ' en vivo';

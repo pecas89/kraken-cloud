@@ -420,19 +420,39 @@ function computePerformanceStats() {
             SOL: calc(history.filter(t => (t.symbol || '').toUpperCase().includes('SOL'))),
             ORO: calc(history.filter(t => (t.symbol || '').toUpperCase().includes('XAU') || (t.symbol || '').toUpperCase() === 'GLD'))
         },
-        byStrategy: {
-            p1: calc(history.filter(t => (t.strategy || '').toLowerCase().includes('delfín') || (t.strategy || '').toLowerCase().includes('pista 1'))),
-            p2: calc(history.filter(t => (t.strategy || '').toLowerCase().includes('base') || (t.strategy || '').toLowerCase().includes('pista 2'))),
-            p3: calc(history.filter(t => (t.strategy || '').toLowerCase().includes('timemachine') || (t.strategy || '').toLowerCase().includes('pista 3'))),
-            p4: calc(history.filter(t => (t.strategy || '').toLowerCase().includes('vwap') || (t.strategy || '').toLowerCase().includes('whale') || (t.strategy || '').toLowerCase().includes('pista 4'))),
-            p5: calc(history.filter(t => (t.strategy || '').toLowerCase().includes('supertrend') || (t.strategy || '').toLowerCase().includes('pista 5'))),
-            p6: calc(history.filter(t => (t.strategy || '').toLowerCase().includes('reversión') || (t.strategy || '').toLowerCase().includes('bollinger') || (t.strategy || '').toLowerCase().includes('pista 6'))),
-            p7: calc(history.filter(t => (t.strategy || '').toLowerCase().includes('orb-30') || (t.strategy || '').toLowerCase().includes('apertura') || (t.strategy || '').toLowerCase().includes('pista 7'))),
-            p8: calc(history.filter(t => (t.strategy || '').toLowerCase().includes('squeeze') || (t.strategy || '').toLowerCase().includes('ttm') || (t.strategy || '').toLowerCase().includes('pista 8'))),
-            rebuilt: calc(history.filter(t => t.rebuiltFromFills || (t.strategy || '').toLowerCase().includes('reconstruido')))
+        // [CLAUDE v2] Clasificación por stratCode (antes por nombre: "Pista 10" contaba como P1, "Gap & Go (apertura)" como P7)
+        byStrategy: (() => {
+            const out = {};
+            ['p1','p2','p3','p4','p5','p6','p7','p8','p9','p10','p11','p12','rebuilt'].forEach(c => {
+                out[c] = calc(history.filter(t => classifyStratCodeEngine(t) === c));
+            });
+            return out;
+        })(),
+        // [CLAUDE v2] Escalera de Pedro (STEP, Alpaca) vs salida normal (STD, Pepperstone) sobre las mismas señales
+        byExitMode: {
+            STEP: calc(history.filter(t => t.exitMode === 'STEP')),
+            STD: calc(history.filter(t => t.exitMode === 'STD'))
         },
         updatedAt: new Date().toISOString()
     };
+}
+// [CLAUDE v2] Código de estrategia de una operación: primero la etiqueta stratCode, si no el nombre (operaciones antiguas)
+function classifyStratCodeEngine(t) {
+    if (t.rebuiltFromFills) return 'rebuilt';
+    if (t.stratCode) return String(t.stratCode).toLowerCase();
+    const s = (t.strategy || '').toLowerCase();
+    if (s.includes('reconstruido')) return 'rebuilt';
+    const m = s.match(/pista\s*(\d{1,2})\b/);
+    if (m) return 'p' + m[1];
+    if (s.includes('delfín') || s.includes('delfin')) return 'p1';
+    if (s.includes('base') || s.includes('tibur')) return 'p2';
+    if (s.includes('timemachine')) return 'p3';
+    if (s.includes('vwap') || s.includes('whale') || s.includes('ballena')) return 'p4';
+    if (s.includes('supertrend')) return 'p5';
+    if (s.includes('reversión') || s.includes('reversion') || s.includes('rsi') || s.includes('bollinger')) return 'p6';
+    if (s.includes('orb') || s.includes('apertura')) return 'p7';
+    if (s.includes('squeeze') || s.includes('ttm')) return 'p8';
+    return 'otros';
 }
 // Inicializar métricas cuantitativas al arrancar
 computePerformanceStats();
