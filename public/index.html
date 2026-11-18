@@ -2078,7 +2078,8 @@
             const upd = document.getElementById('duelo-updated');
             if (upd) {
                 const excl = (engineState.closedTradesHistoryAll || list).length - list.length;
-                upd.innerText = list.length + ' trades con cierre confirmado en broker' + (excl ? ' (' + excl + ' con cierre fallido excluidos)' : '') + ' • ordenado por R';
+                const failed = (engineState.closedTradesHistoryAll || []).filter(t => t.brokerCloseExecuted === false).length;
+                upd.innerText = '🧪 Laboratorio v2 (punto cero 18-nov 23:50): ' + list.length + ' trades confirmados • fuera: ' + (engineState._excludedPreV2 || 0) + ' de antes de v2 y ' + failed + ' con cierre fallido • ordenado por R';
                 renderBrokerTruth(engineState);
             }
         }
@@ -2103,7 +2104,9 @@
                     // [CLAUDE v2.2] Los cierres que el broker no confirmó no cuentan en ninguna estadística
                     const _allClosed = engineState.closedTradesHistory || [];
                     engineState.closedTradesHistoryAll = _allClosed;
-                    engineState.closedTradesHistory = _allClosed.filter(t => t.brokerCloseExecuted !== false);
+                    // [CLAUDE v2.2] Punto cero: solo operaciones del motor v2+ (con strategyVersion) compiten en las estadísticas
+                    engineState.closedTradesHistory = _allClosed.filter(t => t.brokerCloseExecuted !== false && !!t.strategyVersion);
+                    engineState._excludedPreV2 = _allClosed.filter(t => t.brokerCloseExecuted !== false && !t.strategyVersion).length;
                     latestEngineState = engineState;
                     renderDuelScoreboard(engineState);
                     if (engineState.closedTradesHistory) {
