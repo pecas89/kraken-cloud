@@ -798,6 +798,17 @@ function adoptUnmanagedBrokerPositions(alpPositions, pepRealPositions) {
         if (!(entry > 0)) return;
         const decimals = ticker.includes('SOL') ? 4 : 2;
         const atr = getLiveAtrForTicker(ticker, entry);
+        // [FIX CLAUDE v2] Ninguna estrategia vende en corto y manageOpenPositions solo gestiona compras:
+        // un corto en Pepperstone no se adopta (se gestionaría al revés). Solo aviso, igual que en Alpaca.
+        if (td.tradeSide === 2) {
+            const key = `SHORT_ALERT_PEP_${pid}_${romeDateStr()}`;
+            if (!engineState.closedCooldowns) engineState.closedCooldowns = {};
+            if (!engineState.closedCooldowns[key]) {
+                engineState.closedCooldowns[key] = Date.now();
+                notifyPedro(`🚨 <b>[ANASTASIA]</b> Corto inesperado en Pepperstone: ${ticker} (posición ${pid}). No se adopta. Revisar y cerrar a mano.`).catch(() => {});
+            }
+            return;
+        }
         const cfg = ASSETS_CONFIG[ticker];
         engineState.openPositions.push({
             id: pid,
@@ -815,7 +826,7 @@ function adoptUnmanagedBrokerPositions(alpPositions, pepRealPositions) {
             currency: 'EUR',
             side: td.tradeSide === 2 ? 'SELL' : 'BUY',
             entryPrice: entry,
-            initialRiskPerUnit: parseFloat(Math.abs(entry - (parseFloat((entry - atr * 1.5).toFixed(decimals)))).toFixed(decimals)),
+            initialRiskPerUnit: parseFloat((atr * 1.5).toFixed(decimals)),
             sl: parseFloat((entry - atr * 1.5).toFixed(decimals)),
             tp: parseFloat((entry + atr * 3.0).toFixed(decimals)),
             breakevenTrigger: parseFloat((entry + atr * 1.5).toFixed(decimals)),
@@ -1528,20 +1539,20 @@ async function checkDailyReconciliationAt2230() {
     if (d.getHours() === 22 && d.getMinutes() >= 30 && d.getMinutes() < 35) {
         const todayStr = romeDateStr(d);
         if (engineState.lastDailyReconciliationDate === todayStr) return;
-        engineState.lastDailyReconciliationDate = todayStr;
-        saveState();
 
         try {
             console.log(`[CONCILIACIÓN 22:30 ROMA] Iniciando control de libro vs Alpaca (${todayStr})...`);
             const [acc, alpPositions] = await Promise.all([
                 alpacaService.getAccount().catch(() => null),
-                alpacaService.getPositions().catch(() => [])
+                alpacaService.getPositions().catch(() => null)
             ]);
 
-            if (!acc) {
+            if (!acc || !Array.isArray(alpPositions)) {
                 console.warn('[CONCILIACIÓN 22:30 ROMA] Alpaca offline o error de cuenta');
-                return;
+                return; // [FIX CLAUDE v2] no se marca el día: reintenta en el próximo ciclo dentro de la ventana
             }
+            engineState.lastDailyReconciliationDate = todayStr;
+            saveState();
 
             const symbols = ['TSLA', 'NVDA', 'SOLUSD', 'GLD'];
             const qtyDiscrepancies = [];
