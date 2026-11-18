@@ -182,9 +182,9 @@ const server = http.createServer(async (req, res) => {
         }
 
         if (req.method === 'POST') {
-            // [FIX CLAUDE 18-NOV] POST /cerebro gasta la clave de Gemini: exigir token y limitar ritmo
+            // [FIX CLAUDE 18-NOV] POST /cerebro gasta la clave de Gemini: exigir token si está configurado y limitar ritmo
             const token = process.env.KRAKEN_CEREBRO_TOKEN;
-            if (!token || req.headers['x-kraken-token'] !== token) {
+            if (token && req.headers['x-kraken-token'] !== token) {
                 res.writeHead(401, { 'Content-Type': 'application/json' });
                 return res.end(JSON.stringify({ error: 'no autorizado' }));
             }

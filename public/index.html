@@ -2831,9 +2831,12 @@
 
             let responseText = null;
             try {
+                const cerebroToken = new URLSearchParams(window.location.search).get('token') || localStorage.getItem('kraken_token') || '';
+                const fetchHeaders = { 'Content-Type': 'application/json' };
+                if (cerebroToken) fetchHeaders['x-kraken-token'] = cerebroToken;
                 const res = await fetch(primaryEndpoint, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: fetchHeaders,
                     body: JSON.stringify(requestPayload)
                 });
                 if (res.ok) {
