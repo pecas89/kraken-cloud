@@ -516,6 +516,13 @@ function evaluateStrategiesForBar(ticker, enrichedBars, barIndex = -1, promotedM
         }
     });
 
+    // [CLAUDE v2] Pistas 9-12 (26 Hermanas, Delfín E, Gap & Go, Rebote VWAP)
+    try {
+        strategies.push(...require('./strategy_signals_v2').evaluateV2(ticker, enrichedBars, idx));
+    } catch (e) {
+        console.warn('[P9-P12] Error evaluando estrategias v2:', e.message);
+    }
+
     return strategies;
 }
 

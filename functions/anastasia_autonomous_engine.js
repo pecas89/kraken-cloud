@@ -62,6 +62,10 @@ const STATE_FILE = path.join(__dirname, 'anastasia_trading_state.json');
 // Matriz de los 4 Activos Sagrados (DUELO HEAD-TO-HEAD: AMBOS BROKERS EN LAS 4 ACCIONES)
 // [FIX CLAUDE 18-NOV] Laboratorio: hasta 10 estrategias x 4 marcos por símbolo
 const MAX_ALPACA_SUBPOS_PER_SYMBOL = 40;
+// [CLAUDE v2] Salidas: 'STD' = stop + breakeven + objetivo | 'STEP' = escalera de stops de Pedro (objetivo en 4 escalones; el stop sube al escalón anterior)
+// Las dos patas de cada señal (duelPairId) usan salidas distintas: así se comparan sobre las MISMAS entradas.
+const EXIT_MODE_BY_BROKER = { alpaca: 'STEP', pepperstone: 'STD' };
+const ENGINE_VERSION = 'v2-2026-11-18';
 
 const ASSETS_CONFIG = {
     NVDA: {
@@ -313,19 +317,20 @@ async function fetchMarketQuotes() {
 
     // 25 días atrás para asegurar suficientes velas en 4H (mínimo 30-50 barras para EMA21 y ATR14)
     // MANDATO VERDAD FACTUAL: usar feed=iex + sort=desc + reverse() para obtener siempre las ÚLTIMAS 50 velas reales hasta HOY (nunca velas viejas).
-    const start = new Date(Date.now() - 25 * 24 * 3600 * 1000).toISOString();
+    // [CLAUDE v2] 300 velas por marco (antes 50: EMA 50/200 y la P9 no tenían historia suficiente)
+    const start = new Date(Date.now() - 400 * 24 * 3600 * 1000).toISOString();
 
     try {
         const fetchPromises = [];
         TIMEFRAMES.forEach(tf => {
             fetchPromises.push(
-                fetchBarsUrl(`https://data.alpaca.markets/v2/stocks/NVDA/bars?timeframe=${tf.code}&limit=50&start=${encodeURIComponent(start)}&sort=desc&feed=iex`)
+                fetchBarsUrl(`https://data.alpaca.markets/v2/stocks/NVDA/bars?timeframe=${tf.code}&limit=300&start=${encodeURIComponent(start)}&sort=desc&feed=iex`)
                     .then(data => ({ ticker: 'NVDA', tf: tf.label, bars: (data?.bars || []).slice().reverse() })),
-                fetchBarsUrl(`https://data.alpaca.markets/v2/stocks/TSLA/bars?timeframe=${tf.code}&limit=50&start=${encodeURIComponent(start)}&sort=desc&feed=iex`)
+                fetchBarsUrl(`https://data.alpaca.markets/v2/stocks/TSLA/bars?timeframe=${tf.code}&limit=300&start=${encodeURIComponent(start)}&sort=desc&feed=iex`)
                     .then(data => ({ ticker: 'TSLA', tf: tf.label, bars: (data?.bars || []).slice().reverse() })),
-                fetchBarsUrl(`https://data.alpaca.markets/v2/stocks/GLD/bars?timeframe=${tf.code}&limit=50&start=${encodeURIComponent(start)}&sort=desc&feed=iex`)
+                fetchBarsUrl(`https://data.alpaca.markets/v2/stocks/GLD/bars?timeframe=${tf.code}&limit=300&start=${encodeURIComponent(start)}&sort=desc&feed=iex`)
                     .then(data => ({ ticker: 'XAUUSD', tf: tf.label, bars: (data?.bars || []).slice().reverse() })),
-                fetchBarsUrl(`https://data.alpaca.markets/v1beta3/crypto/us/bars?symbols=SOL/USD&timeframe=${tf.code}&limit=50&start=${encodeURIComponent(start)}&sort=desc`)
+                fetchBarsUrl(`https://data.alpaca.markets/v1beta3/crypto/us/bars?symbols=SOL/USD&timeframe=${tf.code}&limit=300&start=${encodeURIComponent(start)}&sort=desc`)
                     .then(data => ({ ticker: 'SOLUSD', tf: tf.label, bars: (data?.bars?.['SOL/USD'] || []).slice().reverse() }))
             );
         });
@@ -588,6 +593,10 @@ async function executeAutonomousOpen(ticker, price, analysis) {
                 indicators: analysis.indicators || null,
                 signalReason: analysis.signalReason || '',
                 timeframe: analysis.timeframe || '5m',
+                stratCode: analysis.stratCode || null, // [CLAUDE v2] etiquetas para el informe
+                strategyVersion: analysis.strategyVersion || ENGINE_VERSION,
+                exitMode: EXIT_MODE_BY_BROKER.alpaca,
+                closeAtSessionEnd: !!analysis.closeAtSessionEnd,
                 status: 'OPEN',
                 openedAt: new Date().toISOString(),
                 trailingStopMovedToBreakeven: false
@@ -651,6 +660,10 @@ async function executeAutonomousOpen(ticker, price, analysis) {
                 indicators: analysis.indicators || null,
                 signalReason: analysis.signalReason || '',
                 timeframe: analysis.timeframe || '5m',
+                stratCode: analysis.stratCode || null, // [CLAUDE v2] etiquetas para el informe
+                strategyVersion: analysis.strategyVersion || ENGINE_VERSION,
+                exitMode: EXIT_MODE_BY_BROKER.pepperstone,
+                closeAtSessionEnd: !!analysis.closeAtSessionEnd,
                 status: 'OPEN',
                 openedAt: new Date().toISOString(),
                 trailingStopMovedToBreakeven: false
@@ -1256,6 +1269,17 @@ async function manageOpenPositions(currentQuotes) {
         let closeReason = '';
         let profitAmount = 0.0;
 
+        // [CLAUDE v2] P10-P12 nunca duermen con la posición abierta: cierre a las 15:55 de Nueva York
+        if (pos.closeAtSessionEnd && !(pos.symbol || '').includes('SOL')) {
+            const ny = new Intl.DateTimeFormat('en-US', { timeZone: 'America/New_York', hour12: false, hour: '2-digit', minute: '2-digit' }).formatToParts(new Date()).reduce((a, x) => (a[x.type] = x.value, a), {});
+            const nyMins = (+ny.hour % 24) * 60 + (+ny.minute);
+            if (nyMins >= 955) {
+                positionClosed = true;
+                closeReason = '⏰ Cierre de sesión (15:55 NY)';
+                profitAmount = (currentPrice - pos.entryPrice) * pos.qty;
+            }
+        }
+
         // A) LÓGICA ESPECIAL PISTA 1: ESCALERA DELFÍN 4X4 (TP ESCALONADO DINÁMICO)
         if (pos.isDelfin4x4) {
             const tranches = pos.tranchesClosed || 0;
@@ -1323,7 +1347,31 @@ async function manageOpenPositions(currentQuotes) {
         }
 
         // B) GESTIÓN ESTÁNDAR PARA NO-DELFÍN (PISTAS 2..8 / CUSTODIA)
-        if (!pos.isDelfin4x4) {
+        // [CLAUDE v2] Escalera de stops de Pedro: el recorrido hasta el objetivo se divide en 4 escalones.
+        // Al tocar el escalón k, el stop sube al escalón k-1 (el 1º lo lleva a la entrada). En el 4º se cierra todo.
+        if (!positionClosed && !pos.isDelfin4x4 && pos.exitMode === 'STEP' && pos.tp > pos.entryPrice) {
+            const stepD = (pos.tp - pos.entryPrice) / 4;
+            let step = pos.stepReached || 0;
+            while (step < 4 && currentPrice >= pos.entryPrice + stepD * (step + 1)) step++;
+            if (step >= 4) {
+                positionClosed = true;
+                closeReason = '🪜 Escalera completada (objetivo) 🎯';
+                profitAmount = (currentPrice - pos.entryPrice) * pos.qty;
+            } else if (step > (pos.stepReached || 0)) {
+                pos.stepReached = step;
+                const newSl = pos.entryPrice + stepD * (step - 1);
+                if (newSl > pos.sl) {
+                    pos.sl = parseFloat(newSl.toFixed(4));
+                    pos.trailingStopMovedToBreakeven = true;
+                    console.log(`🪜 [ESCALERA ${step}/4] ${pos.symbol} (${pos.broker}): stop sube a ${pos.sl}`);
+                    if (pos.broker && pos.broker.includes('Pepperstone') && (pos.positionId || pos.id) && pepperstoneService.amendPositionSLTPViaOpenAPI) {
+                        pepperstoneService.amendPositionSLTPViaOpenAPI(pos.positionId || pos.id, pos.sl, pos.tp).catch(() => {});
+                    }
+                }
+            }
+        }
+
+        if (!pos.isDelfin4x4 && !positionClosed && pos.exitMode !== 'STEP') {
             // 1. Verificación de Trailing Stop a Breakeven (+1.5 ATR)
             if (!pos.trailingStopMovedToBreakeven && currentPrice >= pos.breakevenTrigger) {
                 pos.sl = pos.entryPrice; // Movemos SL al precio de entrada (Riesgo Cero)
@@ -1527,7 +1575,7 @@ async function checkDailyReconciliationAt2230() {
 
             // P&L no realizado de TODAS las posiciones abiertas en Alpaca (incluye las externas)
             const unrealizedPnlDay = (alpPositions || []).reduce((sum, p) => {
-                const u = parseFloat(p.unrealizedPnl ?? p.unrealized_pl ?? 0);
+                const u = parseFloat(p.unrealizedIntradayPnl ?? p.unrealizedPnl ?? 0); // [CLAUDE v2] intradía: el saldo de ayer ya incluye lo de días anteriores
                 return sum + (isFinite(u) ? u : 0);
             }, 0);
 
