@@ -233,6 +233,16 @@ async function hydrateFromFirestore(engineState) {
             }
             if (stateData.lastDailyReportDate) engineState.lastDailyReportDate = stateData.lastDailyReportDate;
             if (stateData.lastHeartbeatDate) engineState.lastHeartbeatDate = stateData.lastHeartbeatDate;
+            // [CLAUDE v2.2] Recuperar posiciones abiertas tras un redeploy (antes se guardaban pero nunca se leían:
+            // cada deploy las convertía en "Custodia" y se perdía su estrategia, SL/TP y salida STEP/STD).
+            // Se marcan restoredFromFirestore: el primer cruce con el broker descarta las que ya no existan.
+            if (Array.isArray(stateData.openPositions) && stateData.openPositions.length > 0 && (!engineState.openPositions || engineState.openPositions.length === 0)) {
+                engineState.openPositions = stateData.openPositions
+                    .filter(p => p && (p.id || p.positionId))
+                    .map(p => ({ ...p, restoredFromFirestore: true }));
+                console.log(`🔥 [FirestoreStore] ${engineState.openPositions.length} posiciones abiertas recuperadas (pendientes de cruce con broker).`);
+            }
+            if (stateData.peakEquity && typeof stateData.peakEquity === 'object') engineState.peakEquity = stateData.peakEquity;
         }
 
         if (Array.isArray(histRows) && histRows.length > 0) {
@@ -283,13 +293,14 @@ async function syncEngineState(engineState, force = false) {
             liveMetrics: engineState.liveMetrics || {},
             performanceStatsGlobal: (engineState.performanceStats && engineState.performanceStats.global) || {},
             openPositionsCount: (engineState.openPositions || []).length,
-            openPositions: (engineState.openPositions || []).slice(0, 40),
+            openPositions: (engineState.openPositions || []).slice(0, 60),
+            peakEquity: engineState.peakEquity || {},
             closedCooldowns: engineState.closedCooldowns || {},
             lastSignalBarTime: engineState.lastSignalBarTime || {},
             lastDailyReportDate: engineState.lastDailyReportDate || null,
             lastHeartbeatDate: engineState.lastHeartbeatDate || null,
             timeframes: ['5m', '15m', '1H', '4H'],
-            strategiesActive: 8
+            strategiesActive: 12
         });
         return true;
     } catch (e) {
