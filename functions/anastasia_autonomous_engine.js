@@ -823,6 +823,11 @@ function adoptUnmanagedBrokerPositions(alpPositions, pepRealPositions) {
         if (Math.abs(engineQtyForSym - parseFloat(ap.qty || 0)) <= 0.001) return;
         if (engineQtyForSym > 0) return; // Evitar duplicar si ya existen sub-órdenes registradas
 
+        // [REGLA MANUAL PEDRO 18-NOV] No adoptar posiciones manuales externas en TSLA
+        if (ap.symbol === 'TSLA') {
+            return;
+        }
+
         // [FIX CLAUDE 18-NOV] Ninguna estrategia vende en corto: un corto en Alpaca es un error, no se adopta como compra
         if (!(parseFloat(ap.qty || 0) > 0)) {
             const key = `SHORT_ALERT_${ap.symbol}_${romeDateStr()}`;
@@ -998,7 +1003,19 @@ async function syncBrokerReality() {
             const eng = engKey ? engineAlpaca[engKey] : 0;
             const real = realKey ? realAlpaca[realKey] : 0;
             if (Math.abs(eng - real) > 0.0001) {
-                divergences.push({ symbol: sym, engineQty: eng, brokerQty: real });
+                // [REGLA MANUAL PEDRO 18-NOV] TSLA: compra manual externa (no adoptada por el motor)
+                if (sym === 'TSLA' && real > eng) {
+                    divergences.push({
+                        symbol: sym,
+                        engineQty: eng,
+                        brokerQty: real,
+                        diff: real - eng,
+                        type: 'POSICION_EXTERNA',
+                        note: 'Posición externa manual (18-nov)'
+                    });
+                } else {
+                    divergences.push({ symbol: sym, engineQty: eng, brokerQty: real });
+                }
             }
         });
 
@@ -1427,6 +1444,90 @@ async function manageOpenPositions(currentQuotes) {
 }
 
 // ------------------------------------------------------------------------------
+// 📋 CONCILIACIÓN DIARIA 22:30 ROMA (AUDITORÍA PASIVA Y ALERTA TELEGRAM)
+// ------------------------------------------------------------------------------
+let lastDailyReconciliationDate = null;
+
+async function checkDailyReconciliationAt2230() {
+    const d = romeNow();
+    // Ventana de 5 minutos a las 22:30 Roma
+    if (d.getHours() === 22 && d.getMinutes() >= 30 && d.getMinutes() < 35) {
+        const todayStr = romeDateStr(d);
+        if (lastDailyReconciliationDate === todayStr) return;
+        lastDailyReconciliationDate = todayStr;
+
+        try {
+            console.log(`[CONCILIACIÓN 22:30 ROMA] Iniciando control de libro vs Alpaca (${todayStr})...`);
+            const [acc, alpPositions] = await Promise.all([
+                alpacaService.getAccount().catch(() => null),
+                alpacaService.getPositions().catch(() => [])
+            ]);
+
+            if (!acc) {
+                console.warn('[CONCILIACIÓN 22:30 ROMA] Alpaca offline o error de cuenta');
+                return;
+            }
+
+            const symbols = ['TSLA', 'NVDA', 'SOLUSD', 'GLD'];
+            const qtyDiscrepancies = [];
+
+            symbols.forEach(sym => {
+                const bookQty = engineState.openPositions
+                    .filter(p => (p.broker || '').includes('Alpaca') && (p.orderSymbol === sym || p.symbol === sym))
+                    .reduce((sum, p) => sum + (parseFloat(p.qty) || 0), 0);
+
+                const alpReal = (alpPositions || []).find(p => p.symbol === sym || p.symbol === sym.replace('/', ''));
+                const realQty = alpReal ? parseFloat(alpReal.qty || 0) : 0;
+
+                const diff = Math.abs(bookQty - realQty);
+                if (diff > 0.001) {
+                    if (sym === 'TSLA' && Math.abs(diff - 1.0) <= 0.001) {
+                        qtyDiscrepancies.push(`• <b>${sym}:</b> Libro ${bookQty} | Broker ${realQty} (Δ ${diff.toFixed(3)}) → <i>Posición externa manual</i>`);
+                    } else {
+                        qtyDiscrepancies.push(`• <b>${sym}:</b> Libro ${bookQty} | Broker ${realQty} (Δ ${diff.toFixed(3)}) ⚠️`);
+                    }
+                }
+            });
+
+            // Comparar suma de P&L del día del libro con el cambio de saldo de la cuenta Alpaca
+            const todayTrades = (engineState.closedTradesHistory || []).filter(t =>
+                t.closedAt && romeDateStr(new Date(t.closedAt)) === todayStr && (t.broker || '').includes('Alpaca')
+            );
+            const bookPnlDay = todayTrades.reduce((sum, t) => sum + (parseFloat(t.pnl) || 0), 0);
+
+            const equity = parseFloat(acc.equity || 0);
+            const lastEquity = parseFloat(acc.lastEquity || equity);
+            const brokerEquityChange = equity - lastEquity;
+            const pnlDiff = Math.abs(bookPnlDay - brokerEquityChange);
+
+            let pnlDiscrepancy = null;
+            if (pnlDiff > 5.0) {
+                pnlDiscrepancy = `• <b>P&L Día vs Saldo:</b> Libro $${bookPnlDay.toFixed(2)} | Cambio Saldo $${brokerEquityChange.toFixed(2)} (Δ $${pnlDiff.toFixed(2)} USD)`;
+            }
+
+            const hasAlert = qtyDiscrepancies.some(q => q.includes('⚠️')) || pnlDiscrepancy;
+            if (hasAlert || qtyDiscrepancies.length > 0) {
+                let msg = `📋 <b>[CONCILIACIÓN DIARIA 22:30 ROMA]</b>\n`;
+                msg += `Fecha: <code>${todayStr}</code>\n\n`;
+                if (qtyDiscrepancies.length > 0) {
+                    msg += `<b>Diferencias en Posiciones:</b>\n` + qtyDiscrepancies.join('\n') + `\n\n`;
+                }
+                if (pnlDiscrepancy) {
+                    msg += `<b>Diferencia en Saldo:</b>\n${pnlDiscrepancy}\n\n`;
+                }
+                msg += `<i>Auditoría pasiva. No se cerró ni adoptó nada automáticamente.</i>`;
+                await notifyPedro(msg).catch(() => {});
+                console.log(`[CONCILIACIÓN 22:30 ROMA] Reporte emitido a Telegram.`);
+            } else {
+                console.log(`[CONCILIACIÓN 22:30 ROMA] ✅ Todo conciliado exactamente (0 diferencias).`);
+            }
+        } catch(err) {
+            console.error('[CONCILIACIÓN 22:30 ROMA ERROR]', err.message);
+        }
+    }
+}
+
+// ------------------------------------------------------------------------------
 // 🔄 CICLO CUANTITATIVO PERPETUO DE ANASTASIA
 // ------------------------------------------------------------------------------
 async function runAutonomousCycle() {
@@ -1443,6 +1544,9 @@ async function runAutonomousCycle() {
     if (engineState.totalScans % 10 === 1) {
         await syncBrokerReality();
     }
+
+    // [FIX CLAUDE 18-NOV] Conciliación diaria a las 22:30 Roma
+    await checkDailyReconciliationAt2230();
 
     // 1. Gestionar posiciones abiertas existentes (Trailing BE, TP, SL)
     await manageOpenPositions(quotes);

@@ -913,8 +913,8 @@
         <!-- BANNER EN VIVO: POSICIONES ACTIVAS EN BROKERS REALES (AUTO-REFRESH) -->
         <div class="desfase-banner" id="live-positions-banner" style="background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(56, 189, 248, 0.08)); border-color: rgba(16, 185, 129, 0.4);">
             <div class="desfase-title">
-                <span class="desfase-badge" style="background: rgba(16, 185, 129, 0.3); color: #34d399; border-color: #10b981;">🔴 RADAR DE MERCADO EN TIEMPO REAL (API LIVE)</span>
-                <b style="font-size: 14px;">DUELO REAL: Pepperstone cTrader (Spotware Londres) vs Alpaca Algorithmic (New York)</b>
+                <span class="desfase-badge" style="background: rgba(16, 185, 129, 0.3); color: #34d399; border-color: #10b981;">🔴 RADAR DE MERCADO EN TIEMPO REAL (DEMO)</span>
+                <b style="font-size: 14px;">DUELO DEMO: Pepperstone cTrader (Demo Londres) vs Alpaca Paper (New York)</b>
             </div>
             <div class="desfase-metrics" id="live-banner-metrics">
                 <div class="desfase-metric-item" style="color: var(--text-dim);">Sincronizando posiciones reales en vivo con Alpaca &amp; Pepperstone cTrader...</div>
@@ -956,7 +956,7 @@
                     <span class="positive" id="kpi-pistas-badge">8 / 8 ACTIVAS</span>
                 </div>
                 <div class="kpi-value" id="kpi-pistas-value" style="color: var(--accent-cyan);">5m • 15m • 1H • 4H</div>
-                <div class="kpi-sub" id="kpi-pistas-sub">Escaneando 4 activos • Cero datos simulados</div>
+                <div class="kpi-sub" id="kpi-pistas-sub">Escaneando 4 activos • Cuentas Demo &amp; Paper</div>
             </div>
         </div>
 
@@ -1901,18 +1901,35 @@
                 (groups[k] = groups[k] || []).push(t);
             });
             return Object.entries(groups).map(([name, tr]) => {
-                let w = 0, l = 0, pnlEur = 0, gp = 0, gl = 0, real = 0;
+                let w = 0, l = 0, pnlEur = 0, gp = 0, gl = 0, real = 0, totalR = 0;
                 tr.forEach(t => {
                     let p = parseFloat(t.pnl) || 0;
                     if (t.currency === 'USD' || (t.broker && t.broker.includes('Alpaca'))) p = p / 1.05;
                     pnlEur += p;
                     if (p > 0.005) { w++; gp += p; } else if (p < -0.005) { l++; gl += Math.abs(p); }
                     if (t.brokerCloseExecuted) real++;
+
+                    // Múltiplo de Riesgo R: pnl / (initialRisk = |entry - sl| * qty)
+                    const entry = parseFloat(t.entryPrice) || 0;
+                    const sl = parseFloat(t.sl) || 0;
+                    const qty = parseFloat(t.qty) || 1;
+                    const riskPerUnit = (entry > 0 && sl > 0) ? Math.abs(entry - sl) : 0;
+                    const initRisk = riskPerUnit * qty;
+                    let r = 0;
+                    if (typeof t.rMultiple === 'number') {
+                        r = t.rMultiple;
+                    } else if (initRisk > 0.001) {
+                        r = (parseFloat(t.pnl) || 0) / initRisk;
+                    } else {
+                        r = p > 0 ? 1.0 : (p < 0 ? -1.0 : 0.0);
+                    }
+                    totalR += r;
                 });
                 return {
                     name, n: tr.length, w, l,
                     wr: (w + l) ? (w / (w + l) * 100) : 0,
                     pnl: pnlEur,
+                    rMultiple: totalR,
                     pf: gl > 0 ? (gp / gl) : (gp > 0 ? 99.9 : 0),
                     real
                 };
@@ -1924,11 +1941,12 @@
             const isLeader = rank === 0 && s.pnl > 0;
             const pnlColor = s.pnl >= 0 ? 'var(--accent-green)' : 'var(--accent-red)';
             const sign = s.pnl >= 0 ? '+' : '';
+            const rSign = s.rMultiple >= 0 ? '+' : '';
             return '<div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; margin-bottom: 6px; border-radius: 8px; ' +
                 (isLeader ? 'background: rgba(251,191,36,0.10); border: 1px solid rgba(251,191,36,0.35);' : 'background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);') + '">' +
                 '<div style="font-size: 13px;"><span style="margin-right: 6px;">' + medal + '</span><b>' + s.name + '</b></div>' +
                 '<div style="text-align: right; font-size: 11px; font-family: \'JetBrains Mono\', monospace;">' +
-                '<div style="color: ' + pnlColor + '; font-weight: 800; font-size: 13px;">' + sign + '€' + s.pnl.toFixed(2) + '</div>' +
+                '<div style="color: ' + pnlColor + '; font-weight: 800; font-size: 13px;">' + sign + '€' + s.pnl.toFixed(2) + '<span style="font-size: 11px; color: var(--accent-cyan); font-weight: 700; margin-left: 6px;">(' + rSign + s.rMultiple.toFixed(2) + 'R)</span></div>' +
                 '<div style="color: var(--text-dim);">' + s.n + ' trades • WR ' + s.wr.toFixed(0) + '% • PF ' + s.pf.toFixed(2) + '</div>' +
                 '</div></div>';
         }
@@ -2001,12 +2019,12 @@
                     const elKpiAlp = document.getElementById('kpi-alpaca-bal');
                     if (elKpiAlp) elKpiAlp.innerText = alpBalStr;
                     const elKpiAlpBadge = document.getElementById('kpi-alpaca-badge');
-                    if (elKpiAlpBadge) elKpiAlpBadge.innerText = '● API LIVE';
+                    if (elKpiAlpBadge) elKpiAlpBadge.innerText = '● DEMO';
                     const elKpiAlpSub = document.getElementById('kpi-alpaca-sub');
                     if (elKpiAlpSub) {
                         const alpCount = recon.alpacaPositions ? recon.alpacaPositions.length : 0;
-                        const cashTxt = lm.alpacaCashUsd ? ('Cash $' + lm.alpacaCashUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })) : 'Wall St Algorithmic';
-                        elKpiAlpSub.innerText = cashTxt + ' • ' + alpCount + ' pos. activas API';
+                        const cashTxt = lm.alpacaCashUsd ? ('Cash $' + lm.alpacaCashUsd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })) : 'Paper Trading';
+                        elKpiAlpSub.innerText = cashTxt + ' • ' + alpCount + ' pos. Demo';
                     }
 
                     const elPepper = document.getElementById('pepper-balance');
@@ -2014,11 +2032,11 @@
                     const elKpiPep = document.getElementById('kpi-pepper-bal');
                     if (elKpiPep) elKpiPep.innerText = pepBalStr;
                     const elKpiPepBadge = document.getElementById('kpi-pepper-badge');
-                    if (elKpiPepBadge) elKpiPepBadge.innerText = '● cTRADER LIVE';
+                    if (elKpiPepBadge) elKpiPepBadge.innerText = '● DEMO';
                     const elKpiPepSub = document.getElementById('kpi-pepper-sub');
                     if (elKpiPepSub) {
                         const ctCount = typeof recon.ctraderRealCount === 'number' ? recon.ctraderRealCount : 0;
-                        elKpiPepSub.innerText = 'Cuenta #4285238 Spotware • ' + ctCount + ' pos. cTrader';
+                        elKpiPepSub.innerText = 'Cuenta #4285238 Spotware Demo • ' + ctCount + ' pos. cTrader';
                     }
 
                     // Drawdown Real Diario & Kill Switch
@@ -2166,7 +2184,7 @@
                 const ctBreakdown = {};
                 ctraderPositions.forEach(cp => { ctBreakdown[cp.symbol] = (ctBreakdown[cp.symbol] || 0) + 1; });
                 const ctListText = Object.entries(ctBreakdown).map(([sym, cnt]) => cnt + '× ' + sym).join(', ');
-                let itemsHtml = '<div class="desfase-metric-item"><span style="color: var(--accent-gold); font-weight: 700;">🏛️ Pepperstone (cTrader #4285238):</span> <b>' + pepBal + '</b> • <span style="color: var(--accent-cyan); font-weight: 700;">' + ctCount + ' Pos. Reales API' + (ctListText ? ' (' + ctListText + ')' : '') + '</span></div>';
+                let itemsHtml = '<div class="desfase-metric-item"><span style="color: var(--accent-gold); font-weight: 700;">🏛️ Pepperstone (cTrader #4285238 Demo):</span> <b>' + pepBal + '</b> • <span style="color: var(--accent-cyan); font-weight: 700;">' + ctCount + ' Pos. Demo' + (ctListText ? ' (' + ctListText + ')' : '') + '</span></div>';
 
                 if (alpacaPositions.length === 0) {
                     itemsHtml += '<div class="desfase-metric-item"><span style="color: var(--accent-blue); font-weight: 700;">🦙 Alpaca API:</span> <b>0 posiciones abiertas en broker</b></div>';
@@ -2181,8 +2199,19 @@
                 }
 
                 if (recon && recon.divergences && recon.divergences.length > 0) {
-                    const divText = recon.divergences.map(d => d.symbol + ': motor ' + d.engineQty + ' vs broker ' + d.brokerQty).join(' | ');
-                    itemsHtml += '<div class="desfase-metric-item" style="border: 1px solid rgba(245, 158, 11, 0.5); background: rgba(245, 158, 11, 0.08); border-radius: 6px; padding: 6px 10px;"><span style="color: #fbbf24; font-weight: 800;">⚠️ DIVERGENCIA MOTOR vs BROKER:</span> ' + divText + ' (auditado ' + new Date(recon.checkedAt).toLocaleTimeString('es-ES', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }) + ')</div>';
+                    const realDivs = recon.divergences.filter(d => d.type !== 'POSICION_EXTERNA');
+                    const extDivs = recon.divergences.filter(d => d.type === 'POSICION_EXTERNA');
+                    if (realDivs.length > 0) {
+                        const divText = realDivs.map(d => d.symbol + ': motor ' + d.engineQty + ' vs broker ' + d.brokerQty).join(' | ');
+                        itemsHtml += '<div class="desfase-metric-item" style="border: 1px solid rgba(245, 158, 11, 0.5); background: rgba(245, 158, 11, 0.08); border-radius: 6px; padding: 6px 10px;"><span style="color: #fbbf24; font-weight: 800;">⚠️ DIVERGENCIA MOTOR vs BROKER:</span> ' + divText + ' (auditado ' + new Date(recon.checkedAt).toLocaleTimeString('es-ES', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' }) + ')</div>';
+                    }
+                    if (extDivs.length > 0) {
+                        const extText = extDivs.map(d => d.symbol + ': ' + d.brokerQty + ' ud (broker) vs ' + d.engineQty + ' ud (motor) — ' + (d.note || 'Posición externa')).join(' | ');
+                        itemsHtml += '<div class="desfase-metric-item" style="border: 1px solid rgba(56, 189, 248, 0.4); background: rgba(56, 189, 248, 0.08); border-radius: 6px; padding: 6px 10px;"><span style="color: #38bdf8; font-weight: 700;">ℹ️ POSICIÓN EXTERNA:</span> ' + extText + '</div>';
+                    }
+                    if (realDivs.length === 0 && extDivs.length > 0) {
+                        itemsHtml += '<div class="desfase-metric-item"><span style="color: var(--accent-green); font-weight: 700;">✅ Libreta del motor reconciliada (sin desajustes internos)</span></div>';
+                    }
                 } else if (recon && recon.checkedAt) {
                     itemsHtml += '<div class="desfase-metric-item"><span style="color: var(--accent-green); font-weight: 700;">✅ Libreta reconciliada con brokers (sin divergencias)</span></div>';
                 }
@@ -2209,7 +2238,7 @@
 
             const sectionHeader = document.createElement('tr');
             sectionHeader.className = 'live-section-header';
-            sectionHeader.innerHTML = '<td colspan="10" style="background: rgba(16, 185, 129, 0.12); border-left: 4px solid var(--accent-green); font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #34d399; text-transform: uppercase; padding: 12px 18px;">🟢 Duelo en Vivo • Posiciones Abiertas del Motor &amp; Inventario Real en Brokers</td>';
+            sectionHeader.innerHTML = '<td colspan="10" style="background: rgba(16, 185, 129, 0.12); border-left: 4px solid var(--accent-green); font-size: 11px; font-weight: 800; letter-spacing: 1px; color: #34d399; text-transform: uppercase; padding: 12px 18px;">🟢 Duelo en Demo • Posiciones Abiertas del Motor &amp; Inventario Demo en Brokers</td>';
             tbody.insertBefore(sectionHeader, tbody.firstChild);
 
             let prev = sectionHeader;
@@ -2660,6 +2689,7 @@
             const savedTheme = localStorage.getItem('kraken_theme') || 'classic';
             setDashboardTheme(savedTheme);
             renderNotes(getStoredNotes());
+            initKrakenTokenUI();
             setTimeout(initTradingViewChart, 300);
         });
 
@@ -2671,11 +2701,36 @@
         let speechRecognition = null;
         let isRecordingVoice = false;
 
+        function initKrakenTokenUI() {
+            const input = document.getElementById('kraken-token-input');
+            const status = document.getElementById('kraken-token-status');
+            const current = localStorage.getItem('kraken_token');
+            if (input && current) {
+                input.value = current;
+                if (status) { status.textContent = '✅ Guardado'; status.style.color = '#34d399'; }
+            }
+        }
+
+        function saveKrakenToken() {
+            const input = document.getElementById('kraken-token-input');
+            const status = document.getElementById('kraken-token-status');
+            if (!input) return;
+            const val = input.value.trim();
+            if (val) {
+                localStorage.setItem('kraken_token', val);
+                if (status) { status.textContent = '✅ Guardado'; status.style.color = '#34d399'; }
+            } else {
+                localStorage.removeItem('kraken_token');
+                if (status) { status.textContent = 'Borrado'; status.style.color = '#ef4444'; }
+            }
+        }
+
         function toggleAnastasiaChat() {
             const panel = document.getElementById('gemini-chat-panel');
             if (!panel) return;
             panel.classList.toggle('active');
             if (panel.classList.contains('active')) {
+                initKrakenTokenUI();
                 const input = document.getElementById('chat-user-input');
                 if (input) input.focus();
                 scrollChatToBottom();
@@ -2831,7 +2886,8 @@
 
             let responseText = null;
             try {
-                const cerebroToken = new URLSearchParams(window.location.search).get('token') || localStorage.getItem('kraken_token') || '';
+                // [FIX CLAUDE 18-NOV] Token leído únicamente de localStorage (nunca de la URL)
+                const cerebroToken = (localStorage.getItem('kraken_token') || '').trim();
                 const fetchHeaders = { 'Content-Type': 'application/json' };
                 if (cerebroToken) fetchHeaders['x-kraken-token'] = cerebroToken;
                 const res = await fetch(primaryEndpoint, {
@@ -2839,7 +2895,9 @@
                     headers: fetchHeaders,
                     body: JSON.stringify(requestPayload)
                 });
-                if (res.ok) {
+                if (res.status === 401) {
+                    responseText = '🔒 <b>Acceso no autorizado (HTTP 401).</b><br>El endpoint /cerebro está cerrado por defecto. Pega tu <code>KRAKEN_CEREBRO_TOKEN</code> en el campo de arriba y pulsa <b>Guardar</b>.';
+                } else if (res.ok) {
                     const data = await res.json();
                     if (data.candidates && data.candidates[0] && data.candidates[0].content) {
                         responseText = data.candidates[0].content.parts.map(p => p.text).join('\n');
@@ -2932,6 +2990,14 @@
                 </a>
                 <button onclick="toggleAnastasiaChat()" style="background: none; border: none; color: #94a3b8; font-size: 18px; cursor: pointer; padding: 4px 8px;">✕</button>
             </div>
+        </div>
+
+        <!-- [FIX CLAUDE 18-NOV] BARRA DE TOKEN KRAKEN_CEREBRO_TOKEN (LOCALSTORAGE) -->
+        <div style="padding: 7px 14px; background: rgba(0,0,0,0.45); border-bottom: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; gap: 8px; font-size: 11px;">
+            <span style="color: #94a3b8; font-weight: 700; font-size: 11px;">🔑 Token:</span>
+            <input id="kraken-token-input" type="password" placeholder="Pegar KRAKEN_CEREBRO_TOKEN..." style="flex: 1; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 4px 8px; color: #fff; font-size: 11px; font-family: 'JetBrains Mono', monospace;" onkeydown="if(event.key==='Enter') saveKrakenToken()">
+            <button onclick="saveKrakenToken()" style="background: rgba(0,255,204,0.15); border: 1px solid #00ffcc; color: #00ffcc; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 10px; font-weight: 700; white-space: nowrap;">Guardar</button>
+            <span id="kraken-token-status" style="font-size: 10px; color: #64748b;"></span>
         </div>
 
         <div class="chat-chips-scroll">
