@@ -130,7 +130,9 @@ let engineState = {
         SOLUSD: { score: 0, pez: '🐡 PEZ GLOBO', price: 0, time: null }
     },
     closedCooldowns: {},
-    lastSignalBarTime: {}
+    lastSignalBarTime: {},
+    externalQty: { TSLA: 1 },
+    lastDailyReconciliationDate: null
 };
 
 // Cargar estado persistente si existe y depurar restos legados
@@ -138,6 +140,7 @@ if (fs.existsSync(STATE_FILE)) {
     try {
         const saved = JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
         engineState = { ...engineState, ...saved, running: true };
+        if (!engineState.externalQty) engineState.externalQty = { TSLA: 1 };
         if (Array.isArray(engineState.closedTradesHistory)) {
             engineState.closedTradesHistory.forEach(t => {
                 if (t && typeof t.broker === 'string' && t.broker.includes('200')) {
@@ -571,6 +574,7 @@ async function executeAutonomousOpen(ticker, price, analysis) {
                 fillPrice: realAlpacaFill || alpacaEntry,
                 sl: alpacaSl,
                 tp: alpacaTp,
+                initialRiskPerUnit: parseFloat(Math.abs(alpacaEntry - alpacaSl).toFixed(priceDecimals)),
                 isDelfin4x4: false, // [FIX CLAUDE 18-NOV] los escalones 25% nunca se vendían en el broker: la ganancia parcial era solo de libreta. Pendiente v2 (ventas fraccionadas reales).
                 tp1: analysis.isDelfin4x4 ? parseFloat((alpacaEntry + atr * 0.75).toFixed(priceDecimals)) : null,
                 tp2: analysis.isDelfin4x4 ? parseFloat((alpacaEntry + atr * 1.50).toFixed(priceDecimals)) : null,
@@ -632,6 +636,7 @@ async function executeAutonomousOpen(ticker, price, analysis) {
                 fillPrice: pepEntry,
                 sl: pepSl,
                 tp: pepTp,
+                initialRiskPerUnit: parseFloat(Math.abs(pepEntry - pepSl).toFixed(priceDecimals)),
                 brokerSltpBound: !!pepRes.order.brokerSltpBound,
                 isDelfin4x4: false, // [FIX CLAUDE 18-NOV] los escalones 25% nunca se vendían en el broker: la ganancia parcial era solo de libreta. Pendiente v2 (ventas fraccionadas reales).
                 tp1: analysis.isDelfin4x4 ? parseFloat((pepEntry + atr * 0.75).toFixed(priceDecimals)) : null,
@@ -797,6 +802,7 @@ function adoptUnmanagedBrokerPositions(alpPositions, pepRealPositions) {
             currency: 'EUR',
             side: td.tradeSide === 2 ? 'SELL' : 'BUY',
             entryPrice: entry,
+            initialRiskPerUnit: parseFloat(Math.abs(entry - (parseFloat((entry - atr * 1.5).toFixed(decimals)))).toFixed(decimals)),
             sl: parseFloat((entry - atr * 1.5).toFixed(decimals)),
             tp: parseFloat((entry + atr * 3.0).toFixed(decimals)),
             breakevenTrigger: parseFloat((entry + atr * 1.5).toFixed(decimals)),
@@ -820,13 +826,6 @@ function adoptUnmanagedBrokerPositions(alpPositions, pepRealPositions) {
         const engineQtyForSym = engineState.openPositions
             .filter(op => op.broker && op.broker.includes('Alpaca') && normSym(op.orderSymbol || op.symbol) === normSym(ap.symbol))
             .reduce((sum, op) => sum + (parseFloat(op.qty) || 0), 0);
-        if (Math.abs(engineQtyForSym - parseFloat(ap.qty || 0)) <= 0.001) return;
-        if (engineQtyForSym > 0) return; // Evitar duplicar si ya existen sub-órdenes registradas
-
-        // [REGLA MANUAL PEDRO 18-NOV] No adoptar posiciones manuales externas en TSLA
-        if (ap.symbol === 'TSLA') {
-            return;
-        }
 
         // [FIX CLAUDE 18-NOV] Ninguna estrategia vende en corto: un corto en Alpaca es un error, no se adopta como compra
         if (!(parseFloat(ap.qty || 0) > 0)) {
@@ -838,10 +837,22 @@ function adoptUnmanagedBrokerPositions(alpPositions, pepRealPositions) {
             }
             return;
         }
+
+        // [REGLA externalQty 18-NOV] Descontar posición externa editable (brokerQty - externalQty[símbolo])
+        const extQty = (engineState.externalQty && engineState.externalQty[ap.symbol])
+            ? (parseFloat(engineState.externalQty[ap.symbol]) || 0)
+            : 0;
+        const brokerQtyForEngine = Math.max(0, parseFloat(ap.qty || 0) - extQty);
+        const qtyToAdopt = brokerQtyForEngine - engineQtyForSym;
+
+        if (qtyToAdopt <= 0.001) return; // Si lo que queda no está por encima del libro, no se adopta
+
         const entry = parseFloat(ap.avgEntryPrice) || (engineState.liveQuotes && engineState.liveQuotes[ticker]) || 0;
         if (!(entry > 0)) return;
         const decimals = ticker.includes('SOL') ? 4 : 2;
         const atr = getLiveAtrForTicker(ticker, entry);
+        const slPrice = parseFloat((entry - atr * 1.5).toFixed(decimals));
+        const initialRiskPerUnit = parseFloat(Math.abs(entry - slPrice).toFixed(decimals));
         engineState.openPositions.push({
             id: `ALP-CUST-${ap.symbol}`,
             broker: 'Alpaca Markets Paper Algorithmic',
@@ -849,13 +860,14 @@ function adoptUnmanagedBrokerPositions(alpPositions, pepRealPositions) {
             account: 'PA35UQ22S',
             symbol: ticker,
             orderSymbol: cfg.alpacaSymbol,
-            qty: parseFloat(ap.qty),
-            initialQty: parseFloat(ap.qty),
+            qty: parseFloat(qtyToAdopt.toFixed(decimals)),
+            initialQty: parseFloat(qtyToAdopt.toFixed(decimals)),
             unit: ticker.includes('SOL') ? 'SOL' : 'acción',
             currency: 'USD',
             side: 'BUY',
             entryPrice: entry,
-            sl: parseFloat((entry - atr * 1.5).toFixed(decimals)),
+            initialRiskPerUnit: initialRiskPerUnit,
+            sl: slPrice,
             tp: parseFloat((entry + atr * 3.0).toFixed(decimals)),
             breakevenTrigger: parseFloat((entry + atr * 1.5).toFixed(decimals)),
             pez: '🛡️ CUSTODIA',
@@ -1002,20 +1014,31 @@ async function syncBrokerReality() {
             const realKey = Object.keys(realAlpaca).find(k => norm(k) === sym);
             const eng = engKey ? engineAlpaca[engKey] : 0;
             const real = realKey ? realAlpaca[realKey] : 0;
-            if (Math.abs(eng - real) > 0.0001) {
-                // [REGLA MANUAL PEDRO 18-NOV] TSLA: compra manual externa (no adoptada por el motor)
-                if (sym === 'TSLA' && real > eng) {
-                    divergences.push({
-                        symbol: sym,
-                        engineQty: eng,
-                        brokerQty: real,
-                        diff: real - eng,
-                        type: 'POSICION_EXTERNA',
-                        note: 'Posición externa manual (18-nov)'
-                    });
-                } else {
-                    divergences.push({ symbol: sym, engineQty: eng, brokerQty: real });
-                }
+            const extQty = (engineState.externalQty && engineState.externalQty[sym])
+                ? (parseFloat(engineState.externalQty[sym]) || 0)
+                : 0;
+            const brokerQtyForEngine = Math.max(0, real - extQty);
+
+            if (extQty > 0) {
+                divergences.push({
+                    symbol: sym,
+                    engineQty: eng,
+                    brokerQty: real,
+                    brokerQtyForEngine,
+                    externalQty: extQty,
+                    type: 'POSICION_EXTERNA',
+                    note: `Posición externa (${extQty} ud)`
+                });
+            }
+
+            if (Math.abs(eng - brokerQtyForEngine) > 0.0001) {
+                divergences.push({
+                    symbol: sym,
+                    engineQty: eng,
+                    brokerQty: real,
+                    brokerQtyForEngine,
+                    diff: Math.abs(eng - brokerQtyForEngine)
+                });
             }
         });
 
@@ -1384,6 +1407,11 @@ async function manageOpenPositions(currentQuotes) {
             }
             pos.pnl = parseFloat(profitAmount.toFixed(pnlDecimals));
             pos.closeReason = closeReason;
+            if (pos.initialRiskPerUnit > 0 && pos.qty > 0) {
+                pos.rMultiple = parseFloat((pos.pnl / (pos.initialRiskPerUnit * pos.qty)).toFixed(2));
+            } else {
+                pos.rMultiple = null;
+            }
 
             // Cooldown anti-churn: registrar marca de tiempo para evitar reaperturas instantáneas
             if (!engineState.closedCooldowns) engineState.closedCooldowns = {};
@@ -1446,15 +1474,14 @@ async function manageOpenPositions(currentQuotes) {
 // ------------------------------------------------------------------------------
 // 📋 CONCILIACIÓN DIARIA 22:30 ROMA (AUDITORÍA PASIVA Y ALERTA TELEGRAM)
 // ------------------------------------------------------------------------------
-let lastDailyReconciliationDate = null;
-
 async function checkDailyReconciliationAt2230() {
     const d = romeNow();
     // Ventana de 5 minutos a las 22:30 Roma
     if (d.getHours() === 22 && d.getMinutes() >= 30 && d.getMinutes() < 35) {
         const todayStr = romeDateStr(d);
-        if (lastDailyReconciliationDate === todayStr) return;
-        lastDailyReconciliationDate = todayStr;
+        if (engineState.lastDailyReconciliationDate === todayStr) return;
+        engineState.lastDailyReconciliationDate = todayStr;
+        saveState();
 
         try {
             console.log(`[CONCILIACIÓN 22:30 ROMA] Iniciando control de libro vs Alpaca (${todayStr})...`);
@@ -1479,30 +1506,41 @@ async function checkDailyReconciliationAt2230() {
                 const alpReal = (alpPositions || []).find(p => p.symbol === sym || p.symbol === sym.replace('/', ''));
                 const realQty = alpReal ? parseFloat(alpReal.qty || 0) : 0;
 
-                const diff = Math.abs(bookQty - realQty);
+                const extQty = (engineState.externalQty && engineState.externalQty[sym])
+                    ? (parseFloat(engineState.externalQty[sym]) || 0)
+                    : 0;
+                const brokerQtyForEngine = Math.max(0, realQty - extQty);
+
+                const diff = Math.abs(bookQty - brokerQtyForEngine);
                 if (diff > 0.001) {
-                    if (sym === 'TSLA' && Math.abs(diff - 1.0) <= 0.001) {
-                        qtyDiscrepancies.push(`• <b>${sym}:</b> Libro ${bookQty} | Broker ${realQty} (Δ ${diff.toFixed(3)}) → <i>Posición externa manual</i>`);
-                    } else {
-                        qtyDiscrepancies.push(`• <b>${sym}:</b> Libro ${bookQty} | Broker ${realQty} (Δ ${diff.toFixed(3)}) ⚠️`);
-                    }
+                    qtyDiscrepancies.push(`• <b>${sym}:</b> Libro = ${bookQty} | Broker Motor = ${brokerQtyForEngine} (Total: ${realQty}, Externa: ${extQty}) (Δ ${diff.toFixed(3)}) ⚠️`);
+                } else if (extQty > 0) {
+                    qtyDiscrepancies.push(`• <b>${sym}:</b> Libro = ${bookQty} | Broker Motor = ${brokerQtyForEngine} (Externa: ${extQty}) ✅`);
                 }
             });
 
-            // Comparar suma de P&L del día del libro con el cambio de saldo de la cuenta Alpaca
+            // Comparar cambio de saldo de Alpaca con (P&L cerrado del día + P&L no realizado de posiciones abiertas, sumando externas)
             const todayTrades = (engineState.closedTradesHistory || []).filter(t =>
                 t.closedAt && romeDateStr(new Date(t.closedAt)) === todayStr && (t.broker || '').includes('Alpaca')
             );
-            const bookPnlDay = todayTrades.reduce((sum, t) => sum + (parseFloat(t.pnl) || 0), 0);
+            const closedPnlDay = todayTrades.reduce((sum, t) => sum + (parseFloat(t.pnl) || 0), 0);
+
+            // P&L no realizado de TODAS las posiciones abiertas en Alpaca (incluye las externas)
+            const unrealizedPnlDay = (alpPositions || []).reduce((sum, p) => {
+                const u = parseFloat(p.unrealizedPnl ?? p.unrealized_pl ?? 0);
+                return sum + (isFinite(u) ? u : 0);
+            }, 0);
+
+            const totalTheorPnlDay = closedPnlDay + unrealizedPnlDay;
 
             const equity = parseFloat(acc.equity || 0);
             const lastEquity = parseFloat(acc.lastEquity || equity);
             const brokerEquityChange = equity - lastEquity;
-            const pnlDiff = Math.abs(bookPnlDay - brokerEquityChange);
+            const pnlDiff = Math.abs(totalTheorPnlDay - brokerEquityChange);
 
             let pnlDiscrepancy = null;
             if (pnlDiff > 5.0) {
-                pnlDiscrepancy = `• <b>P&L Día vs Saldo:</b> Libro $${bookPnlDay.toFixed(2)} | Cambio Saldo $${brokerEquityChange.toFixed(2)} (Δ $${pnlDiff.toFixed(2)} USD)`;
+                pnlDiscrepancy = `• <b>P&L Día vs Saldo:</b> Teórico $${totalTheorPnlDay.toFixed(2)} (Cerrado $${closedPnlDay.toFixed(2)} + No Realizado $${unrealizedPnlDay.toFixed(2)}) | Cambio Saldo Broker = $${brokerEquityChange.toFixed(2)} (Δ $${pnlDiff.toFixed(2)} USD)`;
             }
 
             const hasAlert = qtyDiscrepancies.some(q => q.includes('⚠️')) || pnlDiscrepancy;
