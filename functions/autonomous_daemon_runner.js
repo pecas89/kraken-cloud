@@ -58,9 +58,11 @@ const server = http.createServer(async (req, res) => {
     const parsedUrl = new URL(req.url, 'http://localhost');
     const url = parsedUrl.pathname;
 
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    // [FIX CLAUDE 18-NOV] CORS solo para el panel propio (antes: '*', abierto a cualquier web)
+    res.setHeader('Access-Control-Allow-Origin', process.env.KRAKEN_ALLOWED_ORIGIN || 'https://kraken-trading-cloud.web.app');
+    res.setHeader('Vary', 'Origin');
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-kraken-token');
 
     if (req.method === 'OPTIONS') {
         res.writeHead(204);
@@ -180,6 +182,21 @@ const server = http.createServer(async (req, res) => {
         }
 
         if (req.method === 'POST') {
+            // [FIX CLAUDE 18-NOV] POST /cerebro gasta la clave de Gemini: exigir token y limitar ritmo
+            const token = process.env.KRAKEN_CEREBRO_TOKEN;
+            if (!token || req.headers['x-kraken-token'] !== token) {
+                res.writeHead(401, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify({ error: 'no autorizado' }));
+            }
+            const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
+            global.__cerebroHits = global.__cerebroHits || {};
+            const now = Date.now(), win = 60 * 60 * 1000;
+            const hits = (global.__cerebroHits[ip] || []).filter(t => now - t < win);
+            if (hits.length >= 30) {
+                res.writeHead(429, { 'Content-Type': 'application/json' });
+                return res.end(JSON.stringify({ error: 'demasiadas peticiones' }));
+            }
+            hits.push(now); global.__cerebroHits[ip] = hits;
             let body = '';
             req.on('data', chunk => body += chunk);
             req.on('end', async () => {

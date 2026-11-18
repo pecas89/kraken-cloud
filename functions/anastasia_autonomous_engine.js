@@ -60,6 +60,9 @@ const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
 const STATE_FILE = path.join(__dirname, 'anastasia_trading_state.json');
 
 // Matriz de los 4 Activos Sagrados (DUELO HEAD-TO-HEAD: AMBOS BROKERS EN LAS 4 ACCIONES)
+// [FIX CLAUDE 18-NOV] Laboratorio: hasta 10 estrategias x 4 marcos por símbolo
+const MAX_ALPACA_SUBPOS_PER_SYMBOL = 40;
+
 const ASSETS_CONFIG = {
     NVDA: {
         symbol: 'NVDA',
@@ -507,7 +510,7 @@ async function executeAutonomousOpen(ticker, price, analysis) {
     const existingAlpSameSym = engineState.openPositions.filter(p => p.broker && p.broker.includes('Alpaca') && p.symbol === ticker).length;
     const brokerHasHeavyBag = reconAlpPos.some(ap => (ap.symbol === config.alpacaSymbol || ap.symbol === config.alpacaSymbol.replace('/', '')) && parseFloat(ap.qty || 0) >= 3);
 
-    if (existingAlpSameSym < 3 && !brokerHasHeavyBag) {
+    if (existingAlpSameSym < MAX_ALPACA_SUBPOS_PER_SYMBOL) { // [FIX CLAUDE 18-NOV] sin bracket ya no hay choque entre subposiciones
         try {
             const isCrypto = config.alpacaSymbol.includes('/');
             let alpacaTp = analysis.tp;
@@ -522,22 +525,13 @@ async function executeAutonomousOpen(ticker, price, analysis) {
                     side: 'buy'
                 });
             } else {
-                try {
-                    alpacaOrder = await alpacaService.placeBracketOrder({
-                        symbol: config.alpacaSymbol,
-                        qty: config.alpacaQty,
-                        side: 'buy',
-                        takeProfitLimit: parseFloat(alpacaTp.toFixed(2)),
-                        stopLossStop: parseFloat(alpacaSl.toFixed(2))
-                    });
-                } catch (bracketErr) {
-                    console.warn(`[ALPACA BRACKET FALLBACK] ${config.alpacaSymbol} bracket fallo (${bracketErr.message}), ejecutando market order simple...`);
-                    alpacaOrder = await alpacaService.placeMarketOrder({
-                        symbol: config.alpacaSymbol,
-                        qty: config.alpacaQty,
-                        side: 'buy'
-                    });
-                }
+                // [FIX CLAUDE 18-NOV] Sin bracket: el stop del broker + el stop del motor vendían DOS veces
+                // y abrían cortos (NVDA -2 el 17-nov). Ahora el motor es la única fuente de salidas en Alpaca.
+                alpacaOrder = await alpacaService.placeMarketOrder({
+                    symbol: config.alpacaSymbol,
+                    qty: config.alpacaQty,
+                    side: 'buy'
+                });
             }
             if (!alpacaOrder || !alpacaOrder.id) {
                 throw new Error(`Alpaca no devolvió ID de orden válido para ${config.alpacaSymbol}. Orden no ejecutada.`);
@@ -577,7 +571,7 @@ async function executeAutonomousOpen(ticker, price, analysis) {
                 fillPrice: realAlpacaFill || alpacaEntry,
                 sl: alpacaSl,
                 tp: alpacaTp,
-                isDelfin4x4: analysis.isDelfin4x4 || false,
+                isDelfin4x4: false, // [FIX CLAUDE 18-NOV] los escalones 25% nunca se vendían en el broker: la ganancia parcial era solo de libreta. Pendiente v2 (ventas fraccionadas reales).
                 tp1: analysis.isDelfin4x4 ? parseFloat((alpacaEntry + atr * 0.75).toFixed(priceDecimals)) : null,
                 tp2: analysis.isDelfin4x4 ? parseFloat((alpacaEntry + atr * 1.50).toFixed(priceDecimals)) : null,
                 tp3: analysis.isDelfin4x4 ? parseFloat((alpacaEntry + atr * 2.25).toFixed(priceDecimals)) : null,
@@ -639,7 +633,7 @@ async function executeAutonomousOpen(ticker, price, analysis) {
                 sl: pepSl,
                 tp: pepTp,
                 brokerSltpBound: !!pepRes.order.brokerSltpBound,
-                isDelfin4x4: analysis.isDelfin4x4 || false,
+                isDelfin4x4: false, // [FIX CLAUDE 18-NOV] los escalones 25% nunca se vendían en el broker: la ganancia parcial era solo de libreta. Pendiente v2 (ventas fraccionadas reales).
                 tp1: analysis.isDelfin4x4 ? parseFloat((pepEntry + atr * 0.75).toFixed(priceDecimals)) : null,
                 tp2: analysis.isDelfin4x4 ? parseFloat((pepEntry + atr * 1.50).toFixed(priceDecimals)) : null,
                 tp3: analysis.isDelfin4x4 ? parseFloat((pepEntry + atr * 2.25).toFixed(priceDecimals)) : null,
@@ -727,22 +721,16 @@ function isEntryWindowForAsset(symbol) {
 async function executeRealBrokerClose(pos) {
     const isAlpaca = pos.broker && pos.broker.includes('Alpaca');
     if (isAlpaca) {
-        try {
-            const order = await alpacaService.placeMarketOrder({
-                symbol: pos.orderSymbol,
-                qty: pos.qty,
-                side: 'sell'
-            });
-            return { broker: 'Alpaca', orderId: order && order.id ? order.id : null };
-        } catch (sellErr) {
-            // Si es custodia hidratada única del símbolo (ej. SOLUSD con fracción neta por fees), usar closePosition oficial
-            const openSameSym = engineState.openPositions.filter(p => p.broker && p.broker.includes('Alpaca') && p.orderSymbol === pos.orderSymbol).length;
-            if (pos.hydratedFromBroker && openSameSym <= 1) {
-                const closeRes = await alpacaService.closePosition((pos.orderSymbol || pos.symbol).replace('/', ''));
-                return { broker: 'Alpaca', orderId: closeRes && closeRes.id ? closeRes.id : null, viaClosePosition: true };
-            }
-            throw sellErr;
+        // [FIX CLAUDE 18-NOV] Nunca vender más de lo que el broker tiene: así nacían los cortos.
+        const sym = pos.orderSymbol || pos.symbol;
+        const brokerQty = await alpacaService.getPositionQty(sym);
+        if (!(brokerQty > 0)) {
+            return { broker: 'Alpaca', alreadyClosedByBroker: true, brokerQty };
         }
+        const qty = Math.min(parseFloat(pos.qty) || 0, brokerQty);
+        const order = await alpacaService.placeMarketOrder({ symbol: sym, qty, side: 'sell' });
+        const exitFill = order && order.id ? await alpacaService.getFillPrice(order.id) : null;
+        return { broker: 'Alpaca', orderId: order && order.id ? order.id : null, qtySold: qty, exitFill };
     }
     const pid = pos.positionId || pos.id;
     let vol = pos.cTraderVolume;
@@ -835,6 +823,16 @@ function adoptUnmanagedBrokerPositions(alpPositions, pepRealPositions) {
         if (Math.abs(engineQtyForSym - parseFloat(ap.qty || 0)) <= 0.001) return;
         if (engineQtyForSym > 0) return; // Evitar duplicar si ya existen sub-órdenes registradas
 
+        // [FIX CLAUDE 18-NOV] Ninguna estrategia vende en corto: un corto en Alpaca es un error, no se adopta como compra
+        if (!(parseFloat(ap.qty || 0) > 0)) {
+            const key = `SHORT_ALERT_${ap.symbol}_${romeDateStr()}`;
+            if (!engineState.closedCooldowns) engineState.closedCooldowns = {};
+            if (!engineState.closedCooldowns[key]) {
+                engineState.closedCooldowns[key] = Date.now();
+                notifyPedro(`🚨 <b>[ANASTASIA]</b> Corto inesperado en Alpaca: ${ap.symbol} qty ${ap.qty}. No se adopta. Revisar y cerrar a mano.`).catch(() => {});
+            }
+            return;
+        }
         const entry = parseFloat(ap.avgEntryPrice) || (engineState.liveQuotes && engineState.liveQuotes[ticker]) || 0;
         if (!(entry > 0)) return;
         const decimals = ticker.includes('SOL') ? 4 : 2;
@@ -1357,6 +1355,16 @@ async function manageOpenPositions(currentQuotes) {
 
             pos.closedAt = new Date().toISOString();
             pos.exitPrice = currentPrice;
+            // [FIX CLAUDE 18-NOV] El libro se apunta con el fill real del broker, no con el precio que vio el motor
+            const ci = pos.brokerCloseInfo || {};
+            if (ci.exitFill > 0 && ci.qtySold > 0) {
+                pos.exitPrice = ci.exitFill;
+                pos.qty = ci.qtySold;
+                profitAmount = (ci.exitFill - pos.entryPrice) * ci.qtySold;
+                pos.pnlVerifiedByBroker = true;
+            } else {
+                pos.pnlVerifiedByBroker = false; // cierre del broker o fallo: revisar contra Alpaca/cTrader
+            }
             pos.pnl = parseFloat(profitAmount.toFixed(pnlDecimals));
             pos.closeReason = closeReason;
 

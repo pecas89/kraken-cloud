@@ -151,6 +151,28 @@ async function cancelAllOrders() {
     return res.data;
 }
 
+
+// 7b. [FIX CLAUDE 18-NOV] Cantidad real de un símbolo en el broker (0 si no hay posición)
+async function getPositionQty(symbol) {
+    const sym = (symbol || '').replace('/', '').toUpperCase();
+    const res = await alpacaRequest(`/positions/${sym}`, 'GET');
+    if (res.status === 404) return 0;
+    if (!res.ok) throw new Error(res.data ? res.data.message : `HTTP ${res.status}`);
+    return parseFloat(res.data.qty || 0);
+}
+
+// 7c. [FIX CLAUDE 18-NOV] Esperar el precio real de ejecución de una orden
+async function getFillPrice(orderId, tries = 6) {
+    for (let i = 0; i < tries; i++) {
+        try {
+            const o = await getOrderById(orderId);
+            if (o && parseFloat(o.filled_avg_price) > 0) return parseFloat(o.filled_avg_price);
+        } catch (e) {}
+        await new Promise(r => setTimeout(r, 400));
+    }
+    return null;
+}
+
 // Self-Test Execution
 if (require.main === module) {
     (async () => {
@@ -171,6 +193,8 @@ if (require.main === module) {
 }
 
 module.exports = {
+    getPositionQty,
+    getFillPrice,
     ALPACA_CONFIG,
     alpacaRequest,
     getAccount,
