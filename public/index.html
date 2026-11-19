@@ -972,6 +972,29 @@
             </div>
         </div>
 
+        <!-- [CLAUDE v2.4] LABORATORIO FANTASMA: todas las señales de las 12 estrategias, en igualdad, medidas en R -->
+        <div id="shadow-lab" style="margin: 18px 0; padding: 16px; border-radius: 16px; border: 1px solid rgba(167,139,250,0.35); background: rgba(167,139,250,0.05);">
+            <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px;">
+                <div style="font-weight: 800; color: #c4b5fd; font-size: 14px;">👻 LABORATORIO FANTASMA • ¿QUÉ ESTRATEGIA TIENE VENTAJA DE VERDAD?</div>
+                <div id="shadow-meta" style="font-size: 11px; color: var(--text-dim); font-family: 'JetBrains Mono', monospace;">Esperando datos del motor v2.4...</div>
+            </div>
+            <div style="font-size: 11px; color: var(--text-dim); margin: 6px 0 10px;">Cada señal abre una operación virtual (sin cupos ni esperas), medida con las dos salidas a la vez. R = múltiplos del riesgo, con costes. Semáforo: 🔴 &lt;30 operaciones = azar • 🟡 prometedor • 🟢 ≥100 operaciones y t ≥ 2 = ventaja real • ⚫ pierde de verdad.</div>
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 12px; font-family: 'JetBrains Mono', monospace;">
+                    <thead><tr style="color: var(--text-dim); text-align: left;">
+                        <th style="padding: 6px;">Estrategia</th><th>Ops</th><th>R medio normal</th><th>R medio escalera</th><th>Gana</th><th>t</th><th>Semáforo</th><th>Mejor casilla (≥10 ops)</th><th>Últimas 40</th>
+                    </tr></thead>
+                    <tbody id="shadow-body"></tbody>
+                </table>
+            </div>
+            <div style="margin-top: 14px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <b style="color: #c4b5fd; font-size: 12px;">🔬 ¿Cuándo gana? (signal stack)</b>
+                <select id="shadow-stack-filter" onchange="renderShadowLab(latestEngineState)" style="background: rgba(255,255,255,0.06); color: #fff; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 3px 6px; font-size: 11px;"></select>
+                <span style="font-size: 11px; color: var(--text-dim);">R medio con salida normal según la condición al entrar (últimas 300 fantasmas cerradas)</span>
+            </div>
+            <div id="shadow-stack" style="margin-top: 8px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; font-size: 11px; font-family: 'JetBrains Mono', monospace;"></div>
+        </div>
+
         <!-- LAS 4 JUGADORAS (DATOS REALES LIVE + RADAR 4 TIMEFRAMES 5m/15m/1H/4H) -->
         <div class="section-header">
             <div class="section-title">
@@ -2041,6 +2064,77 @@
                 line('🦙 Alpaca Paper', bt.alpaca) + line('🏛️ Pepperstone Demo', bt.pepperstone);
         }
 
+        // [CLAUDE v2.4] LABORATORIO FANTASMA
+        const SHADOW_NAMES = { p1:'🐬 P1 Delfín', p2:'🦈 P2 Base', p3:'⏳ P3 TimeMachine', p4:'🌊 P4 VWAP', p5:'⚡ P5 SuperTrend', p6:'🎯 P6 RSI-2', p7:'🚪 P7 ORB-30', p8:'🗜️ P8 Squeeze', p9:'🐙 P9 Hermanas', p10:'🐬 P10 Delfín E', p11:'🚀 P11 Gap&Go', p12:'🌊 P12 VWAP rebote' };
+        const LIGHT = { rojo:'🔴', amarillo:'🟡', verde:'🟢', negro:'⚫', gris:'⚪' };
+        function fmtR(v) { return (v === null || v === undefined) ? '—' : '<span style="color:' + (v >= 0 ? 'var(--accent-green)' : 'var(--accent-red)') + ';">' + (v >= 0 ? '+' : '') + Number(v).toFixed(2) + 'R</span>'; }
+        function renderShadowLab(engineState) {
+            const body = document.getElementById('shadow-body');
+            if (!body) return;
+            const lab = engineState && engineState.shadowLab;
+            const sm = lab && lab.summary;
+            const meta = document.getElementById('shadow-meta');
+            if (!lab || !sm) { body.innerHTML = '<tr><td colspan="9" style="padding: 8px; color: var(--text-dim);">El motor todavía no tiene el laboratorio fantasma (llega con la v2.4).</td></tr>'; return; }
+            if (meta) meta.textContent = 'desde ' + new Date(sm.startedAt).toLocaleString('es-ES') + ' • ' + sm.openCount + ' abiertas • ' + (lab.recent || []).length + ' cerradas recientes';
+            const recent = lab.recent || [];
+            const rows = Object.keys(SHADOW_NAMES).map(code => {
+                const st = (sm.byStrategy && sm.byStrategy[code]) || { STD: { n: 0 }, STEP: { n: 0 } };
+                const a = st.STD || { n: 0 }, b = st.STEP || { n: 0 };
+                // mejor casilla (marco + activo) con al menos 10 operaciones
+                let best = null;
+                Object.entries(sm.byCell || {}).forEach(([k, v]) => {
+                    if (!k.startsWith(code + '_')) return;
+                    const c = v.STD; if (!c || c.n < 10) return;
+                    if (!best || c.avgR > best.avgR) best = { k: k.slice(code.length + 1).replace('_', ' • '), avgR: c.avgR, n: c.n };
+                });
+                const last = recent.filter(r => r.code === code).slice(0, 40).reverse();
+                const squares = last.map(r => '<span title="' + r.tf + ' ' + r.ticker + ' ' + r.rStd + 'R" style="display:inline-block;width:6px;height:10px;margin-right:1px;border-radius:1px;background:' + (r.rStd > 0 ? '#10b981' : '#ef4444') + ';"></span>').join('');
+                const lightKey = a.light || 'gris';
+                return { code, n: a.n || 0, html: '<tr style="border-top: 1px solid rgba(255,255,255,0.06);">' +
+                    '<td style="padding: 6px; white-space: nowrap;">' + SHADOW_NAMES[code] + '</td>' +
+                    '<td>' + (a.n || 0) + '</td>' +
+                    '<td>' + fmtR(a.avgR) + '</td>' +
+                    '<td>' + fmtR(b.avgR) + ((a.n && b.n && a.avgR !== null && b.avgR !== null) ? (b.avgR > a.avgR ? ' 🪜' : '') : '') + '</td>' +
+                    '<td>' + (a.wr === null || a.wr === undefined ? '—' : a.wr + '%') + '</td>' +
+                    '<td>' + (a.t === null || a.t === undefined ? '—' : a.t.toFixed(2)) + '</td>' +
+                    '<td title="' + (a.label || '') + '">' + LIGHT[lightKey] + ' <span style="color: var(--text-dim);">' + (a.label || 'sin datos') + '</span></td>' +
+                    '<td>' + (best ? best.k + ' ' + fmtR(best.avgR) + ' (' + best.n + ')' : '—') + '</td>' +
+                    '<td style="white-space: nowrap;">' + (squares || '—') + '</td></tr>' };
+            }).sort((x, y) => {
+                const ax = (sm.byStrategy[x.code] && sm.byStrategy[x.code].STD.avgR), ay = (sm.byStrategy[y.code] && sm.byStrategy[y.code].STD.avgR);
+                if (x.n >= 10 && y.n >= 10) return ay - ax;
+                return y.n - x.n;
+            });
+            body.innerHTML = rows.map(r => r.html).join('');
+
+            // Signal stack: ¿cuándo gana?
+            const sel = document.getElementById('shadow-stack-filter');
+            if (sel && !sel.options.length) {
+                sel.innerHTML = '<option value="">Todas las estrategias</option>' + Object.entries(SHADOW_NAMES).map(([k, v]) => '<option value="' + k + '">' + v + '</option>').join('');
+            }
+            const fcode = sel ? sel.value : '';
+            const list = recent.filter(r => !fcode || r.code === fcode);
+            const buckets = [
+                { title: '🕐 Hora Nueva York', fn: r => { const m = r.f && r.f.nyMins; if (m === null || m === undefined) return null; if (m < 570 || m >= 960) return 'fuera de sesión (SOL)'; if (m < 660) return '9:30-11:00 apertura'; if (m < 840) return '11:00-14:00 mediodía'; return '14:00-16:00 cierre'; } },
+                { title: '📈 Tendencia (EMA9-EMA21 en ATR)', fn: r => { const v = r.f && r.f.trendAtr; if (v === null || v === undefined) return null; return v > 0.5 ? 'fuerte (> 0,5)' : (v > 0 ? 'suave (0 - 0,5)' : 'en contra (< 0)'); } },
+                { title: '🔊 Volumen relativo (RVOL)', fn: r => { const v = r.f && r.f.rvol; if (v === null || v === undefined) return null; return v >= 2 ? 'alto (≥ 2)' : (v >= 1 ? 'normal (1 - 2)' : 'bajo (< 1)'); } },
+                { title: '🌡️ RSI al entrar', fn: r => { const v = r.f && r.f.rsi; if (v === null || v === undefined) return null; return v >= 70 ? 'sobrecomprado (≥ 70)' : (v >= 50 ? 'fuerte (50 - 70)' : 'débil (< 50)'); } },
+                { title: '⏱️ Marco temporal', fn: r => r.tf },
+                { title: '🎯 Activo', fn: r => r.ticker }
+            ];
+            const stack = document.getElementById('shadow-stack');
+            if (stack) {
+                if (!list.length) { stack.innerHTML = '<div style="color: var(--text-dim);">Aún no hay fantasmas cerradas para analizar.</div>'; }
+                else stack.innerHTML = buckets.map(bk => {
+                    const g = {};
+                    list.forEach(r => { const k = bk.fn(r); if (!k) return; (g[k] = g[k] || []).push(r.rStd); });
+                    const lines = Object.entries(g).sort((a, b) => (b[1].reduce((x, y) => x + y, 0) / b[1].length) - (a[1].reduce((x, y) => x + y, 0) / a[1].length))
+                        .map(([k, arr]) => '<div style="display:flex;justify-content:space-between;gap:6px;"><span>' + k + '</span><span>' + fmtR(arr.reduce((x, y) => x + y, 0) / arr.length) + ' <span style="color: var(--text-dim);">(' + arr.length + ')</span></span></div>').join('');
+                    return '<div style="padding: 8px 10px; border-radius: 10px; background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06);"><div style="color: #c4b5fd; font-weight: 700; margin-bottom: 4px;">' + bk.title + '</div>' + (lines || '<span style="color: var(--text-dim);">sin datos</span>') + '</div>';
+                }).join('');
+            }
+        }
+
         function renderDuelScoreboard(engineState) {
             if (!engineState) return;
             const list = engineState.closedTradesHistory || [];
@@ -2109,6 +2203,7 @@
                     engineState._excludedPreV2 = _allClosed.filter(t => t.brokerCloseExecuted !== false && !t.strategyVersion).length;
                     latestEngineState = engineState;
                     renderDuelScoreboard(engineState);
+                    try { renderShadowLab(engineState); } catch (e) { console.warn('[shadow panel]', e); }
                     if (engineState.closedTradesHistory) {
                         renderDynamicScorecard(engineState.closedTradesHistory, currentScorecardPeriod);
                     }

@@ -27,6 +27,7 @@ const alpacaService = require('./alpaca_service');
 const pepperstoneService = require('./pepperstone_centinela');
 const ti = require('./technical_indicators');
 const { evaluateStrategiesForBar } = require('./strategy_signals');
+const shadowLab = require('./shadow_lab'); // [CLAUDE v2.4] laboratorio fantasma: todas las señales, en igualdad
 const firestoreStore = require('./firestore_store');
 
 const PROMO_MATRIX_FILE = path.join(__dirname, 'promoted_strategies.json');
@@ -631,6 +632,7 @@ async function executeAutonomousOpen(ticker, price, analysis) {
                 timeframe: analysis.timeframe || '5m',
                 stratCode: analysis.stratCode || null, // [CLAUDE v2] etiquetas para el informe
                 strategyVersion: analysis.strategyVersion || ENGINE_VERSION,
+                features: analysis.features || null,
                 exitMode: EXIT_MODE_BY_BROKER.alpaca,
                 closeAtSessionEnd: !!analysis.closeAtSessionEnd,
                 status: 'OPEN',
@@ -702,6 +704,7 @@ async function executeAutonomousOpen(ticker, price, analysis) {
                 timeframe: analysis.timeframe || '5m',
                 stratCode: analysis.stratCode || null, // [CLAUDE v2] etiquetas para el informe
                 strategyVersion: analysis.strategyVersion || ENGINE_VERSION,
+                features: analysis.features || null,
                 exitMode: EXIT_MODE_BY_BROKER.pepperstone,
                 closeAtSessionEnd: !!analysis.closeAtSessionEnd,
                 status: 'OPEN',
@@ -1754,6 +1757,15 @@ async function runAutonomousCycle() {
     // 1. Gestionar posiciones abiertas existentes (Trailing BE, TP, SL)
     await manageOpenPositions(quotes);
 
+    // [CLAUDE v2.4] Gestionar operaciones fantasma (STD y escalera a la vez) y resumir para el panel
+    try {
+        shadowLab.manage(engineState, (t) => {
+            const cfg = ASSETS_CONFIG[t] || {};
+            return parseFloat(quotes[t] || quotes[cfg.altSymbol] || (engineState.liveQuotes && engineState.liveQuotes[t]) || 0);
+        }, isSessionOpenForAsset);
+        shadowLab.summarize(engineState);
+    } catch (e) { console.warn('[SHADOW manage]', e.message); }
+
     // Limpiar restos antiguos de temporalidad 1m eliminada por mandato de Pedro
     Object.keys(engineState.latestScores || {}).forEach(k => {
         if (k.endsWith('_1m')) delete engineState.latestScores[k];
@@ -1767,6 +1779,7 @@ async function runAutonomousCycle() {
         const price = quotes[ticker] || quotes[config.altSymbol] || 0;
         let bestOverall = null;
         let openedTickerThisCycle = false;
+        const fairCandidates = []; // [CLAUDE v2.4]
 
         for (const tf of TIMEFRAMES) {
             const allStrats = evaluateAllStrategies(ticker, price, tf.label);
@@ -1802,6 +1815,12 @@ async function runAutonomousCycle() {
                     console.log(`🛑 [CHOP FILTER ${tf.label}] SOL ignorado: rVol insuficiente (${analysis.indicators?.rvol || 0} < 1.5x).`);
                     continue;
                 }
+
+                // [CLAUDE v2.4] Foto de indicadores ("signal stack") + operación fantasma ANTES de los cupos y esperas del broker
+                try {
+                    analysis.features = shadowLab.features(analysis, barsForTf, price);
+                    shadowLab.onSignal(engineState, ticker, tf.label, analysis, price, barsForTf, currentBarTime, isEntryWindowForAsset(ticker));
+                } catch (e) { console.warn('[SHADOW onSignal]', e.message); }
 
                 // Máximo 1 disparo por misma vela cerrada/en curso en (activo, estrategia, timeframe)
                 const barKey = `${ticker}_${analysis.stratCode}_${tf.label}`;
@@ -1844,13 +1863,9 @@ async function runAutonomousCycle() {
                 const pepCount = Math.max(pepLibretaCount, ctraderRealCount);
 
                 if (pepCount < 24 && price > 0) {
-                    const opened = await executeAutonomousOpen(ticker, price, analysis);
-                    if (opened && opened.length > 0) {
-                        openedTickerThisCycle = true;
-                        if (currentBarTime) engineState.lastSignalBarTime[barKey] = currentBarTime;
-                        if (!engineState.closedCooldowns) engineState.closedCooldowns = {};
-                        engineState.closedCooldowns[assetCooldownKey] = Date.now();
-                    }
+                    // [CLAUDE v2.4] TURNO JUSTO: no abrir "la primera de la lista" (P1-P2 en 5m se quedaban siempre el hueco).
+                    // Se juntan todas las candidatas del activo y al final del ciclo entra la estrategia con menos operaciones reales.
+                    fairCandidates.push({ analysis: { ...analysis }, tfLabel: tf.label, barKey, currentBarTime, assetCooldownKey });
                 } else {
                     console.log(`🔒 [CANDADO PEPPERSTONE] Máximo 24 posiciones reales alcanzado (${pepCount}/24 en cTrader). Señal ${ticker} (${analysis.strategyName} • ${tf.label}) en espera.`);
                 }
@@ -1885,6 +1900,27 @@ async function runAutonomousCycle() {
                 if (!bestOverall || tfPrio > ovPrio) {
                     bestOverall = tfEntry;
                 }
+            }
+        }
+
+        // [CLAUDE v2.4] TURNO JUSTO: de todas las candidatas del activo, entra la estrategia con MENOS operaciones reales
+        // en el laboratorio v2 (empate: mayor score). Así P9-P12 y los marcos 1H/4H también reciben operaciones reales.
+        if (fairCandidates.length > 0) {
+            const realCount = {};
+            (engineState.closedTradesHistory || []).forEach(t => { if (t.strategyVersion && t.stratCode) realCount[t.stratCode] = (realCount[t.stratCode] || 0) + 1; });
+            (engineState.openPositions || []).forEach(p => { if (p.stratCode) realCount[p.stratCode] = (realCount[p.stratCode] || 0) + 1; });
+            fairCandidates.sort((x, y) => {
+                const cx = realCount[x.analysis.stratCode] || 0, cy = realCount[y.analysis.stratCode] || 0;
+                if (cx !== cy) return cx - cy;
+                return (y.analysis.score || 0) - (x.analysis.score || 0);
+            });
+            const pick = fairCandidates[0];
+            console.log(`⚖️ [TURNO JUSTO] ${ticker}: ${fairCandidates.length} candidatas (${fairCandidates.map(c => c.analysis.stratCode + '/' + c.tfLabel).join(', ')}) → entra ${pick.analysis.stratCode}/${pick.tfLabel} (${realCount[pick.analysis.stratCode] || 0} ops reales).`);
+            const opened = await executeAutonomousOpen(ticker, price, pick.analysis);
+            if (opened && opened.length > 0) {
+                if (pick.currentBarTime) engineState.lastSignalBarTime[pick.barKey] = pick.currentBarTime;
+                if (!engineState.closedCooldowns) engineState.closedCooldowns = {};
+                engineState.closedCooldowns[pick.assetCooldownKey] = Date.now();
             }
         }
 
