@@ -1757,13 +1757,12 @@ async function runAutonomousCycle() {
     // 1. Gestionar posiciones abiertas existentes (Trailing BE, TP, SL)
     await manageOpenPositions(quotes);
 
-    // [CLAUDE v2.4] Gestionar operaciones fantasma (STD y escalera a la vez) y resumir para el panel
+    // [CLAUDE v2.4] Gestionar operaciones fantasma (STD y escalera a la vez)
     try {
         shadowLab.manage(engineState, (t) => {
             const cfg = ASSETS_CONFIG[t] || {};
             return parseFloat(quotes[t] || quotes[cfg.altSymbol] || (engineState.liveQuotes && engineState.liveQuotes[t]) || 0);
         }, isSessionOpenForAsset);
-        shadowLab.summarize(engineState);
     } catch (e) { console.warn('[SHADOW manage]', e.message); }
 
     // Limpiar restos antiguos de temporalidad 1m eliminada por mandato de Pedro
@@ -1928,6 +1927,9 @@ async function runAutonomousCycle() {
             engineState.latestScores[ticker] = { ...bestOverall, price: price };
         }
     }
+
+    // [FIX ANTIGRAVITY v2.4.1] Resumir el laboratorio fantasma tras el escaneo para reflejar aperturas del mismo ciclo
+    try { shadowLab.summarize(engineState); } catch (e) { console.warn('[SHADOW summarize]', e.message); }
 
     // 3. Recalcular Matriz Cuantitativa en Vivo (Win Rate & PnL)
     computePerformanceStats();
