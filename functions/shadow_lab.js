@@ -156,7 +156,8 @@ function statsOf(a) {
     const sd = Math.sqrt(varr);
     const t = (n > 1 && sd > 0) ? mean / (sd / Math.sqrt(n)) : null;
     let light = 'rojo', label = 'todavía es azar (< 30)';
-    if (n >= 30) { light = 'amarillo'; label = 'prometedor, no probado'; }
+    // [FIX ANTIGRAVITY v2.4.1] Con n >= 30, solo etiquetar "prometedor" si la media es positiva
+    if (n >= 30) { light = 'amarillo'; label = mean > 0 ? 'prometedor, no probado' : 'negativo, sin confirmar'; }
     if (n >= 30 && t !== null && t <= -2) { light = 'negro'; label = 'pierde de verdad'; }
     if (n >= 100 && t !== null && t >= 2) { light = 'verde'; label = 'VENTAJA REAL'; }
     if (n >= 30 && n < 100 && t !== null && t >= 2) { light = 'amarillo'; label = 'buena pinta, faltan datos (< 100)'; }

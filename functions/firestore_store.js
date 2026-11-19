@@ -232,6 +232,7 @@ async function hydrateFromFirestore(engineState) {
                 engineState.emergencyStopReason = stateData.emergencyStopReason || null;
             }
             if (stateData.lastDailyReportDate) engineState.lastDailyReportDate = stateData.lastDailyReportDate;
+            if (stateData.lastDailyReconciliationDate) engineState.lastDailyReconciliationDate = stateData.lastDailyReconciliationDate; // [FIX ANTIGRAVITY v2.4.1]
             if (stateData.lastHeartbeatDate) engineState.lastHeartbeatDate = stateData.lastHeartbeatDate;
             // [CLAUDE v2.2] Recuperar posiciones abiertas tras un redeploy (antes se guardaban pero nunca se leían:
             // cada deploy las convertía en "Custodia" y se perdía su estrategia, SL/TP y salida STEP/STD).
@@ -318,6 +319,7 @@ async function syncEngineState(engineState, force = false) {
             closedCooldowns: engineState.closedCooldowns || {},
             lastSignalBarTime: engineState.lastSignalBarTime || {},
             lastDailyReportDate: engineState.lastDailyReportDate || null,
+            lastDailyReconciliationDate: engineState.lastDailyReconciliationDate || null, // [FIX ANTIGRAVITY v2.4.1]
             lastHeartbeatDate: engineState.lastHeartbeatDate || null,
             timeframes: ['5m', '15m', '1H', '4H'],
             strategiesActive: 12
