@@ -243,6 +243,18 @@ async function hydrateFromFirestore(engineState) {
                 console.log(`🔥 [FirestoreStore] ${engineState.openPositions.length} posiciones abiertas recuperadas (pendientes de cruce con broker).`);
             }
             if (stateData.peakEquity && typeof stateData.peakEquity === 'object') engineState.peakEquity = stateData.peakEquity;
+            // [CLAUDE v2.4] Laboratorio fantasma: recuperar acumulados, fantasmas abiertas e historial reciente
+            if (stateData.shadowLab && typeof stateData.shadowLab === 'object' && !engineState.shadowLab) {
+                engineState.shadowLab = {
+                    startedAt: stateData.shadowLab.startedAt || new Date().toISOString(),
+                    version: stateData.shadowLab.version || 'v2.4',
+                    agg: stateData.shadowLab.agg || {},
+                    open: Array.isArray(stateData.shadowLab.open) ? stateData.shadowLab.open : [],
+                    recent: Array.isArray(stateData.shadowLab.recent) ? stateData.shadowLab.recent : [],
+                    lastBar: stateData.shadowLab.lastBar || {}
+                };
+                console.log(`👻 [FirestoreStore] Laboratorio fantasma recuperado: ${engineState.shadowLab.open.length} abiertas, ${engineState.shadowLab.recent.length} recientes.`);
+            }
         }
 
         if (Array.isArray(histRows) && histRows.length > 0) {
@@ -295,6 +307,14 @@ async function syncEngineState(engineState, force = false) {
             openPositionsCount: (engineState.openPositions || []).length,
             openPositions: (engineState.openPositions || []).slice(0, 60),
             peakEquity: engineState.peakEquity || {},
+            shadowLab: engineState.shadowLab ? {
+                startedAt: engineState.shadowLab.startedAt || null,
+                version: engineState.shadowLab.version || 'v2.4',
+                agg: engineState.shadowLab.agg || {},
+                open: (engineState.shadowLab.open || []).slice(0, 200),
+                recent: (engineState.shadowLab.recent || []).slice(0, 150),
+                lastBar: engineState.shadowLab.lastBar || {}
+            } : null,
             closedCooldowns: engineState.closedCooldowns || {},
             lastSignalBarTime: engineState.lastSignalBarTime || {},
             lastDailyReportDate: engineState.lastDailyReportDate || null,
