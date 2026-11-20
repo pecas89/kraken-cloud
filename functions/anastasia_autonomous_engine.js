@@ -28,6 +28,8 @@ const pepperstoneService = require('./pepperstone_centinela');
 const ti = require('./technical_indicators');
 const { evaluateStrategiesForBar } = require('./strategy_signals');
 const shadowLab = require('./shadow_lab'); // [CLAUDE v2.4] laboratorio fantasma: todas las señales, en igualdad
+const riskGate = require('./risk_gate');   // [CLAUDE v2.5] la jaula: toda orden pasa por aquí antes del broker
+const slowLab = require('./slow_lab');     // [CLAUDE v2.5] P13 lenta vs comprar y mantener
 const firestoreStore = require('./firestore_store');
 
 const PROMO_MATRIX_FILE = path.join(__dirname, 'promoted_strategies.json');
@@ -167,8 +169,13 @@ if (fs.existsSync(STATE_FILE)) {
 const PUBLIC_STATE_FILE = path.join(__dirname, '../public/trading_state.json');
 function saveState(forceCloud = false) {
     try {
-        fs.writeFileSync(STATE_FILE, JSON.stringify(engineState, null, 2), 'utf8');
-        fs.writeFileSync(PUBLIC_STATE_FILE, JSON.stringify(engineState, null, 2), 'utf8');
+        // [CLAUDE v2.5] Guardado atómico: se escribe a un temporal y se renombra. Si Render corta a mitad, el archivo anterior queda intacto.
+        const json = JSON.stringify(engineState, null, 2);
+        for (const f of [STATE_FILE, PUBLIC_STATE_FILE]) {
+            const tmp = f + '.tmp';
+            fs.writeFileSync(tmp, json, 'utf8');
+            fs.renameSync(tmp, f);
+        }
         firestoreStore.syncEngineState(engineState, forceCloud).catch(() => {});
     } catch(e) {
         console.error('[ANASTASIA ENGINE] Error guardando estado:', e.message);
@@ -555,7 +562,13 @@ async function executeAutonomousOpen(ticker, price, analysis) {
     const existingAlpSameSym = engineState.openPositions.filter(p => p.broker && p.broker.includes('Alpaca') && p.symbol === ticker).length;
     const brokerHasHeavyBag = reconAlpPos.some(ap => (ap.symbol === config.alpacaSymbol || ap.symbol === config.alpacaSymbol.replace('/', '')) && parseFloat(ap.qty || 0) >= 3);
 
-    if (existingAlpSameSym < MAX_ALPACA_SUBPOS_PER_SYMBOL) { // [FIX CLAUDE 18-NOV] sin bracket ya no hay choque entre subposiciones
+    // [CLAUDE v2.5] LA JAULA: el reglamento decide si la orden puede salir hacia Alpaca
+    const alpEquity = parseFloat((engineState.liveMetrics && engineState.liveMetrics.alpacaEquityUsd) || 0);
+    const gateAlp = riskGate.check(engineState, { brokerKey: 'alpaca', symbol: ticker, qty: config.alpacaQty, price: liveRefPrice, sl: analysis.sl, equity: alpEquity });
+    riskGate.record(engineState, { ok: gateAlp.ok, broker: 'Alpaca', symbol: ticker, stratCode: analysis.stratCode, timeframe: analysis.timeframe, reason: gateAlp.reason || null });
+    if (!gateAlp.ok) console.log(`🔒 [JAULA] Alpaca ${ticker} ${analysis.stratCode}: RECHAZADA — ${gateAlp.reason}`);
+
+    if (gateAlp.ok && existingAlpSameSym < MAX_ALPACA_SUBPOS_PER_SYMBOL) { // [FIX CLAUDE 18-NOV] sin bracket ya no hay choque entre subposiciones
         try {
             const isCrypto = config.alpacaSymbol.includes('/');
             let alpacaTp = analysis.tp;
@@ -651,8 +664,16 @@ async function executeAutonomousOpen(ticker, price, analysis) {
     // 2. DISPARO A PEPPERSTONE cTRADER - Mínimo volumen (0.01 micro-lotes / 0.10 CFD)
     // [CLAUDE v2.2] Oro en Pepperstone en pausa: el motor gestiona con precios del GLD (~$340) una posición de oro al contado
     // (~$4000). SL/TP, breakeven y PnL salían en la escala equivocada. Se reactiva con KRAKEN_PEP_GOLD=on cuando haya cotización spot.
+    // [CLAUDE v2.5] LA JAULA también para Pepperstone (valor en USD frente a saldo en EUR: más prudente, no menos)
+    const pepEquity = parseFloat((engineState.liveMetrics && engineState.liveMetrics.pepperstoneBalanceEur) || 0);
+    const gatePep = (ticker === 'XAUUSD' && process.env.KRAKEN_PEP_GOLD !== 'on') ? { ok: true, skip: true }
+        : riskGate.check(engineState, { brokerKey: 'pepperstone', symbol: ticker, qty: config.pepperstoneQty, price: liveRefPrice, sl: analysis.sl, equity: pepEquity });
+    if (!gatePep.skip) riskGate.record(engineState, { ok: gatePep.ok, broker: 'Pepperstone', symbol: ticker, stratCode: analysis.stratCode, timeframe: analysis.timeframe, reason: gatePep.reason || null });
+
     if (ticker === 'XAUUSD' && process.env.KRAKEN_PEP_GOLD !== 'on') {
         console.log('⏸️ [PEPPERSTONE ORO] En pausa (escala GLD vs spot). Solo Alpaca GLD.');
+    } else if (!gatePep.ok) {
+        console.log(`🔒 [JAULA] Pepperstone ${ticker} ${analysis.stratCode}: RECHAZADA — ${gatePep.reason}`);
     } else try {
         const pepRes = await pepperstoneService.processIncomingSignal({
             action: 'BUY',
@@ -984,8 +1005,8 @@ async function syncBrokerReality() {
         // El marcador del panel debe salir de aquí, no de la libreta del motor.
         try {
             // Saldo al reseteo del laboratorio (12-nov), NO el de apertura de la cuenta: sin dato, se muestra 'falta saldo inicial'
-            const startAlp = parseFloat(process.env.KRAKEN_ALPACA_START_USD || 'NaN');
-            const startPep = parseFloat(process.env.KRAKEN_PEP_START_EUR || 'NaN');
+            const startAlp = parseFloat(process.env.KRAKEN_ALPACA_START_USD || '99475.62'); // [CLAUDE v2.5] por defecto, saldo en el punto cero (18-nov 23:50)
+            const startPep = parseFloat(process.env.KRAKEN_PEP_START_EUR || '9074.46'); // [CLAUDE v2.5] por defecto, saldo en el punto cero
             if (!engineState.peakEquity) engineState.peakEquity = {};
             if (alpEquity > 0) engineState.peakEquity.alpaca = Math.max(engineState.peakEquity.alpaca || 0, alpEquity);
             if (pepBalEur > 0) engineState.peakEquity.pepperstone = Math.max(engineState.peakEquity.pepperstone || 0, pepBalEur);
@@ -1318,6 +1339,30 @@ async function sendDailyReport() {
     console.log('📬 [PARTE DIARIO] Enviado a Pedro por Telegram.');
 }
 
+// [CLAUDE v2.5] Parte de media sesión: qué hay abierto, qué se cerró hoy (en R), fantasmas y jaula
+function buildMidSessionText() {
+    const today = romeDateStr();
+    const closedToday = (engineState.closedTradesHistory || []).filter(t => t.strategyVersion && t.closedAt && romeDateStr(new Date(t.closedAt)) === today && t.brokerCloseExecuted !== false);
+    const sumR = closedToday.reduce((a, t) => a + (typeof t.rMultiple === 'number' ? t.rMultiple : 0), 0);
+    const wins = closedToday.filter(t => (parseFloat(t.pnl) || 0) > 0).length;
+    const best = closedToday.filter(t => typeof t.rMultiple === 'number').sort((a, b) => b.rMultiple - a.rMultiple)[0];
+    const open = engineState.openPositions || [];
+    const sl = engineState.shadowLab || {};
+    const ghostToday = (sl.recent || []).filter(r => r.closedAt && romeDateStr(new Date(r.closedAt)) === today);
+    const ghostR = ghostToday.reduce((a, r) => a + (r.rStd || 0), 0);
+    const rejToday = (engineState.gateLog || []).filter(g => romeDateStr(new Date(g.at)) === today);
+    const p13 = engineState.slowLab && engineState.slowLab.summary;
+    let msg = `⏱️ <b>[ANASTASIA • MEDIA SESIÓN 18:30]</b>\n`;
+    msg += `📂 Abiertas: <b>${open.length}</b> (${open.map(p => `${p.symbol} ${p.stratCode || 'custodia'}`).slice(0, 6).join(', ') || 'ninguna'})\n`;
+    msg += `✅ Cerradas hoy: <b>${closedToday.length}</b> • ganadoras ${wins} • total <b>${sumR >= 0 ? '+' : ''}${sumR.toFixed(2)}R</b>\n`;
+    if (best) msg += `🏆 Mejor: ${best.symbol} ${best.stratCode} ${best.timeframe} <b>${best.rMultiple >= 0 ? '+' : ''}${best.rMultiple.toFixed(2)}R</b>\n`;
+    msg += `👻 Fantasmas cerradas hoy: ${ghostToday.length} • ${ghostR >= 0 ? '+' : ''}${ghostR.toFixed(2)}R\n`;
+    msg += `🔒 Jaula: ${rejToday.length} órdenes rechazadas hoy${rejToday[0] ? ` (última: ${rejToday[0].symbol}, ${rejToday[0].reason})` : ''}\n`;
+    if (p13) msg += `🐢 P13 lenta: ${p13.p13Pct >= 0 ? '+' : ''}${p13.p13Pct}% vs comprar y mantener ${p13.bhPct >= 0 ? '+' : ''}${p13.bhPct}%\n`;
+    msg += `<i>Demo. Panel: kraken-trading-cloud.web.app</i>`;
+    return msg;
+}
+
 async function maybeSendScheduledReports() {
     const d = romeNow();
     const mins = d.getHours() * 60 + d.getMinutes();
@@ -1327,6 +1372,12 @@ async function maybeSendScheduledReports() {
         engineState.lastHeartbeatDate = today;
         await notifyPedro(`🐙💓 <b>[Kraken despierto]</b> Motor online en Frankfurt. ${(engineState.openPositions || []).length} posiciones vivas, ${(engineState.closedTradesHistory || []).length} trades en la era real. Escaneando cada 30s.`);
         saveState();
+    }
+    // [CLAUDE v2.5] 18:30 Roma: parte de media sesión
+    if (mins >= 18 * 60 + 30 && mins < 18 * 60 + 35 && engineState.lastMidReportDate !== today) {
+        engineState.lastMidReportDate = today;
+        try { await notifyPedro(buildMidSessionText()); } catch (e) { console.warn('[PARTE 18:30]', e.message); }
+        saveState(true);
     }
     // 22:05 Roma: parte de guerra tras cierre de Wall Street
     if (mins >= 22 * 60 + 5 && engineState.lastDailyReportDate !== today) {
@@ -1764,6 +1815,11 @@ async function runAutonomousCycle() {
             return parseFloat(quotes[t] || quotes[cfg.altSymbol] || (engineState.liveQuotes && engineState.liveQuotes[t]) || 0);
         }, isSessionOpenForAsset);
     } catch (e) { console.warn('[SHADOW manage]', e.message); }
+
+    // [CLAUDE v2.5] P13 lenta (una vez al día tras el cierre de NY)
+    try {
+        await slowLab.update(engineState, { 'APCA-API-KEY-ID': alpacaService.ALPACA_CONFIG.apiKey, 'APCA-API-SECRET-KEY': alpacaService.ALPACA_CONFIG.secretKey });
+    } catch (e) { console.warn('[P13 slowLab]', e.message); }
 
     // Limpiar restos antiguos de temporalidad 1m eliminada por mandato de Pedro
     Object.keys(engineState.latestScores || {}).forEach(k => {
