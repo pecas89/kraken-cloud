@@ -64,6 +64,7 @@ button{font:inherit}
 .g2{grid-template-columns:repeat(2,minmax(0,1fr))}
 .g3{grid-template-columns:repeat(3,minmax(0,1fr))}
 .g4{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:639px){ .g4{grid-template-columns:repeat(2,minmax(0,1fr))} }
 .section{margin-top:16px}
 .section-title{display:flex;justify-content:space-between;align-items:baseline;margin:0 4px 8px}
 .section-title h2{font-size:15px;color:var(--ink2);font-weight:600}
@@ -85,7 +86,7 @@ button{font:inherit}
 .seg button[aria-pressed="true"]{background:#fff;box-shadow:0 1px 2px rgba(15,23,42,.08)}
 .filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .filters label{font-size:12px;color:var(--muted);font-weight:600}
-.lights{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
+.lights{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
 .light{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:10px;color:var(--muted)}
 .light i{width:24px;height:24px;border-radius:999px;border:2px solid}
 .bar{position:relative;height:8px;border-radius:999px;background:var(--line2)}
@@ -178,7 +179,7 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
       <div class="card span6 stack">
         <div class="row"><h2>¿Qué estrategia es fiable?</h2><a href="#laboratorio" style="font-size:13px;font-weight:600;text-decoration:none;padding:8px 0">Ver detalle →</a></div>
         <div class="lights" id="lights"></div>
-        <p class="sub" style="margin:0">Gris: sin datos · rojo: menos de 30 operaciones, aún puede ser suerte · ámbar: prometedora · verde: ventaja demostrada (100+ operaciones) · negro: pierde de verdad.</p>
+        <p class="sub" style="margin:0">Gris: sin datos · rojo: &lt;30 ops (azar) · ámbar: 30–99 ops · verde: ventaja demostrada (100+ ops, t ≥ 2) · negro: pierde de verdad.</p>
       </div>
 
       <div class="card span6 stack" id="p13-home"></div>
@@ -217,7 +218,7 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
       </div>
     </div>
     <div class="section">
-      <div class="section-title"><h2>¿Cuándo gana? Condición al entrar → R medio (salida normal)</h2></div>
+      <div class="section-title"><h2 id="stack-title">¿Cuándo gana? Condición al entrar → R medio (salida normal)</h2></div>
       <div class="filters" style="margin:0 4px 10px"><label for="stack-filter">Estrategia</label><select id="stack-filter" style="min-height:40px;border-radius:10px;border:1px solid var(--line);padding:0 10px;font:inherit;background:#fff"></select></div>
       <div class="grid" id="stack-grid" style="grid-template-columns:repeat(auto-fit,minmax(230px,1fr))"></div>
     </div>
@@ -266,6 +267,13 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
       </table></div>
       <div id="rank-watch" class="sub"></div>
     </div>
+    <details class="group section" id="res-hist-wrap">
+      <summary><div class="kv"><b style="font-size:15px">Historial completo de operaciones cerradas</b><span id="hist-count">Cargando…</span></div><svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></summary>
+      <div style="padding:0 16px 16px"><div class="tablebox"><table>
+        <thead><tr><th>Hora</th><th>Activo</th><th>Estrategia · marco</th><th>Broker</th><th class="num">Entrada → Salida</th><th>Motivo</th><th class="num">Resultado</th><th>Estado</th></tr></thead>
+        <tbody id="hist-body"></tbody>
+      </table></div></div>
+    </details>
   </section>
 
   <!-- ======================= GRÁFICO ======================= -->
@@ -341,6 +349,7 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
   const fmtN = (v, d = 2) => (v == null ? '–' : Math.abs(v).toLocaleString('es-ES', { minimumFractionDigits: d, maximumFractionDigits: d }));
   const sign = v => (v > 0 ? '+' : v < 0 ? '−' : '');
   const money = (v, cur = '$', d = 2) => v == null ? '–' : sign(v) + (cur === '€' ? '€' : '$') + fmtN(v, (v !== 0 && Math.abs(v) < 0.1 && d === 2) ? 3 : d);
+  const absMoney = (v, cur = '$', d = 2) => v == null ? '–' : (cur === '€' ? '€' : '$') + fmtN(Math.abs(v), (v !== 0 && Math.abs(v) < 0.1 && d === 2) ? 3 : d);
   const R = (v, d = 2) => v == null ? '–' : sign(v) + fmtN(v, d) + 'R';
   const cls = v => v == null ? 'zero' : v > 0 ? 'pos' : v < 0 ? 'neg' : 'zero';
   const romeTime = d => new Date(d).toLocaleTimeString('es-ES', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' });
@@ -360,8 +369,8 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
   const assetOf = s => { s = String(s || '').toUpperCase().replace('/', ''); return s === 'GLD' ? 'XAUUSD' : s; };
 
   // ---------- estado de la interfaz ----------
-  const ui = { view: 'inicio', exit: 'STD', tf: 'all', asset: 'all', broker: 'all', cAsset: 'TSLA', cTf: '15m', stack: '' };
-  let st = null, lastOk = 0, eurUsd = 1.08;
+  const ui = { view: 'inicio', exit: 'STD', tf: 'all', asset: 'all', broker: 'all', cAsset: 'TSLA', cTf: '15m', stack: '', openGroups: new Set(), touchedGroups: false };
+  let st = null, lastOk = 0, eurUsd = 1.08, lastChartKey = '';
 
   // ---------- navegación ----------
   function buildNav() {
@@ -404,6 +413,7 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
     if (s.light === 'verde') return { txt: 'sí · ventaja (' + s.n + ' ops)', tag: 'tag-green' };
     if (s.light === 'negro') return { txt: 'sí · pierde (' + s.n + ' ops)', tag: 'tag-red' };
     if (s.n < 30) return { txt: 'aún no · ' + s.n + ' de 100', tag: 'tag-gray' };
+    if (s.avgR != null && s.avgR <= 0) return { txt: 'negativo · ' + s.n + ' de 100', tag: 'tag-amber' };
     return { txt: 'falta · ' + s.n + ' de 100', tag: 'tag-amber' };
   }
   function marketOpen() {
@@ -433,7 +443,8 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
     const bt = st.brokerTruth || {};
     const mc = (label, b, cur) => {
       if (!b) return '<div class="card"><div class="sub">' + label + '</div><div class="big zero">–</div></div>';
-      return '<div class="card stack" style="gap:6px"><span class="sub">' + label + '</span><span class="big ' + cls(b.realPnl) + '">' + money(b.realPnl, cur) + '</span><span class="sub">Inicio ' + (cur === '€' ? '€' : '$') + fmtN(b.start) + ' · ahora ' + (cur === '€' ? '€' : '$') + fmtN(b.equity ?? b.balance) + '</span><span class="sub">Caída máx. ' + fmtN(b.drawdownFromPeakPct) + ' %</span></div>';
+      const gapLine = (b.gap != null) ? '<span class="sub">Libreta ' + money(b.ledgerPnl, cur) + ' · brecha ' + money(b.gap, cur) + '</span>' : '';
+      return '<div class="card stack" style="gap:6px"><span class="sub">' + label + '</span><span class="big ' + cls(b.realPnl) + '">' + money(b.realPnl, cur) + '</span><span class="sub">Inicio ' + (cur === '€' ? '€' : '$') + fmtN(b.start) + ' · ahora ' + (cur === '€' ? '€' : '$') + fmtN(b.equity ?? b.balance) + '</span><span class="sub">Caída máx. ' + fmtN(b.drawdownFromPeakPct) + ' %</span>' + gapLine + '</div>';
     };
     $('money-cards').innerHTML = mc('Alpaca · USD', bt.alpaca, '$') + mc('Pepperstone · EUR', bt.pepperstone, '€');
     $('money-title').textContent = 'Dinero real desde el punto cero (' + romeLabel(epochMs()) + ')';
@@ -446,11 +457,11 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
     const ctR = ct.reduce((a, t) => a + (num(t.rMultiple) || 0), 0), ctUsd = ct.reduce((a, t) => a + pnlUSD(t), 0);
     $('q-today').textContent = ct.length; $('q-today-sub').innerHTML = '<b class="' + cls(ctUsd) + '">' + money(ctUsd) + '</b> · ' + R(ctR);
 
-    $('lights').innerHTML = CODES.concat(['p13']).map(c => {
-      let lt = lightOf(c).light || 'gris';
-      if (c === 'p13') lt = sl ? 'gris' : 'gris';
+    $('lights').innerHTML = CODES.map(c => {
+      const s = lightOf(c);
+      const lt = s.light || 'gris';
       const [f, r] = LIGHT_STYLE[lt] || LIGHT_STYLE.gris;
-      return '<div class="light"><i style="background:' + f + ';border-color:' + r + '" aria-hidden="true"></i>' + c.toUpperCase() + '<span class="visually-hidden">: ' + esc(fiable(lightOf(c)).txt) + '</span></div>';
+      return '<div class="light"><i style="background:' + f + ';border-color:' + r + '" aria-hidden="true"></i>' + c.toUpperCase() + '<span class="visually-hidden">: ' + esc(fiable(s).txt) + '</span></div>';
     }).join('');
 
     $('p13-home').innerHTML = p13Html();
@@ -481,10 +492,10 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
     if (!sm) { $('lab-body').innerHTML = '<tr><td colspan="6" class="sub">El laboratorio fantasma aún no tiene datos.</td></tr>'; }
     else {
       const rows = CODES.map(c => {
-        const s = (sm.byStrategy && sm.byStrategy[c]) || {}; const a = s[ui.exit] || { n: 0 }; const std = s.STD || { n: 0 };
+        const s = (sm.byStrategy && sm.byStrategy[c]) || {}; const a = s[ui.exit] || { n: 0 };
         let best = null;
         Object.entries(sm.byCell || {}).forEach(([k, v]) => { if (!k.startsWith(c + '_')) return; const x = v[ui.exit]; if (!x || x.n < 10) return; if (!best || x.avgR > best.avgR) best = { k: k.slice(c.length + 1).replace('_', ' · ').replace('XAUUSD', 'Oro').replace('SOLUSD', 'SOL'), avgR: x.avgR, n: x.n }; });
-        const f = fiable(std);
+        const f = fiable(a);
         return { n: a.n || 0, avg: a.avgR, html: '<tr><td><b>' + esc(NAMES[c]) + '</b></td><td class="num">' + (a.n || 0) + '</td><td class="num ' + cls(a.avgR) + '"><b>' + R(a.avgR) + '</b></td><td class="num">' + (a.wr == null ? '–' : fmtN(a.wr, 0) + ' %') + '</td><td><span class="tag ' + f.tag + '">' + esc(f.txt) + '</span></td><td class="sub">' + (best ? esc(best.k) + ' <b class="' + cls(best.avgR) + '">' + R(best.avgR) + '</b> (' + best.n + ')' : '–') + '</td></tr>' };
       }).sort((x, y) => (y.n >= 10) - (x.n >= 10) || ((y.avg ?? -99) - (x.avg ?? -99)) || (y.n - x.n));
       $('lab-body').innerHTML = rows.map(r => r.html).join('');
@@ -506,8 +517,10 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
       ['Marco temporal', r => r.tf],
       ['Activo', r => ASSET_LABEL[r.ticker] || r.ticker]
     ];
+    const stackTitle = $('stack-title');
+    if (stackTitle) stackTitle.textContent = '¿Cuándo gana? Condición al entrar → R medio (' + (ui.exit === 'STEP' ? 'tu escalera' : 'salida normal') + ')';
     $('stack-grid').innerHTML = rec.length ? buckets.map(([t, fn]) => {
-      const g = {}; rec.forEach(r => { const k = fn(r); if (!k) return; (g[k] = g[k] || []).push(r.rStd); });
+      const g = {}; rec.forEach(r => { const k = fn(r); const rv = ui.exit === 'STEP' ? r.rStep : r.rStd; if (!k || rv == null) return; (g[k] = g[k] || []).push(rv); });
       const lines = Object.entries(g).map(([k, a]) => [k, a.reduce((x, y) => x + y, 0) / a.length, a.length]).sort((a, b) => b[1] - a[1]);
       return '<div class="card stack" style="gap:6px"><b style="font-size:13px">' + esc(t) + '</b>' + (lines.map(([k, v, n]) => '<div class="row" style="font-size:13px"><span>' + esc(k) + '</span><span><b class="' + cls(v) + '">' + R(v) + '</b> <span class="sub">(' + n + ')</span></span></div>').join('') || '<span class="sub">sin datos</span>') + '</div>';
     }).join('') : '<div class="empty">Aún no hay operaciones fantasma cerradas para analizar.</div>';
@@ -532,8 +545,10 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
       const ps = groups[c]; const g = ps.reduce((a, p) => a + pnlOf(p), 0);
       const name = NAMES[c] || (c === 'custodia' ? 'Sin estrategia (custodia)' : 'Otras');
       const tfs = [...new Set(ps.map(p => p.timeframe))].join(' · ');
-      return '<details class="group"' + (keys.length <= 2 ? ' open' : '') + '><summary><div class="kv"><b style="font-size:15px">' + esc(name) + '</b><span>' + ps.length + ' abiertas · ' + esc(tfs) + '</span></div><div class="row" style="gap:10px"><b class="' + cls(g) + '">' + money(g) + '</b><svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></div></summary><div class="posgrid">' + ps.map(posCard).join('') + '</div></details>';
+      const isOpen = ui.touchedGroups ? ui.openGroups.has(c) : (keys.length <= 2);
+      return '<details class="group" data-code="' + esc(c) + '"' + (isOpen ? ' open' : '') + '><summary><div class="kv"><b style="font-size:15px">' + esc(name) + '</b><span>' + ps.length + ' abiertas · ' + esc(tfs) + '</span></div><div class="row" style="gap:10px"><b class="' + cls(g) + '">' + money(g) + '</b><svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></div></summary><div class="posgrid">' + ps.map(posCard).join('') + '</div></details>';
     }).join('') : '<div class="empty">No hay operaciones abiertas' + (all.length ? ' con estos filtros.' : '.') + '</div>';
+    $('live-groups').querySelectorAll('details.group').forEach(el => el.addEventListener('toggle', () => { ui.touchedGroups = true; const c = el.dataset.code; if (el.open) ui.openGroups.add(c); else ui.openGroups.delete(c); }));
 
     // fuera del motor
     const out = [];
@@ -561,7 +576,7 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
     const pc = v => Math.max(0, Math.min(100, (v - lo) / (hi - lo) * 100)).toFixed(0) + '%';
     const note = (sl != null && e != null && sl >= e) ? (p.exitMode === 'STEP' ? 'La escalera ya subió el stop: no puede perder.' : 'Stop en la entrada: como mucho sale a cero.') : (p.pendingClose ? 'Cierre pendiente: el broker no lo confirmó, se reintenta.' : 'En su stop inicial.');
     return '<div class="poscard"><div class="row"><div class="kv"><b style="font-size:15px">' + esc(ASSET_LABEL[assetOf(p.symbol)] || p.symbol) + ' · ' + esc(brokerName(p.broker)) + '</b><span>Marco ' + esc(p.timeframe || '–') + ' · salida ' + exitName(p.exitMode) + ' · abierta ' + (p.openedAt ? romeLabel(p.openedAt) : '–') + '</span></div><div class="kv" style="text-align:right"><b class="' + cls(pnl) + '">' + money(pnl) + '</b><span class="' + cls(r) + '">' + R(r) + '</span></div></div>' +
-      '<div class="money3"><div class="kv"><span>Invertido</span><b>' + money(e * q) + '</b><span>' + fmtN(q, q < 1 ? 2 : 0) + ' ' + (assetOf(p.symbol) === 'SOLUSD' ? 'SOL' : brokerKey(p.broker) === 'pep' ? 'CFD' : 'acc.') + '</span></div><div class="kv"><span>Arriesga</span><b>' + (riskNow == null ? '–' : riskNow <= 0 ? 'nada' : money(riskNow)) + '</b><span>si toca el stop</span></div><div class="kv"><span>Puede ganar</span><b class="pos">' + money(gain) + '</b><span>si llega al objetivo</span></div></div>' +
+      '<div class="money3"><div class="kv"><span>Invertido</span><b>' + absMoney(e * q) + '</b><span>' + fmtN(q, q < 1 ? 2 : 0) + ' ' + (assetOf(p.symbol) === 'SOLUSD' ? 'SOL' : brokerKey(p.broker) === 'pep' ? 'CFD' : 'acc.') + '</span></div><div class="kv"><span>Arriesga</span><b>' + (riskNow == null ? '–' : riskNow <= 0 ? 'nada' : absMoney(riskNow)) + '</b><span>si toca el stop</span></div><div class="kv"><span>Puede ganar</span><b class="pos">' + money(gain) + '</b><span>si llega al objetivo</span></div></div>' +
       '<div class="stack" style="gap:6px"><div class="bar"><div class="fill" style="width:' + (px ? pc(px) : '0%') + ';background:' + (px >= e ? 'var(--green)' : 'var(--red)') + '"></div><div class="mark" style="left:' + pc(e) + '"></div></div><div class="row sub"><span>Stop $' + fmtN(sl, d) + '</span><span>Entrada $' + fmtN(e, d) + '</span><span>Objetivo $' + fmtN(tp, d) + '</span></div></div>' +
       '<span class="sub">' + esc(note) + '</span></div>';
   }
@@ -583,15 +598,27 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
     list.forEach(t => { const k = stratCode(t) + '|' + (t.timeframe || '–'); (g[k] = g[k] || []).push(t); });
     const rows = Object.entries(g).map(([k, ts]) => {
       const [c, tf] = k.split('|'); const ev = [];
-      ts.forEach(t => { const nUsd = Math.abs(num(t.qty) || 0) * (num(t.entryPrice) || 0) * (t.currency === 'EUR' ? 1 : 1); ev.push([Date.parse(t.openedAt), nUsd], [Date.parse(t.closedAt), -nUsd]); });
+      ts.forEach(t => { const nUsd = Math.abs(num(t.qty) || 0) * (num(t.entryPrice) || 0); ev.push([Date.parse(t.openedAt), nUsd], [Date.parse(t.closedAt), -nUsd]); });
       ev.sort((a, b) => a[0] - b[0] || a[1] - b[1]); let cur = 0, peak = 0; ev.forEach(([, v]) => { cur += v; peak = Math.max(peak, cur); });
       const tot = ts.reduce((a, t) => a + pnlUSD(t), 0), td = ts.filter(t => romeDay(t.closedAt) === today).reduce((a, t) => a + pnlUSD(t), 0);
       return { c, tf, n: ts.length, tot, td, peak, ret: peak > 0 ? tot / peak * 100 : null, f: fiable(lightOf(c)) };
     });
     const ranked = rows.filter(r => r.n >= 20).sort((a, b) => (b.ret ?? -1e9) - (a.ret ?? -1e9));
     const watch = rows.filter(r => r.n < 20).sort((a, b) => b.n - a.n);
-    $('rank-body').innerHTML = ranked.length ? ranked.map((r, i) => '<tr><td>' + (i + 1) + '</td><td><b>' + esc(NAMES[r.c] || r.c) + '</b> · ' + esc(r.tf) + '</td><td class="num">' + r.n + '</td><td class="num ' + cls(r.td) + '">' + money(r.td) + '</td><td class="num ' + cls(r.tot) + '"><b>' + money(r.tot) + '</b></td><td class="num">' + money(r.peak, '$', 0).replace('+', '') + '</td><td class="num ' + cls(r.ret) + '"><b>' + (r.ret == null ? '–' : sign(r.ret) + fmtN(r.ret, 2) + ' %') + '</b></td><td><span class="tag ' + r.f.tag + '">' + esc(r.f.txt) + '</span></td></tr>').join('') : '<tr><td colspan="8" class="sub">Ninguna estrategia lleva 20 operaciones desde el punto cero. Para entrar en la clasificación hacen falta 20.</td></tr>';
+    $('rank-body').innerHTML = ranked.length ? ranked.map((r, i) => '<tr><td>' + (i + 1) + '</td><td><b>' + esc(NAMES[r.c] || r.c) + '</b> · ' + esc(r.tf) + '</td><td class="num">' + r.n + '</td><td class="num ' + cls(r.td) + '">' + money(r.td) + '</td><td class="num ' + cls(r.tot) + '"><b>' + money(r.tot) + '</b></td><td class="num">' + absMoney(r.peak, '$', 0) + '</td><td class="num ' + cls(r.ret) + '"><b>' + (r.ret == null ? '–' : sign(r.ret) + fmtN(r.ret, 2) + ' %') + '</b></td><td><span class="tag ' + r.f.tag + '">' + esc(r.f.txt) + '</span></td></tr>').join('') : '<tr><td colspan="8" class="sub">Ninguna estrategia lleva 20 operaciones desde el punto cero. Para entrar en la clasificación hacen falta 20.</td></tr>';
     $('rank-watch').innerHTML = watch.length ? '<b>En observación (menos de 20 operaciones):</b> ' + watch.map(r => esc(NAMES[r.c] || r.c) + ' · ' + esc(r.tf) + ' (' + r.n + ', <span class="' + cls(r.tot) + '">' + money(r.tot) + '</span>)').join(' · ') : '';
+
+    // historial completo desde el punto cero (incluye cierres fallidos marcados en rojo para auditoría)
+    const allEp = (st.closedTradesHistory || []).filter(t => t.strategyVersion && Date.parse(t.openedAt || 0) >= ep);
+    const failedEp = allEp.filter(t => t.brokerCloseExecuted === false).length;
+    $('hist-count').textContent = list.length + ' confirmadas' + (failedEp ? ' · ' + failedEp + ' con cierre fallido (no cuentan)' : '') + ' · toca para desplegar';
+    $('hist-body').innerHTML = allEp.length ? allEp.slice(0, 150).map(t => {
+      const d = assetOf(t.symbol) === 'SOLUSD' ? 3 : 2;
+      const u = pnlUSD(t), r = num(t.rMultiple);
+      const ok = t.brokerCloseExecuted !== false;
+      const badge = t.brokerCloseExecuted === true ? '<span class="tag tag-green">Confirmado</span>' : (t.brokerCloseExecuted === false ? '<span class="tag tag-red" title="' + esc(t.closeError || '') + '">Falló · no cuenta</span>' : '<span class="tag tag-gray">Libreta</span>');
+      return '<tr' + (ok ? '' : ' style="opacity:.65"') + '><td class="sub" style="white-space:nowrap">' + (t.closedAt ? romeLabel(t.closedAt) : '–') + '</td><td><b>' + esc(ASSET_LABEL[assetOf(t.symbol)] || t.symbol) + '</b></td><td>' + esc(NAMES[stratCode(t)] || 'Otra') + ' · <span class="sub">' + esc(t.timeframe || '–') + '</span></td><td class="sub">' + esc(brokerName(t.broker)) + ' · ' + exitName(t.exitMode) + '</td><td class="num sub" style="white-space:nowrap">$' + fmtN(num(t.entryPrice), d) + ' → $' + fmtN(num(t.exitPrice), d) + '</td><td class="sub">' + esc((t.closeReason || '').replace(/[^\wÀ-ÿ ().,+\-%]/g, '').trim().slice(0, 42)) + '</td><td class="num" style="white-space:nowrap"><b class="' + cls(u) + '">' + money(u) + '</b> <span class="sub ' + cls(r) + '">' + R(r) + '</span></td><td>' + badge + '</td></tr>';
+    }).join('') : '<tr><td colspan="8" class="sub">Todavía no hay operaciones cerradas desde el punto cero.</td></tr>';
   }
 
   // ---------- GRÁFICO ----------
@@ -612,7 +639,15 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
     try {
       const res = await fetch(API + '/bars?symbol=' + encodeURIComponent(ui.cAsset) + '&tf=' + encodeURIComponent(ui.cTf) + '&t=' + Date.now());
       const p = res.ok ? await res.json() : null; const c = (p && p.candles) || [];
+      const ck = ui.cAsset + '|' + ui.cTf;
+      const sameView = ck === lastChartKey;
+      const savedRange = (chart && sameView) ? chart.timeScale().getVisibleLogicalRange() : null;
       if (series) { series.setData(c); lines.forEach(l => { try { series.removePriceLine(l); } catch (e) {} }); lines = []; }
+      if (chart && c.length) {
+        if (savedRange) chart.timeScale().setVisibleLogicalRange(savedRange);
+        else chart.timeScale().fitContent();
+      }
+      lastChartKey = ck;
       const last = c.length ? c[c.length - 1].close : null; const q = (p && num(p.liveQuote)) || last;
       $('c-price').textContent = q ? '$' + fmtN(q, ui.cAsset === 'SOLUSD' ? 3 : 2) : '–';
       $('c-meta').textContent = c.length ? c.length + ' velas · última ' + romeLabel(c[c.length - 1].time * 1000) : 'Sin velas todavía';
