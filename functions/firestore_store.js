@@ -251,6 +251,7 @@ async function hydrateFromFirestore(engineState) {
             if (stateData.shadowLab && typeof stateData.shadowLab === 'object' && !engineState.shadowLab) {
                 engineState.shadowLab = {
                     startedAt: stateData.shadowLab.startedAt || new Date().toISOString(),
+                    epoch: stateData.shadowLab.epoch || null, // [FIX ANTIGRAVITY v2.6.1] preservar epoch del punto cero al reiniciar
                     version: stateData.shadowLab.version || 'v2.4',
                     agg: stateData.shadowLab.agg || {},
                     open: Array.isArray(stateData.shadowLab.open) ? stateData.shadowLab.open : [],
@@ -313,6 +314,7 @@ async function syncEngineState(engineState, force = false) {
             peakEquity: engineState.peakEquity || {},
             shadowLab: engineState.shadowLab ? {
                 startedAt: engineState.shadowLab.startedAt || null,
+                epoch: engineState.shadowLab.epoch || null, // [FIX ANTIGRAVITY v2.6.1] evitar reinicio repetido de shadowLab tras redeploy
                 version: engineState.shadowLab.version || 'v2.4',
                 agg: engineState.shadowLab.agg || {},
                 open: (engineState.shadowLab.open || []).slice(0, 200),
