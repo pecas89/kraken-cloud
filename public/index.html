@@ -270,36 +270,26 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
       </div>
     </div>
     <div class="card card-dark stack" id="res-summary"></div>
-    <div class="section grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">
-      <div class="card stack">
-        <div class="row"><h2>Quién va ganando</h2><span class="sub" id="res-win-sub">ordenado por R</span></div>
-        <div class="stack" style="gap:10px" id="res-winners"></div>
-      </div>
-      <div class="card stack">
-        <div class="row"><h2>Curva acumulada (R)</h2><span class="sub" id="res-curve-sub">evolución en el período</span></div>
-        <div class="filters" id="res-curve-legend" style="gap:10px;font-size:12px"></div>
-        <div class="eqbox" id="res-curve" role="img" aria-label="Curva acumulada de resultados por estrategia"></div>
-        <div class="sub" id="res-curve-empty" hidden>Sin operaciones cerradas con estos filtros para dibujar la curva.</div>
-      </div>
+    <div class="section card stack">
+      <div class="row"><h2>Curva acumulada (R)</h2><span class="sub" id="res-curve-sub">evolución en el período</span></div>
+      <div class="filters" id="res-curve-legend" style="gap:10px;font-size:12px"></div>
+      <div class="eqbox" id="res-curve" role="img" aria-label="Curva acumulada de resultados por estrategia"></div>
+      <div class="sub" id="res-curve-empty" hidden>Sin operaciones cerradas con estos filtros para dibujar la curva.</div>
     </div>
     <div class="section grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">
       <div class="card stack"><h2>Día a día</h2><div class="stack" style="gap:10px" id="res-days"></div></div>
       <div class="card stack" id="res-exits"></div>
     </div>
-    <div class="section stack" style="gap:10px">
-      <div class="section-title"><h2>Cerradas por estrategia</h2><span class="sub" id="res-grp-sub">Toca una estrategia para ver sus operaciones</span></div>
-      <div class="stack" id="res-groups"></div>
-    </div>
-    <div class="section card stack" id="res-rank-card">
-      <div class="row" style="flex-wrap:wrap"><h2>Clasificación oficial (≥20 ops)</h2><span class="sub">Rendimiento = ganancia ÷ capital máximo invertido a la vez</span></div>
+    <div class="section card stack">
+      <div class="row" style="flex-wrap:wrap"><h2>Clasificación por estrategia y marco</h2><span class="sub" id="rank-sub">Rendimiento = ganancia ÷ capital máximo invertido a la vez</span></div>
       <div class="tablebox"><table>
-        <thead><tr><th>#</th><th>Estrategia · marco</th><th class="num">Ops</th><th class="num">Hoy</th><th class="num">En el filtro</th><th class="num">Capital máx.</th><th class="num">Rendimiento</th><th>¿Fiable?</th></tr></thead>
+        <thead><tr id="rank-head"><th>#</th><th>Estrategia · marco</th><th class="num">Ops</th><th class="num">Hoy</th><th class="num">Desde el inicio</th><th class="num">Capital máx.</th><th class="num">Rendimiento</th><th>¿Fiable?</th></tr></thead>
         <tbody id="rank-body"></tbody>
       </table></div>
       <div id="rank-watch" class="sub"></div>
     </div>
     <details class="group section" id="res-hist-wrap">
-      <summary><div class="kv"><b style="font-size:15px">Historial completo sin agrupar (auditoría)</b><span id="hist-count">Cargando…</span></div><svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></summary>
+      <summary><div class="kv"><b style="font-size:15px">Historial completo de operaciones cerradas</b><span id="hist-count">Cargando…</span></div><svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></summary>
       <div style="padding:0 16px 16px"><div class="tablebox"><table>
         <thead><tr><th>Hora</th><th>Activo</th><th>Estrategia · marco</th><th>Broker</th><th class="num">Entrada → Salida</th><th>Motivo</th><th class="num">Resultado</th><th>Estado</th></tr></thead>
         <tbody id="hist-body"></tbody>
@@ -796,26 +786,17 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
       return { code, arr, n: arr.length, w, wr: arr.length ? w / arr.length * 100 : 0, sumR, avgR: arr.length ? sumR / arr.length : 0, sumU, tfs };
     }).sort((a, b) => b.sumR - a.sumR || ((b.sumU ?? 0) - (a.sumU ?? 0)));
 
-    // 1. Barras: Quién va ganando
-    $('res-win-sub').textContent = stratGroups.length ? (stratGroups.length + ' estrategias · ordenado por R') : 'sin datos en este filtro';
-    const mxS = Math.max(0.5, ...stratGroups.map(sg => Math.abs(sg.sumR)));
-    $('res-winners').innerHTML = stratGroups.length ? stratGroups.map(sg => {
-      const v = sg.sumR, w = Math.abs(v) / mxS * 50;
-      const rightTxt = '<b class="' + cls(v) + '">' + R(v, 1) + '</b>' + (!isShadow ? ' <span class="sub">' + money(sg.sumU) + '</span>' : ' <span class="sub">(' + sg.n + ')</span>');
-      return '<div class="hbar"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + esc(NAMES[sg.code] || sg.code) + ' (' + sg.n + ' ops)"><b>' + esc(NAMES[sg.code] || sg.code) + '</b></span><div class="track"><div class="axis"></div><div class="b" style="left:' + (v >= 0 ? 50 : 50 - w).toFixed(1) + '%;width:' + w.toFixed(1) + '%;background:' + (v >= 0 ? 'var(--green)' : 'var(--red)') + '"></div></div><span style="text-align:right;white-space:nowrap">' + rightTxt + '</span></div>';
-    }).join('') : '<div class="sub">Sin operaciones cerradas con estos filtros.</div>';
-
-    // 2. Curva acumulada (R)
+    // 1. Curva acumulada (R) del filtro actual (total + top 4 estrategias)
     $('res-curve-sub').textContent = items.length ? ('total + top ' + Math.min(4, stratGroups.length) + ' estrategias') : '';
     drawEquityCurve(items, stratGroups, isShadow);
 
-    // 3. Día a día (del filtro actual)
+    // 2. Día a día (del filtro actual)
     const days = {};
     items.forEach(x => { const d = romeDay(x.closedAt); days[d] = days[d] || { r: 0, u: 0, n: 0 }; days[d].r += x.r; if (!isShadow) days[d].u += x.usd; days[d].n++; });
     const dk = Object.keys(days).sort(); const mxD = Math.max(1, ...dk.map(k => Math.abs(days[k].r)));
     $('res-days').innerHTML = dk.length ? dk.map(k => { const v = days[k].r, w = Math.abs(v) / mxD * 50; const lbl = new Date(k + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'short', day: '2-digit' }); return '<div class="hbar day"><span>' + esc(lbl) + '</span><div class="track"><div class="axis"></div><div class="b" style="left:' + (v >= 0 ? 50 : 50 - w).toFixed(1) + '%;width:' + w.toFixed(1) + '%;background:' + (v >= 0 ? 'var(--green)' : 'var(--red)') + '"></div></div><span style="text-align:right"><b class="' + cls(v) + '">' + R(v, 1) + '</b> <span class="sub">' + days[k].n + '</span></span></div>'; }).join('') : '<div class="sub">Sin cierres en este filtro.</div>';
 
-    // 4. Por salida (recalculado sobre el filtro actual)
+    // 3. Por salida (recalculado sobre el filtro actual)
     let stdStats, stepStats;
     if (isShadow) {
       const calcSh = key => {
@@ -824,7 +805,7 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
         return { n: vals.length, avgR: vals.length ? sum / vals.length : null, sumR: sum };
       };
       stdStats = calcSh('rStd'); stepStats = calcSh('rStep');
-      $('res-exits').innerHTML = '<h2>Por salida (mismo filtro)</h2><div class="grid g2">' +
+      $('res-exits').innerHTML = '<h2>Por salida</h2><div class="grid g2">' +
         '<div class="kv"><span>Normal · STD</span><b class="big ' + cls(stdStats.avgR) + '" style="font-size:22px">' + R(stdStats.avgR) + '</b><span>' + stdStats.n + ' ops · total ' + R(stdStats.sumR, 1) + '</span></div>' +
         '<div class="kv"><span>Tu escalera · STEP</span><b class="big ' + cls(stepStats.avgR) + '" style="font-size:22px">' + R(stepStats.avgR) + '</b><span>' + stepStats.n + ' ops · total ' + R(stepStats.sumR, 1) + '</span></div>' +
         '</div>';
@@ -835,48 +816,53 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
         return { n: sub.length, avgR: sub.length ? sumR / sub.length : null, sumU };
       };
       stdStats = calcEx('STD'); stepStats = calcEx('STEP');
-      $('res-exits').innerHTML = '<h2>Por salida (mismo filtro)</h2><div class="grid g2">' +
+      $('res-exits').innerHTML = '<h2>Por salida</h2><div class="grid g2">' +
         '<div class="kv"><span>Normal · Pepperstone</span><b class="big ' + cls(stdStats.avgR) + '" style="font-size:22px">' + R(stdStats.avgR) + '</b><span>' + stdStats.n + ' ops · ' + money(stdStats.sumU) + '</span></div>' +
         '<div class="kv"><span>Escalera · Alpaca</span><b class="big ' + cls(stepStats.avgR) + '" style="font-size:22px">' + R(stepStats.avgR) + '</b><span>' + stepStats.n + ' ops · ' + money(stepStats.sumU) + '</span></div>' +
         '</div>';
     }
 
-    // 5. Acordeones por estrategia (espejo de En vivo, persistentes)
-    $('res-grp-sub').textContent = stratGroups.length ? (items.length + ' cerradas en ' + stratGroups.length + ' estrategias · toca para desplegar') : '';
-    $('res-groups').innerHTML = stratGroups.length ? stratGroups.map(sg => {
-      const isOpen = ui.resTouched ? ui.resOpenGroups.has(sg.code) : (stratGroups.length <= 2);
-      const name = NAMES[sg.code] || (sg.code === 'custodia' ? 'Sin estrategia (custodia)' : 'Otras');
-      const f = fiable(lightOf(sg.code));
-      const rowsHtml = sg.arr.slice().sort((a, b) => b.ts - a.ts).slice(0, 60).map(x => {
-        const d = x.asset === 'SOLUSD' ? 3 : 2;
-        const pxCell = x.exit != null ? ('$' + fmtN(x.entry, d) + ' → $' + fmtN(x.exit, d)) : ('$' + fmtN(x.entry, d));
-        const resCell = isShadow ? ('<b class="' + cls(x.r) + '">' + R(x.r) + '</b>') : ('<b class="' + cls(x.usd) + '">' + money(x.usd) + '</b> <span class="sub ' + cls(x.r) + '">' + R(x.r) + '</span>');
-        return '<tr><td class="sub" style="white-space:nowrap">' + (x.closedAt ? romeLabel(x.closedAt) : '–') + '</td><td><b>' + esc(ASSET_LABEL[x.asset] || x.asset) + '</b> · <span class="sub">' + esc(x.tf) + '</span></td><td class="sub">' + esc(x.brokerLabel) + '</td><td class="num sub" style="white-space:nowrap">' + pxCell + '</td><td class="sub">' + esc(x.reason.slice(0, 38)) + '</td><td class="num" style="white-space:nowrap">' + resCell + '</td></tr>';
-      }).join('');
-      const rightHead = isShadow
-        ? '<div class="kv" style="text-align:right"><b class="' + cls(sg.sumR) + '">' + R(sg.sumR, 1) + '</b><span class="sub">media ' + R(sg.avgR, 2) + '</span></div>'
-        : '<div class="kv" style="text-align:right"><b class="' + cls(sg.sumU) + '">' + money(sg.sumU) + '</b><span class="' + cls(sg.sumR) + '">' + R(sg.sumR, 1) + '</span></div>';
-      return '<details class="group" data-rc="' + esc(sg.code) + '"' + (isOpen ? ' open' : '') + '><summary><div class="kv"><div class="row" style="justify-content:flex-start;gap:8px;flex-wrap:wrap"><b style="font-size:15px">' + esc(name) + '</b><span class="tag ' + f.tag + '">' + esc(f.txt) + '</span></div><span>' + sg.n + ' cerradas · ' + fmtN(sg.wr, 0) + ' % ganadoras · ' + esc(sg.tfs) + '</span></div><div class="row" style="gap:10px">' + rightHead + '<svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></div></summary><div style="padding:0 14px 14px"><div class="tablebox"><table><thead><tr><th>Hora</th><th>Activo · marco</th><th>Broker / salida</th><th class="num">Precio</th><th>Motivo</th><th class="num">Resultado</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div></div></details>';
-    }).join('') : '<div class="empty">No hay operaciones cerradas con estos filtros.</div>';
-    $('res-groups').querySelectorAll('details.group').forEach(el => el.addEventListener('toggle', () => { ui.resTouched = true; const c = el.dataset.rc; if (el.open) ui.resOpenGroups.add(c); else ui.resOpenGroups.delete(c); }));
+    // 4. Tabla completa: Clasificación por estrategia y marco (con TODAS sus columnas, filtrada)
+    if (isShadow) {
+      $('rank-sub').textContent = 'Operaciones fantasma del filtro · ordenado por R total';
+      $('rank-head').innerHTML = '<th>#</th><th>Estrategia · marco</th><th class="num">Ops</th><th class="num">Ganadoras</th><th class="num">Hoy (R)</th><th class="num">Total R</th><th class="num">R medio</th><th>¿Fiable?</th>';
+      const g = {};
+      items.forEach(x => { const k = x.code + '|' + x.tf; (g[k] = g[k] || []).push(x); });
+      const rows = Object.entries(g).map(([k, arr]) => {
+        const [c, tf] = k.split('|');
+        const w = arr.filter(x => x.r > 0).length;
+        const totR = arr.reduce((a, x) => a + x.r, 0);
+        const tdR = arr.filter(x => romeDay(x.closedAt) === today).reduce((a, x) => a + x.r, 0);
+        const sm = shadowSum(); const sObj = sm && sm.byStrategy && sm.byStrategy[c] && sm.byStrategy[c][ui.rShadowExit];
+        return { c, tf, n: arr.length, wr: arr.length ? w / arr.length * 100 : 0, tdR, totR, avgR: arr.length ? totR / arr.length : 0, f: fiable(sObj || lightOf(c)) };
+      }).sort((a, b) => b.totR - a.totR);
+      $('rank-body').innerHTML = rows.length ? rows.map((r, i) => '<tr><td>' + (i + 1) + '</td><td><b>' + esc(NAMES[r.c] || r.c) + '</b> · ' + esc(r.tf) + '</td><td class="num">' + r.n + '</td><td class="num">' + fmtN(r.wr, 0) + ' %</td><td class="num ' + cls(r.tdR) + '">' + R(r.tdR, 1) + '</td><td class="num ' + cls(r.totR) + '"><b>' + R(r.totR, 1) + '</b></td><td class="num ' + cls(r.avgR) + '">' + R(r.avgR, 2) + '</td><td><span class="tag ' + r.f.tag + '">' + esc(r.f.txt) + '</span></td></tr>').join('') : '<tr><td colspan="8" class="sub">Sin operaciones fantasma cerradas con estos filtros.</td></tr>';
+      $('rank-watch').innerHTML = '';
 
-    // 6. Clasificación oficial (≥20 ops) y auditoría sin agrupar (solo en modo Reales)
-    $('res-rank-card').hidden = isShadow;
-    $('res-hist-wrap').hidden = isShadow;
-    if (!isShadow) {
+      $('hist-count').textContent = items.length + ' fantasma cerradas con estos filtros · toca para desplegar';
+      $('hist-body').innerHTML = items.length ? items.slice().sort((a, b) => b.ts - a.ts).slice(0, 150).map(x => {
+        const d = x.asset === 'SOLUSD' ? 3 : 2;
+        return '<tr><td class="sub" style="white-space:nowrap">' + (x.closedAt ? romeLabel(x.closedAt) : '–') + '</td><td><b>' + esc(ASSET_LABEL[x.asset] || x.asset) + '</b></td><td>' + esc(NAMES[x.code] || x.code) + ' · <span class="sub">' + esc(x.tf) + '</span></td><td class="sub">' + esc(x.brokerLabel) + '</td><td class="num sub" style="white-space:nowrap">$' + fmtN(x.entry, d) + '</td><td class="sub">' + esc(x.reason.slice(0, 42)) + '</td><td class="num" style="white-space:nowrap"><b class="' + cls(x.r) + '">' + R(x.r) + '</b></td><td><span class="tag tag-blue">Fantasma</span></td></tr>';
+      }).join('') : '<tr><td colspan="8" class="sub">Sin operaciones fantasma con estos filtros.</td></tr>';
+    } else {
+      $('rank-sub').textContent = 'Rendimiento = ganancia ÷ capital máximo invertido a la vez';
+      $('rank-head').innerHTML = '<th>#</th><th>Estrategia · marco</th><th class="num">Ops</th><th class="num">Hoy</th><th class="num">Desde el inicio</th><th class="num">Capital máx.</th><th class="num">Rendimiento</th><th>¿Fiable?</th>';
       const g = {};
       rawFiltered.forEach(t => { const k = stratCode(t) + '|' + (t.timeframe || '–'); (g[k] = g[k] || []).push(t); });
       const rows = Object.entries(g).map(([k, ts]) => {
         const [c, tf] = k.split('|'); const ev = [];
         ts.forEach(t => { const nUsd = Math.abs(num(t.qty) || 0) * (num(t.entryPrice) || 0); ev.push([Date.parse(t.openedAt), nUsd], [Date.parse(t.closedAt), -nUsd]); });
         ev.sort((a, b) => a[0] - b[0] || a[1] - b[1]); let cur = 0, peak = 0; ev.forEach(([, v]) => { cur += v; peak = Math.max(peak, cur); });
-        const tot = ts.reduce((a, t) => a + pnlUSD(t), 0), td = ts.filter(t => romeDay(t.closedAt) === today).reduce((a, t) => a + pnlUSD(t), 0);
-        return { c, tf, n: ts.length, tot, td, peak, ret: peak > 0 ? tot / peak * 100 : null, f: fiable(lightOf(c)) };
+        const tot = ts.reduce((a, t) => a + pnlUSD(t), 0), totR = ts.reduce((a, t) => a + (num(t.rMultiple) || 0), 0), td = ts.filter(t => romeDay(t.closedAt) === today).reduce((a, t) => a + pnlUSD(t), 0);
+        return { c, tf, n: ts.length, tot, totR, td, peak, ret: peak > 0 ? tot / peak * 100 : null, f: fiable(lightOf(c)) };
       });
       const ranked = rows.filter(r => r.n >= 20).sort((a, b) => (b.ret ?? -1e9) - (a.ret ?? -1e9));
-      const watch = rows.filter(r => r.n < 20).sort((a, b) => b.n - a.n);
-      $('rank-body').innerHTML = ranked.length ? ranked.map((r, i) => '<tr><td>' + (i + 1) + '</td><td><b>' + esc(NAMES[r.c] || r.c) + '</b> · ' + esc(r.tf) + '</td><td class="num">' + r.n + '</td><td class="num ' + cls(r.td) + '">' + money(r.td) + '</td><td class="num ' + cls(r.tot) + '"><b>' + money(r.tot) + '</b></td><td class="num">' + absMoney(r.peak, '$', 0) + '</td><td class="num ' + cls(r.ret) + '"><b>' + (r.ret == null ? '–' : sign(r.ret) + fmtN(r.ret, 2) + ' %') + '</b></td><td><span class="tag ' + r.f.tag + '">' + esc(r.f.txt) + '</span></td></tr>').join('') : '<tr><td colspan="8" class="sub">Ninguna estrategia lleva 20 operaciones en este filtro. Para entrar en la clasificación hacen falta 20.</td></tr>';
-      $('rank-watch').innerHTML = watch.length ? '<b>En observación (menos de 20 operaciones):</b> ' + watch.map(r => esc(NAMES[r.c] || r.c) + ' · ' + esc(r.tf) + ' (' + r.n + ', <span class="' + cls(r.tot) + '">' + money(r.tot) + '</span>)').join(' · ') : '';
+      const watch = rows.filter(r => r.n < 20).sort((a, b) => (b.tot ?? -1e9) - (a.tot ?? -1e9));
+      const allRows = ranked.length ? ranked : watch;
+      $('rank-body').innerHTML = allRows.length ? allRows.map((r, i) => '<tr><td>' + (ranked.length ? (i + 1) : '·') + '</td><td><b>' + esc(NAMES[r.c] || r.c) + '</b> · ' + esc(r.tf) + '</td><td class="num">' + r.n + '</td><td class="num ' + cls(r.td) + '">' + money(r.td) + '</td><td class="num ' + cls(r.tot) + '"><b>' + money(r.tot) + '</b> <span class="sub ' + cls(r.totR) + '">' + R(r.totR, 1) + '</span></td><td class="num">' + absMoney(r.peak, '$', 0) + '</td><td class="num ' + cls(r.ret) + '"><b>' + (r.ret == null ? '–' : sign(r.ret) + fmtN(r.ret, 2) + ' %') + '</b></td><td><span class="tag ' + r.f.tag + '">' + esc(r.f.txt) + '</span></td></tr>').join('') : '<tr><td colspan="8" class="sub">Sin operaciones cerradas con estos filtros.</td></tr>';
+      $('rank-watch').innerHTML = (ranked.length && watch.length)
+        ? '<b>En observación (menos de 20 operaciones):</b> ' + watch.map(r => esc(NAMES[r.c] || r.c) + ' · ' + esc(r.tf) + ' (' + r.n + ', <span class="' + cls(r.tot) + '">' + money(r.tot) + '</span>)').join(' · ')
+        : (!ranked.length && watch.length ? 'Mostrando estrategias en observación (<20 ops). Con 20+ pasan al ranking numerado.' : '');
 
       const allEp = (st.closedTradesHistory || []).filter(t => {
         const ts = Date.parse(t.closedAt || 0);
