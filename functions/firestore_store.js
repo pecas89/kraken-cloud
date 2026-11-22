@@ -234,6 +234,7 @@ async function hydrateFromFirestore(engineState) {
             if (stateData.lastDailyReportDate) engineState.lastDailyReportDate = stateData.lastDailyReportDate;
             if (stateData.lastDailyReconciliationDate) engineState.lastDailyReconciliationDate = stateData.lastDailyReconciliationDate; // [FIX ANTIGRAVITY v2.4.1]
             if (stateData.lastMidReportDate) engineState.lastMidReportDate = stateData.lastMidReportDate; // [CLAUDE v2.5]
+            if (stateData.labEpochStart && typeof stateData.labEpochStart === 'object' && !engineState.labEpochStart) engineState.labEpochStart = stateData.labEpochStart; // [CLAUDE v2.6]
             if (stateData.slowLab && typeof stateData.slowLab === 'object' && !engineState.slowLab) engineState.slowLab = stateData.slowLab; // [CLAUDE v2.5] P13
             if (stateData.lastHeartbeatDate) engineState.lastHeartbeatDate = stateData.lastHeartbeatDate;
             // [CLAUDE v2.2] Recuperar posiciones abiertas tras un redeploy (antes se guardaban pero nunca se leían:
@@ -323,6 +324,7 @@ async function syncEngineState(engineState, force = false) {
             lastDailyReportDate: engineState.lastDailyReportDate || null,
             lastDailyReconciliationDate: engineState.lastDailyReconciliationDate || null, // [FIX ANTIGRAVITY v2.4.1]
             lastMidReportDate: engineState.lastMidReportDate || null, // [CLAUDE v2.5]
+            labEpochStart: engineState.labEpochStart || null, // [CLAUDE v2.6] saldos al punto cero de la semana
             slowLab: engineState.slowLab || null, // [CLAUDE v2.5] P13 (pequeño: 3 posiciones, 2 curvas y 60 cambios como mucho)
             lastHeartbeatDate: engineState.lastHeartbeatDate || null,
             timeframes: ['5m', '15m', '1H', '4H'],
