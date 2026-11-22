@@ -993,6 +993,19 @@
                 <span style="font-size: 11px; color: var(--text-dim);">R medio con salida normal según la condición al entrar (últimas 300 fantasmas cerradas)</span>
             </div>
             <div id="shadow-stack" style="margin-top: 8px; display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; font-size: 11px; font-family: 'JetBrains Mono', monospace;"></div>
+
+            <!-- [CLAUDE v2.5] P13 lenta vs comprar y mantener + LA JAULA -->
+            <div style="margin-top: 14px; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; font-size: 12px; font-family: 'JetBrains Mono', monospace;">
+                <div style="padding: 12px; border-radius: 12px; background: rgba(0,0,0,0.25); border: 1px solid rgba(52,211,153,0.25);">
+                    <div style="color: #6ee7b7; font-weight: 800; margin-bottom: 6px;">🐢 P13 LENTA vs COMPRAR Y MANTENER (SPY • QQQ • GLD)</div>
+                    <div id="p13-box" style="color: var(--text-dim);">Esperando el primer cierre de Nueva York tras la v2.5...</div>
+                    <div style="margin-top: 6px; font-size: 10px; color: var(--text-dim);">Media de 200 días con banda ±2 %. Backtest 1994-2026: 9,4 %/año y caída máx −20 % (comprar y mantener: 10,5 % y −55 %). No busca ganar más: busca caer menos.</div>
+                </div>
+                <div style="padding: 12px; border-radius: 12px; background: rgba(0,0,0,0.25); border: 1px solid rgba(248,113,113,0.25);">
+                    <div style="color: #fca5a5; font-weight: 800; margin-bottom: 6px;">🔒 LA JAULA • el reglamento decide</div>
+                    <div id="gate-box" style="color: var(--text-dim);">Sin datos de la jaula todavía.</div>
+                </div>
+            </div>
         </div>
 
         <!-- LAS 4 JUGADORAS (DATOS REALES LIVE + RADAR 4 TIMEFRAMES 5m/15m/1H/4H) -->
@@ -2135,6 +2148,29 @@
             }
         }
 
+        // [CLAUDE v2.5] P13 y jaula
+        function renderSlowAndGate(engineState) {
+            const pb = document.getElementById('p13-box');
+            const sm = engineState && engineState.slowLab && engineState.slowLab.summary;
+            if (pb && sm) {
+                const pc = v => '<b style="color:' + (v >= 0 ? 'var(--accent-green)' : 'var(--accent-red)') + ';">' + (v >= 0 ? '+' : '') + Number(v).toFixed(2) + '%</b>';
+                const trades = (engineState.slowLab.trades || []).slice(0, 5).map(t => t.d + ' ' + t.sym + ' ' + t.action + ' $' + Number(t.price).toFixed(2)).join('<br>');
+                pb.innerHTML = 'Desde ' + sm.startedAt + ' (último cierre ' + sm.lastDay + ')<br>' +
+                    'P13: ' + pc(sm.p13Pct) + ' • caída máx ' + Number(sm.p13MaxDD).toFixed(2) + '%<br>' +
+                    'Comprar y mantener: ' + pc(sm.bhPct) + ' • caída máx ' + Number(sm.bhMaxDD).toFixed(2) + '%<br>' +
+                    'Posición ahora: ' + Object.entries(sm.positions || {}).map(([k, v]) => k + ' ' + (v === 'DENTRO' ? '🟢' : '⚪') + ' ' + v).join(' • ') +
+                    (trades ? '<div style="margin-top: 6px; color: var(--text-dim);">Últimos cambios:<br>' + trades + '</div>' : '');
+            }
+            const gb = document.getElementById('gate-box');
+            if (gb) {
+                const st = (engineState && engineState.gateStats) || null;
+                const log = (engineState && engineState.gateLog) || [];
+                if (!st) { gb.textContent = 'La jaula aún no ha revisado ninguna orden (llega con la v2.5).'; return; }
+                gb.innerHTML = 'Órdenes revisadas: <b>' + st.checked + '</b> • rechazadas: <b style="color: var(--accent-red);">' + st.rejected + '</b>' +
+                    (log.length ? '<div style="margin-top: 6px;">' + log.slice(0, 8).map(g => '<div>🔴 ' + new Date(g.at).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' ' + g.broker + ' ' + g.symbol + ' ' + (g.stratCode || '') + ' — ' + g.reason + '</div>').join('') + '</div>' : '<div style="margin-top: 6px;">✅ Ninguna orden rechazada.</div>');
+            }
+        }
+
         function renderDuelScoreboard(engineState) {
             if (!engineState) return;
             const list = engineState.closedTradesHistory || [];
@@ -2204,6 +2240,7 @@
                     latestEngineState = engineState;
                     renderDuelScoreboard(engineState);
                     try { renderShadowLab(engineState); } catch (e) { console.warn('[shadow panel]', e); }
+                    try { renderSlowAndGate(engineState); } catch (e) { console.warn('[p13/jaula panel]', e); }
                     if (engineState.closedTradesHistory) {
                         renderDynamicScorecard(engineState.closedTradesHistory, currentScorecardPeriod);
                     }
