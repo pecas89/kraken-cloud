@@ -2209,7 +2209,7 @@
             if (upd) {
                 const excl = (engineState.closedTradesHistoryAll || list).length - list.length;
                 const failed = (engineState.closedTradesHistoryAll || []).filter(t => t.brokerCloseExecuted === false).length;
-                upd.innerText = '🧪 Laboratorio v2 (punto cero 18-nov 23:50): ' + list.length + ' trades confirmados • fuera: ' + (engineState._excludedPreV2 || 0) + ' de antes de v2 y ' + failed + ' con cierre fallido • ordenado por R';
+                upd.innerText = '🧪 Laboratorio (punto cero ' + (engineState._labEpochLabel || '18-nov 23:50') + '): ' + list.length + ' trades confirmados • fuera: ' + (engineState._excludedPreV2 || 0) + ' anteriores y ' + failed + ' con cierre fallido • ordenado por R';
                 renderBrokerTruth(engineState);
             }
         }
@@ -2235,8 +2235,12 @@
                     const _allClosed = engineState.closedTradesHistory || [];
                     engineState.closedTradesHistoryAll = _allClosed;
                     // [CLAUDE v2.2] Punto cero: solo operaciones del motor v2+ (con strategyVersion) compiten en las estadísticas
-                    engineState.closedTradesHistory = _allClosed.filter(t => t.brokerCloseExecuted !== false && !!t.strategyVersion);
-                    engineState._excludedPreV2 = _allClosed.filter(t => t.brokerCloseExecuted !== false && !t.strategyVersion).length;
+                    // [CLAUDE v2.6] y solo desde el punto cero de la semana que publica el motor
+                    const _ep = Date.parse((engineState.performanceStats && engineState.performanceStats.labEpoch) || '2026-11-18T22:50:00Z') || 0;
+                    const _inEp = t => !!t.strategyVersion && Date.parse(t.openedAt || 0) >= _ep;
+                    engineState.closedTradesHistory = _allClosed.filter(t => t.brokerCloseExecuted !== false && _inEp(t));
+                    engineState._excludedPreV2 = _allClosed.filter(t => t.brokerCloseExecuted !== false && !_inEp(t)).length;
+                    engineState._labEpochLabel = new Date(_ep).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
                     latestEngineState = engineState;
                     renderDuelScoreboard(engineState);
                     try { renderShadowLab(engineState); } catch (e) { console.warn('[shadow panel]', e); }

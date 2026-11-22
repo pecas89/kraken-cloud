@@ -69,6 +69,12 @@ const MAX_ALPACA_SUBPOS_PER_SYMBOL = 40;
 // Las dos patas de cada señal (duelPairId) usan salidas distintas: así se comparan sobre las MISMAS entradas.
 const EXIT_MODE_BY_BROKER = { alpaca: 'STEP', pepperstone: 'STD' };
 const ENGINE_VERSION = 'v2-2026-11-18';
+// [CLAUDE v2.6] PUNTO CERO DE LA SEMANA: desde aquí cuentan estadísticas, laboratorio fantasma, P13 y dinero real.
+// Lo anterior NO se borra (sigue en el historial), solo deja de contar. Para otro reinicio: KRAKEN_LAB_EPOCH en Render (fecha ISO).
+const LAB_EPOCH = process.env.KRAKEN_LAB_EPOCH || '2026-11-22T23:00:00Z'; // lunes 23-nov 00:00 hora de Roma
+const LAB_EPOCH_MS = Date.parse(LAB_EPOCH) || 0;
+function labEpochActive() { return Date.now() >= LAB_EPOCH_MS; }
+function inLabEpoch(t) { return !labEpochActive() || (t && t.openedAt && Date.parse(t.openedAt) >= LAB_EPOCH_MS); }
 
 const ASSETS_CONFIG = {
     NVDA: {
@@ -394,7 +400,7 @@ function computePerformanceStats() {
     const excludedFailedCloses = allHistory.length - confirmed.length;
     // [CLAUDE v2.2] PUNTO CERO DEL LABORATORIO: solo cuentan operaciones abiertas por el motor v2+ (llevan strategyVersion).
     // Así las 12 estrategias compiten en igualdad: mismo código, mismas reglas, sin arrastrar los errores de antes.
-    const history = confirmed.filter(t => !!t.strategyVersion);
+    const history = confirmed.filter(t => !!t.strategyVersion && inLabEpoch(t)); // [CLAUDE v2.6] solo desde el punto cero de la semana
     const excludedPreV2 = confirmed.length - history.length;
     function calc(trades) {
         let wins = 0, losses = 0, bes = 0, grossProfit = 0, grossLoss = 0, netPnlUSD = 0, netPnlEUR = 0;
@@ -431,7 +437,8 @@ function computePerformanceStats() {
     engineState.performanceStats = {
         excludedFailedCloses,
         excludedPreV2,
-        labEpochNote: 'Solo operaciones del motor v2+ (desde el 18-nov 23:50)',
+        labEpoch: labEpochActive() ? LAB_EPOCH : '2026-11-18T22:50:00Z',
+        labEpochNote: labEpochActive() ? `Solo operaciones abiertas desde el punto cero (${LAB_EPOCH})` : 'Solo operaciones del motor v2+ (desde el 18-nov 23:50)',
         global: calc(history),
         byBroker: {
             alpaca: calc(history.filter(t => t.broker && t.broker.includes('Alpaca'))),
@@ -1005,8 +1012,15 @@ async function syncBrokerReality() {
         // El marcador del panel debe salir de aquí, no de la libreta del motor.
         try {
             // Saldo al reseteo del laboratorio (12-nov), NO el de apertura de la cuenta: sin dato, se muestra 'falta saldo inicial'
-            const startAlp = parseFloat(process.env.KRAKEN_ALPACA_START_USD || '99475.62'); // [CLAUDE v2.5] por defecto, saldo en el punto cero (18-nov 23:50)
-            const startPep = parseFloat(process.env.KRAKEN_PEP_START_EUR || '9074.46'); // [CLAUDE v2.5] por defecto, saldo en el punto cero
+            // [CLAUDE v2.6] Saldo inicial = el que había al llegar el punto cero de la semana (se captura solo una vez y se guarda en Firestore)
+            if (labEpochActive() && (!engineState.labEpochStart || engineState.labEpochStart.at !== LAB_EPOCH) && alpEquity > 0 && pepBalEur > 0) {
+                engineState.labEpochStart = { at: LAB_EPOCH, capturedAt: new Date().toISOString(), alpaca: alpEquity, pepperstone: pepBalEur };
+                engineState.peakEquity = { alpaca: alpEquity, pepperstone: pepBalEur };
+                console.log(`🧪 [PUNTO CERO] Semana desde ${LAB_EPOCH}: Alpaca $${alpEquity} • Pepperstone €${pepBalEur}`);
+            }
+            const ep = (engineState.labEpochStart && engineState.labEpochStart.at === LAB_EPOCH) ? engineState.labEpochStart : null;
+            const startAlp = parseFloat(process.env.KRAKEN_ALPACA_START_USD || (ep ? ep.alpaca : '99475.62'));
+            const startPep = parseFloat(process.env.KRAKEN_PEP_START_EUR || (ep ? ep.pepperstone : '9074.46'));
             if (!engineState.peakEquity) engineState.peakEquity = {};
             if (alpEquity > 0) engineState.peakEquity.alpaca = Math.max(engineState.peakEquity.alpaca || 0, alpEquity);
             if (pepBalEur > 0) engineState.peakEquity.pepperstone = Math.max(engineState.peakEquity.pepperstone || 0, pepBalEur);
@@ -1807,6 +1821,20 @@ async function runAutonomousCycle() {
 
     // 1. Gestionar posiciones abiertas existentes (Trailing BE, TP, SL)
     await manageOpenPositions(quotes);
+
+    // [CLAUDE v2.6] Punto cero de la semana: laboratorio fantasma y comparación P13 empiezan de cero (una sola vez)
+    if (labEpochActive()) {
+        if (!engineState.shadowLab || engineState.shadowLab.epoch !== LAB_EPOCH) {
+            engineState.shadowLab = { startedAt: new Date().toISOString(), epoch: LAB_EPOCH, open: [], agg: {}, recent: [], lastBar: {}, version: 'v2.6' };
+            console.log('🧪 [PUNTO CERO] Laboratorio fantasma reiniciado.');
+        }
+        const sl = engineState.slowLab;
+        if (sl && sl.epoch !== LAB_EPOCH) {
+            Object.assign(sl, { epoch: LAB_EPOCH, startedAt: sl.lastDay || null, eqP13: 1, eqBH: 1, peakP13: 1, peakBH: 1, ddP13: 0, ddBH: 0, trades: [] });
+            if (sl.summary) Object.assign(sl.summary, { startedAt: sl.startedAt, p13Pct: 0, bhPct: 0, p13MaxDD: 0, bhMaxDD: 0 });
+            console.log('🧪 [PUNTO CERO] Comparación P13 reiniciada (las posiciones se mantienen).');
+        }
+    }
 
     // [CLAUDE v2.4] Gestionar operaciones fantasma (STD y escalera a la vez)
     try {
