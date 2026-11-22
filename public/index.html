@@ -107,7 +107,9 @@ details.group[open] > summary .chev{transform:rotate(90deg)}
 .money3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:10px;border-radius:10px;background:var(--bg)}
 .empty{padding:16px;border:1px dashed #CBD5E1;border-radius:var(--radius);color:var(--muted);font-size:13px;line-height:1.5;background:#fff}
 .chartbox{height:340px;border-radius:12px;overflow:hidden}
-.hbar{display:grid;grid-template-columns:64px 1fr 90px;gap:8px;align-items:center;font-size:12px}
+.eqbox{height:260px;border-radius:12px;overflow:hidden}
+.hbar{display:grid;grid-template-columns:110px 1fr 112px;gap:8px;align-items:center;font-size:12px}
+.hbar.day{grid-template-columns:64px 1fr 90px}
 .hbar .track{position:relative;height:18px}
 .hbar .axis{position:absolute;left:50%;top:0;bottom:0;width:1px;background:#CBD5E1}
 .hbar .b{position:absolute;top:2px;bottom:2px;border-radius:4px}
@@ -254,21 +256,50 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
       <h1 id="t-res" style="font-size:24px">Resultados</h1>
       <p class="sub" style="margin:0;font-size:13px" id="res-epoch"></p>
     </div>
+    <div class="card stack" style="margin-bottom:14px">
+      <div class="filters">
+        <label>Datos</label><div class="seg" role="group" aria-label="Fuente de datos" id="r-source"></div>
+        <label>Período</label><div class="seg" role="group" aria-label="Período" id="r-period"></div>
+      </div>
+      <div class="filters">
+        <label>Marco</label><div class="seg" role="group" aria-label="Marco temporal" id="r-tf"></div>
+      </div>
+      <div class="filters">
+        <label>Activo</label><div class="seg" role="group" aria-label="Activo" id="r-asset"></div>
+        <label id="r-broker-lbl">Broker</label><div class="seg" role="group" aria-label="Broker o salida" id="r-broker"></div>
+      </div>
+    </div>
     <div class="card card-dark stack" id="res-summary"></div>
+    <div class="section grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">
+      <div class="card stack">
+        <div class="row"><h2>Quién va ganando</h2><span class="sub" id="res-win-sub">ordenado por R</span></div>
+        <div class="stack" style="gap:10px" id="res-winners"></div>
+      </div>
+      <div class="card stack">
+        <div class="row"><h2>Curva acumulada (R)</h2><span class="sub" id="res-curve-sub">evolución en el período</span></div>
+        <div class="filters" id="res-curve-legend" style="gap:10px;font-size:12px"></div>
+        <div class="eqbox" id="res-curve" role="img" aria-label="Curva acumulada de resultados por estrategia"></div>
+        <div class="sub" id="res-curve-empty" hidden>Sin operaciones cerradas con estos filtros para dibujar la curva.</div>
+      </div>
+    </div>
     <div class="section grid" style="grid-template-columns:repeat(auto-fit,minmax(320px,1fr))">
       <div class="card stack"><h2>Día a día</h2><div class="stack" style="gap:10px" id="res-days"></div></div>
       <div class="card stack" id="res-exits"></div>
     </div>
-    <div class="section card stack">
-      <div class="row" style="flex-wrap:wrap"><h2>Clasificación por estrategia y marco</h2><span class="sub">Rendimiento = ganancia ÷ capital máximo invertido a la vez</span></div>
+    <div class="section stack" style="gap:10px">
+      <div class="section-title"><h2>Cerradas por estrategia</h2><span class="sub" id="res-grp-sub">Toca una estrategia para ver sus operaciones</span></div>
+      <div class="stack" id="res-groups"></div>
+    </div>
+    <div class="section card stack" id="res-rank-card">
+      <div class="row" style="flex-wrap:wrap"><h2>Clasificación oficial (≥20 ops)</h2><span class="sub">Rendimiento = ganancia ÷ capital máximo invertido a la vez</span></div>
       <div class="tablebox"><table>
-        <thead><tr><th>#</th><th>Estrategia · marco</th><th class="num">Ops</th><th class="num">Hoy</th><th class="num">Desde el inicio</th><th class="num">Capital máx.</th><th class="num">Rendimiento</th><th>¿Fiable?</th></tr></thead>
+        <thead><tr><th>#</th><th>Estrategia · marco</th><th class="num">Ops</th><th class="num">Hoy</th><th class="num">En el filtro</th><th class="num">Capital máx.</th><th class="num">Rendimiento</th><th>¿Fiable?</th></tr></thead>
         <tbody id="rank-body"></tbody>
       </table></div>
       <div id="rank-watch" class="sub"></div>
     </div>
     <details class="group section" id="res-hist-wrap">
-      <summary><div class="kv"><b style="font-size:15px">Historial completo de operaciones cerradas</b><span id="hist-count">Cargando…</span></div><svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></summary>
+      <summary><div class="kv"><b style="font-size:15px">Historial completo sin agrupar (auditoría)</b><span id="hist-count">Cargando…</span></div><svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></summary>
       <div style="padding:0 16px 16px"><div class="tablebox"><table>
         <thead><tr><th>Hora</th><th>Activo</th><th>Estrategia · marco</th><th>Broker</th><th class="num">Entrada → Salida</th><th>Motivo</th><th class="num">Resultado</th><th>Estado</th></tr></thead>
         <tbody id="hist-body"></tbody>
@@ -369,8 +400,8 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
   const assetOf = s => { s = String(s || '').toUpperCase().replace('/', ''); return s === 'GLD' ? 'XAUUSD' : s; };
 
   // ---------- estado de la interfaz ----------
-  const ui = { view: 'inicio', exit: 'STD', tf: 'all', asset: 'all', broker: 'all', cAsset: 'TSLA', cTf: '15m', stack: '', openGroups: new Set(), touchedGroups: false };
-  let st = null, lastOk = 0, eurUsd = 1.08, lastChartKey = '';
+  const ui = { view: 'inicio', exit: 'STD', tf: 'all', asset: 'all', broker: 'all', rSource: 'real', rPeriod: 'all', rTf: 'all', rAsset: 'all', rBroker: 'all', rShadowExit: 'STD', cAsset: 'TSLA', cTf: '15m', stack: '', openGroups: new Set(), touchedGroups: false, resOpenGroups: new Set(), resTouched: false };
+  let st = null, lastOk = 0, eurUsd = 1.08, lastChartKey = '', resChart = null, resSeries = [];
 
   // ---------- navegación ----------
   function buildNav() {
@@ -384,6 +415,7 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
     document.querySelectorAll('[data-view]').forEach(s => { s.hidden = s.id !== 'view-' + ui.view; });
     buildNav();
     if (ui.view === 'grafico') loadChart();
+    if (ui.view === 'resultados' && st) renderResults();
     window.scrollTo(0, 0);
   }
   window.addEventListener('hashchange', route);
@@ -582,43 +614,287 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
   }
 
   // ---------- RESULTADOS ----------
-  function renderResults() {
-    const list = closedLab(); const ep = epochMs();
-    $('res-epoch').textContent = 'Desde el punto cero: ' + romeLabel(ep) + '. Solo cuentan operaciones del motor con cierre confirmado por el broker.';
-    const wins = list.filter(t => pnlUSD(t) > 0).length, totR = list.reduce((a, t) => a + (num(t.rMultiple) || 0), 0), totU = list.reduce((a, t) => a + pnlUSD(t), 0);
-    $('res-summary').innerHTML = '<span class="eyebrow">Resumen</span><div class="grid g4"><div class="kv"><span class="sub">Operaciones</span><b class="big">' + list.length + '</b></div><div class="kv"><span class="sub">Ganadoras</span><b class="big">' + (list.length ? fmtN(wins / list.length * 100, 0) : '0') + ' %</b></div><div class="kv"><span class="sub">Total R</span><b class="big" style="color:' + (totR >= 0 ? '#86EFAC' : '#FCA5A5') + '">' + R(totR, 1) + '</b></div><div class="kv"><span class="sub">Total dinero</span><b class="big" style="color:' + (totU >= 0 ? '#86EFAC' : '#FCA5A5') + '">' + money(totU) + '</b></div></div>';
-    const days = {}; list.forEach(t => { const d = romeDay(t.closedAt); days[d] = days[d] || { r: 0, u: 0, n: 0 }; days[d].r += num(t.rMultiple) || 0; days[d].u += pnlUSD(t); days[d].n++; });
-    const dk = Object.keys(days).sort(); const mx = Math.max(1, ...dk.map(k => Math.abs(days[k].r)));
-    $('res-days').innerHTML = dk.length ? dk.map(k => { const v = days[k].r, w = Math.abs(v) / mx * 50; const lbl = new Date(k + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'short', day: '2-digit' }); return '<div class="hbar"><span>' + esc(lbl) + '</span><div class="track"><div class="axis"></div><div class="b" style="left:' + (v >= 0 ? 50 : 50 - w).toFixed(1) + '%;width:' + w.toFixed(1) + '%;background:' + (v >= 0 ? 'var(--green)' : 'var(--red)') + '"></div></div><span style="text-align:right"><b class="' + cls(v) + '">' + R(v, 1) + '</b> <span class="sub">' + days[k].n + '</span></span></div>'; }).join('') : '<div class="sub">Sin cierres todavía.</div>';
-    const ex = (st.performanceStats && st.performanceStats.byExitMode) || {};
-    $('res-exits').innerHTML = '<h2>Por salida</h2><div class="grid g2">' + ['STD', 'STEP'].map(k => { const e = ex[k] || {}; return '<div class="kv"><span>' + (k === 'STD' ? 'Normal · Pepperstone' : 'Escalera · Alpaca') + '</span><b class="big ' + cls(e.avgR) + '" style="font-size:22px">' + R(e.avgR) + '</b><span>' + (e.total || 0) + ' ops · ' + money(e.netPnlUSD) + '</span></div>'; }).join('') + '</div>';
+  function romeWeekStartMs() {
+    const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short' }).formatToParts(new Date()).reduce((a, x) => (a[x.type] = x.value, a), {});
+    const back = { Mon: 0, Tue: 1, Wed: 2, Thu: 3, Fri: 4, Sat: 5, Sun: 6 }[parts.weekday] || 0;
+    const noonUtc = Date.UTC(+parts.year, +parts.month - 1, +parts.day - back, 12, 0, 0);
+    const monDay = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome' }).format(new Date(noonUtc));
+    let ms = Date.parse(monDay + 'T00:00:00Z') - 2 * 3600 * 1000;
+    while (romeDay(ms) < monDay) ms += 3600 * 1000;
+    return ms;
+  }
+  function drawEquityCurve(items, rankedStrats, isShadow) {
+    const box = $('res-curve'), leg = $('res-curve-legend'), emp = $('res-curve-empty');
+    if (!box) return;
+    if (!items.length) {
+      box.hidden = true; emp.hidden = false; leg.innerHTML = '';
+      return;
+    }
+    box.hidden = false; emp.hidden = true;
+    if (ui.view !== 'resultados' || !window.LightweightCharts) return;
+    if (!resChart) {
+      resChart = LightweightCharts.createChart(box, {
+        autoSize: true,
+        layout: { background: { color: '#FFFFFF' }, textColor: '#334155', fontFamily: 'Inter' },
+        grid: { vertLines: { color: '#F1F5F9' }, horzLines: { color: '#F1F5F9' } },
+        rightPriceScale: { borderColor: '#E2E8F0' },
+        timeScale: { borderColor: '#E2E8F0', timeVisible: true }
+      });
+    }
+    resSeries.forEach(s => { try { resChart.removeSeries(s); } catch (e) {} });
+    resSeries = [];
 
-    // clasificación: estrategia × marco, capital máximo invertido a la vez (valor de la posición)
-    const today = romeDay(Date.now()); const g = {};
-    list.forEach(t => { const k = stratCode(t) + '|' + (t.timeframe || '–'); (g[k] = g[k] || []).push(t); });
-    const rows = Object.entries(g).map(([k, ts]) => {
-      const [c, tf] = k.split('|'); const ev = [];
-      ts.forEach(t => { const nUsd = Math.abs(num(t.qty) || 0) * (num(t.entryPrice) || 0); ev.push([Date.parse(t.openedAt), nUsd], [Date.parse(t.closedAt), -nUsd]); });
-      ev.sort((a, b) => a[0] - b[0] || a[1] - b[1]); let cur = 0, peak = 0; ev.forEach(([, v]) => { cur += v; peak = Math.max(peak, cur); });
-      const tot = ts.reduce((a, t) => a + pnlUSD(t), 0), td = ts.filter(t => romeDay(t.closedAt) === today).reduce((a, t) => a + pnlUSD(t), 0);
-      return { c, tf, n: ts.length, tot, td, peak, ret: peak > 0 ? tot / peak * 100 : null, f: fiable(lightOf(c)) };
+    const sorted = items.slice().sort((a, b) => a.ts - b.ts);
+    const t0 = Math.floor(sorted[0].ts / 1000) - 60;
+    const buildPts = subset => {
+      const pts = [{ time: t0, value: 0 }];
+      let acc = 0, lastT = t0;
+      subset.forEach(x => {
+        acc += x.r;
+        let t = Math.floor(x.ts / 1000);
+        if (t <= lastT) t = lastT + 1;
+        lastT = t;
+        pts.push({ time: t, value: Math.round(acc * 100) / 100 });
+      });
+      return pts;
+    };
+
+    const palette = ['#1D4ED8', '#0F7B4A', '#D97706', '#7C3AED'];
+    const legItems = [];
+    // Curva total del filtro
+    const totPts = buildPts(sorted);
+    const totVal = totPts[totPts.length - 1].value;
+    const sTot = resChart.addLineSeries({ color: '#0F172A', lineWidth: 2, lineStyle: 2, priceLineVisible: false, lastValueVisible: true });
+    sTot.setData(totPts);
+    resSeries.push(sTot);
+    legItems.push('<span class="row" style="gap:5px"><span class="dot" style="background:#0F172A"></span><b>Total</b> <span class="' + cls(totVal) + '">' + R(totVal, 1) + '</span></span>');
+
+    // Top 4 estrategias del filtro
+    const topStrats = rankedStrats.slice(0, 4);
+    topStrats.forEach((sg, idx) => {
+      const col = palette[idx % palette.length];
+      const sub = sorted.filter(x => x.code === sg.code);
+      if (!sub.length) return;
+      const pts = buildPts(sub);
+      const ser = resChart.addLineSeries({ color: col, lineWidth: 2, priceLineVisible: false, lastValueVisible: true });
+      ser.setData(pts);
+      resSeries.push(ser);
+      legItems.push('<span class="row" style="gap:5px"><span class="dot" style="background:' + col + '"></span>' + esc(NAMES[sg.code] || sg.code) + ' <b class="' + cls(sg.sumR) + '">' + R(sg.sumR, 1) + '</b>' + (!isShadow ? ' <span class="sub">(' + money(sg.sumU) + ')</span>' : '') + '</span>');
     });
-    const ranked = rows.filter(r => r.n >= 20).sort((a, b) => (b.ret ?? -1e9) - (a.ret ?? -1e9));
-    const watch = rows.filter(r => r.n < 20).sort((a, b) => b.n - a.n);
-    $('rank-body').innerHTML = ranked.length ? ranked.map((r, i) => '<tr><td>' + (i + 1) + '</td><td><b>' + esc(NAMES[r.c] || r.c) + '</b> · ' + esc(r.tf) + '</td><td class="num">' + r.n + '</td><td class="num ' + cls(r.td) + '">' + money(r.td) + '</td><td class="num ' + cls(r.tot) + '"><b>' + money(r.tot) + '</b></td><td class="num">' + absMoney(r.peak, '$', 0) + '</td><td class="num ' + cls(r.ret) + '"><b>' + (r.ret == null ? '–' : sign(r.ret) + fmtN(r.ret, 2) + ' %') + '</b></td><td><span class="tag ' + r.f.tag + '">' + esc(r.f.txt) + '</span></td></tr>').join('') : '<tr><td colspan="8" class="sub">Ninguna estrategia lleva 20 operaciones desde el punto cero. Para entrar en la clasificación hacen falta 20.</td></tr>';
-    $('rank-watch').innerHTML = watch.length ? '<b>En observación (menos de 20 operaciones):</b> ' + watch.map(r => esc(NAMES[r.c] || r.c) + ' · ' + esc(r.tf) + ' (' + r.n + ', <span class="' + cls(r.tot) + '">' + money(r.tot) + '</span>)').join(' · ') : '';
+    leg.innerHTML = legItems.join('');
+    resChart.timeScale().fitContent();
+  }
+  function renderResults() {
+    const isShadow = ui.rSource === 'shadow';
+    seg($('r-source'), [['real', 'Reales (brokers)'], ['shadow', 'Fantasma (igualdad)']], ui.rSource, v => { ui.rSource = v; renderResults(); });
+    seg($('r-period'), [['today', 'Hoy'], ['week', 'Semana'], ['all', 'Punto cero']], ui.rPeriod, v => { ui.rPeriod = v; renderResults(); });
+    seg($('r-tf'), [['all', 'Todos'], ['5m', '5m'], ['15m', '15m'], ['1H', '1H'], ['4H', '4H']], ui.rTf, v => { ui.rTf = v; renderResults(); });
+    seg($('r-asset'), [['all', 'Todos'], ['TSLA', 'TSLA'], ['NVDA', 'NVDA'], ['XAUUSD', 'Oro'], ['SOLUSD', 'SOL']], ui.rAsset, v => { ui.rAsset = v; renderResults(); });
+    $('r-broker-lbl').textContent = isShadow ? 'Salida' : 'Broker';
+    if (isShadow) {
+      seg($('r-broker'), [['STD', 'Normal (STD)'], ['STEP', 'Tu escalera (STEP)']], ui.rShadowExit, v => { ui.rShadowExit = v; renderResults(); });
+    } else {
+      seg($('r-broker'), [['all', 'Todos'], ['alp', 'Alpaca (escalera)'], ['pep', 'Pepperstone (normal)']], ui.rBroker, v => { ui.rBroker = v; renderResults(); });
+    }
 
-    // historial completo desde el punto cero (incluye cierres fallidos marcados en rojo para auditoría)
-    const allEp = (st.closedTradesHistory || []).filter(t => t.strategyVersion && Date.parse(t.openedAt || 0) >= ep);
-    const failedEp = allEp.filter(t => t.brokerCloseExecuted === false).length;
-    $('hist-count').textContent = list.length + ' confirmadas' + (failedEp ? ' · ' + failedEp + ' con cierre fallido (no cuentan)' : '') + ' · toca para desplegar';
-    $('hist-body').innerHTML = allEp.length ? allEp.slice(0, 150).map(t => {
-      const d = assetOf(t.symbol) === 'SOLUSD' ? 3 : 2;
-      const u = pnlUSD(t), r = num(t.rMultiple);
-      const ok = t.brokerCloseExecuted !== false;
-      const badge = t.brokerCloseExecuted === true ? '<span class="tag tag-green">Confirmado</span>' : (t.brokerCloseExecuted === false ? '<span class="tag tag-red" title="' + esc(t.closeError || '') + '">Falló · no cuenta</span>' : '<span class="tag tag-gray">Libreta</span>');
-      return '<tr' + (ok ? '' : ' style="opacity:.65"') + '><td class="sub" style="white-space:nowrap">' + (t.closedAt ? romeLabel(t.closedAt) : '–') + '</td><td><b>' + esc(ASSET_LABEL[assetOf(t.symbol)] || t.symbol) + '</b></td><td>' + esc(NAMES[stratCode(t)] || 'Otra') + ' · <span class="sub">' + esc(t.timeframe || '–') + '</span></td><td class="sub">' + esc(brokerName(t.broker)) + ' · ' + exitName(t.exitMode) + '</td><td class="num sub" style="white-space:nowrap">$' + fmtN(num(t.entryPrice), d) + ' → $' + fmtN(num(t.exitPrice), d) + '</td><td class="sub">' + esc((t.closeReason || '').replace(/[^\wÀ-ÿ ().,+\-%]/g, '').trim().slice(0, 42)) + '</td><td class="num" style="white-space:nowrap"><b class="' + cls(u) + '">' + money(u) + '</b> <span class="sub ' + cls(r) + '">' + R(r) + '</span></td><td>' + badge + '</td></tr>';
-    }).join('') : '<tr><td colspan="8" class="sub">Todavía no hay operaciones cerradas desde el punto cero.</td></tr>';
+    const ep = epochMs(), today = romeDay(Date.now()), weekMs = romeWeekStartMs();
+    const inPeriod = ts => {
+      if (!ts) return false;
+      if (ui.rPeriod === 'today') return romeDay(ts) === today;
+      if (ui.rPeriod === 'week') return ts >= weekMs;
+      return true;
+    };
+
+    // Normalizar operaciones (reales o fantasma) al mismo formato para filtros, gráficos y acordeones
+    let items = [];
+    let rawFiltered = [];
+    if (isShadow) {
+      const recent = (st.shadowLab && st.shadowLab.recent) || [];
+      items = recent.map(r => {
+        const ts = Date.parse(r.closedAt || 0);
+        const rv = ui.rShadowExit === 'STEP' ? num(r.rStep) : num(r.rStd);
+        return {
+          code: String(r.code || 'otros').toLowerCase(),
+          tf: r.tf || '–',
+          asset: assetOf(r.ticker),
+          brokerKey: ui.rShadowExit === 'STEP' ? 'alp' : 'pep',
+          brokerLabel: 'Fantasma · ' + exitName(ui.rShadowExit),
+          exitMode: ui.rShadowExit,
+          r: rv ?? 0,
+          rStd: num(r.rStd),
+          rStep: num(r.rStep),
+          usd: null,
+          entry: num(r.entry),
+          exit: null,
+          reason: ui.rShadowExit === 'STEP' ? (r.whyStep || '') : (r.whyStd || ''),
+          closedAt: r.closedAt,
+          openedAt: r.openedAt,
+          ts,
+          ok: true,
+          raw: r
+        };
+      }).filter(x => inPeriod(x.ts) && (ui.rTf === 'all' || x.tf === ui.rTf) && (ui.rAsset === 'all' || x.asset === ui.rAsset));
+    } else {
+      rawFiltered = closedLab().filter(t => {
+        const ts = Date.parse(t.closedAt || 0);
+        return inPeriod(ts) &&
+          (ui.rTf === 'all' || (t.timeframe || '–') === ui.rTf) &&
+          (ui.rAsset === 'all' || assetOf(t.symbol) === ui.rAsset) &&
+          (ui.rBroker === 'all' || brokerKey(t.broker) === ui.rBroker);
+      });
+      items = rawFiltered.map(t => ({
+        code: stratCode(t),
+        tf: t.timeframe || '–',
+        asset: assetOf(t.symbol),
+        brokerKey: brokerKey(t.broker),
+        brokerLabel: brokerName(t.broker) + ' · ' + exitName(t.exitMode),
+        exitMode: t.exitMode || (brokerKey(t.broker) === 'alp' ? 'STEP' : 'STD'),
+        r: num(t.rMultiple) || 0,
+        usd: pnlUSD(t),
+        entry: num(t.entryPrice),
+        exit: num(t.exitPrice),
+        reason: (t.closeReason || '').replace(/[^\wÀ-ÿ ().,+\-%]/g, '').trim(),
+        closedAt: t.closedAt,
+        openedAt: t.openedAt,
+        ts: Date.parse(t.closedAt || 0),
+        ok: t.brokerCloseExecuted !== false,
+        raw: t
+      }));
+    }
+
+    const filterTags = [
+      isShadow ? 'Fantasma (' + exitName(ui.rShadowExit) + ')' : 'Reales',
+      ui.rPeriod === 'today' ? 'Hoy' : (ui.rPeriod === 'week' ? 'Esta semana' : 'Desde punto cero'),
+      ui.rTf === 'all' ? 'Todos los marcos' : ui.rTf,
+      ui.rAsset === 'all' ? 'Todos los activos' : (ASSET_LABEL[ui.rAsset] || ui.rAsset),
+      !isShadow ? (ui.rBroker === 'all' ? 'Ambos brokers' : (ui.rBroker === 'alp' ? 'Alpaca' : 'Pepperstone')) : null
+    ].filter(Boolean).join(' · ');
+
+    $('res-epoch').textContent = (isShadow ? 'Operaciones fantasma cerradas recientes (hasta 300), todas en igualdad con 5 pb de coste.' : 'Desde el punto cero: ' + romeLabel(ep) + '. Solo cuentan operaciones con cierre confirmado por el broker.');
+
+    const wins = items.filter(x => isShadow ? x.r > 0 : x.usd > 0).length;
+    const totR = items.reduce((a, x) => a + x.r, 0);
+    const avgR = items.length ? totR / items.length : null;
+    const totU = isShadow ? null : items.reduce((a, x) => a + x.usd, 0);
+    $('res-summary').innerHTML = '<span class="eyebrow">' + esc(filterTags) + '</span><div class="grid g4">' +
+      '<div class="kv"><span class="sub">Operaciones</span><b class="big">' + items.length + '</b></div>' +
+      '<div class="kv"><span class="sub">Ganadoras</span><b class="big">' + (items.length ? fmtN(wins / items.length * 100, 0) : '0') + ' %</b></div>' +
+      '<div class="kv"><span class="sub">Total R</span><b class="big" style="color:' + (totR >= 0 ? '#86EFAC' : '#FCA5A5') + '">' + R(totR, 1) + '</b></div>' +
+      (isShadow
+        ? '<div class="kv"><span class="sub">R medio</span><b class="big" style="color:' + ((avgR ?? 0) >= 0 ? '#86EFAC' : '#FCA5A5') + '">' + R(avgR, 2) + '</b></div>'
+        : '<div class="kv"><span class="sub">Total dinero</span><b class="big" style="color:' + (totU >= 0 ? '#86EFAC' : '#FCA5A5') + '">' + money(totU) + '</b></div>') +
+      '</div>';
+
+    // Agrupar por estrategia (ordenado de mayor a menor R)
+    const byStrat = {};
+    items.forEach(x => { (byStrat[x.code] = byStrat[x.code] || []).push(x); });
+    const stratGroups = Object.entries(byStrat).map(([code, arr]) => {
+      const sumR = arr.reduce((a, x) => a + x.r, 0);
+      const sumU = isShadow ? null : arr.reduce((a, x) => a + x.usd, 0);
+      const w = arr.filter(x => isShadow ? x.r > 0 : x.usd > 0).length;
+      const tfs = [...new Set(arr.map(x => x.tf))].join(' · ');
+      return { code, arr, n: arr.length, w, wr: arr.length ? w / arr.length * 100 : 0, sumR, avgR: arr.length ? sumR / arr.length : 0, sumU, tfs };
+    }).sort((a, b) => b.sumR - a.sumR || ((b.sumU ?? 0) - (a.sumU ?? 0)));
+
+    // 1. Barras: Quién va ganando
+    $('res-win-sub').textContent = stratGroups.length ? (stratGroups.length + ' estrategias · ordenado por R') : 'sin datos en este filtro';
+    const mxS = Math.max(0.5, ...stratGroups.map(sg => Math.abs(sg.sumR)));
+    $('res-winners').innerHTML = stratGroups.length ? stratGroups.map(sg => {
+      const v = sg.sumR, w = Math.abs(v) / mxS * 50;
+      const rightTxt = '<b class="' + cls(v) + '">' + R(v, 1) + '</b>' + (!isShadow ? ' <span class="sub">' + money(sg.sumU) + '</span>' : ' <span class="sub">(' + sg.n + ')</span>');
+      return '<div class="hbar"><span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="' + esc(NAMES[sg.code] || sg.code) + ' (' + sg.n + ' ops)"><b>' + esc(NAMES[sg.code] || sg.code) + '</b></span><div class="track"><div class="axis"></div><div class="b" style="left:' + (v >= 0 ? 50 : 50 - w).toFixed(1) + '%;width:' + w.toFixed(1) + '%;background:' + (v >= 0 ? 'var(--green)' : 'var(--red)') + '"></div></div><span style="text-align:right;white-space:nowrap">' + rightTxt + '</span></div>';
+    }).join('') : '<div class="sub">Sin operaciones cerradas con estos filtros.</div>';
+
+    // 2. Curva acumulada (R)
+    $('res-curve-sub').textContent = items.length ? ('total + top ' + Math.min(4, stratGroups.length) + ' estrategias') : '';
+    drawEquityCurve(items, stratGroups, isShadow);
+
+    // 3. Día a día (del filtro actual)
+    const days = {};
+    items.forEach(x => { const d = romeDay(x.closedAt); days[d] = days[d] || { r: 0, u: 0, n: 0 }; days[d].r += x.r; if (!isShadow) days[d].u += x.usd; days[d].n++; });
+    const dk = Object.keys(days).sort(); const mxD = Math.max(1, ...dk.map(k => Math.abs(days[k].r)));
+    $('res-days').innerHTML = dk.length ? dk.map(k => { const v = days[k].r, w = Math.abs(v) / mxD * 50; const lbl = new Date(k + 'T12:00:00').toLocaleDateString('es-ES', { weekday: 'short', day: '2-digit' }); return '<div class="hbar day"><span>' + esc(lbl) + '</span><div class="track"><div class="axis"></div><div class="b" style="left:' + (v >= 0 ? 50 : 50 - w).toFixed(1) + '%;width:' + w.toFixed(1) + '%;background:' + (v >= 0 ? 'var(--green)' : 'var(--red)') + '"></div></div><span style="text-align:right"><b class="' + cls(v) + '">' + R(v, 1) + '</b> <span class="sub">' + days[k].n + '</span></span></div>'; }).join('') : '<div class="sub">Sin cierres en este filtro.</div>';
+
+    // 4. Por salida (recalculado sobre el filtro actual)
+    let stdStats, stepStats;
+    if (isShadow) {
+      const calcSh = key => {
+        const vals = items.map(x => x[key]).filter(v => v != null);
+        const sum = vals.reduce((a, b) => a + b, 0);
+        return { n: vals.length, avgR: vals.length ? sum / vals.length : null, sumR: sum };
+      };
+      stdStats = calcSh('rStd'); stepStats = calcSh('rStep');
+      $('res-exits').innerHTML = '<h2>Por salida (mismo filtro)</h2><div class="grid g2">' +
+        '<div class="kv"><span>Normal · STD</span><b class="big ' + cls(stdStats.avgR) + '" style="font-size:22px">' + R(stdStats.avgR) + '</b><span>' + stdStats.n + ' ops · total ' + R(stdStats.sumR, 1) + '</span></div>' +
+        '<div class="kv"><span>Tu escalera · STEP</span><b class="big ' + cls(stepStats.avgR) + '" style="font-size:22px">' + R(stepStats.avgR) + '</b><span>' + stepStats.n + ' ops · total ' + R(stepStats.sumR, 1) + '</span></div>' +
+        '</div>';
+    } else {
+      const calcEx = mode => {
+        const sub = items.filter(x => x.exitMode === mode);
+        const sumR = sub.reduce((a, x) => a + x.r, 0), sumU = sub.reduce((a, x) => a + x.usd, 0);
+        return { n: sub.length, avgR: sub.length ? sumR / sub.length : null, sumU };
+      };
+      stdStats = calcEx('STD'); stepStats = calcEx('STEP');
+      $('res-exits').innerHTML = '<h2>Por salida (mismo filtro)</h2><div class="grid g2">' +
+        '<div class="kv"><span>Normal · Pepperstone</span><b class="big ' + cls(stdStats.avgR) + '" style="font-size:22px">' + R(stdStats.avgR) + '</b><span>' + stdStats.n + ' ops · ' + money(stdStats.sumU) + '</span></div>' +
+        '<div class="kv"><span>Escalera · Alpaca</span><b class="big ' + cls(stepStats.avgR) + '" style="font-size:22px">' + R(stepStats.avgR) + '</b><span>' + stepStats.n + ' ops · ' + money(stepStats.sumU) + '</span></div>' +
+        '</div>';
+    }
+
+    // 5. Acordeones por estrategia (espejo de En vivo, persistentes)
+    $('res-grp-sub').textContent = stratGroups.length ? (items.length + ' cerradas en ' + stratGroups.length + ' estrategias · toca para desplegar') : '';
+    $('res-groups').innerHTML = stratGroups.length ? stratGroups.map(sg => {
+      const isOpen = ui.resTouched ? ui.resOpenGroups.has(sg.code) : (stratGroups.length <= 2);
+      const name = NAMES[sg.code] || (sg.code === 'custodia' ? 'Sin estrategia (custodia)' : 'Otras');
+      const f = fiable(lightOf(sg.code));
+      const rowsHtml = sg.arr.slice().sort((a, b) => b.ts - a.ts).slice(0, 60).map(x => {
+        const d = x.asset === 'SOLUSD' ? 3 : 2;
+        const pxCell = x.exit != null ? ('$' + fmtN(x.entry, d) + ' → $' + fmtN(x.exit, d)) : ('$' + fmtN(x.entry, d));
+        const resCell = isShadow ? ('<b class="' + cls(x.r) + '">' + R(x.r) + '</b>') : ('<b class="' + cls(x.usd) + '">' + money(x.usd) + '</b> <span class="sub ' + cls(x.r) + '">' + R(x.r) + '</span>');
+        return '<tr><td class="sub" style="white-space:nowrap">' + (x.closedAt ? romeLabel(x.closedAt) : '–') + '</td><td><b>' + esc(ASSET_LABEL[x.asset] || x.asset) + '</b> · <span class="sub">' + esc(x.tf) + '</span></td><td class="sub">' + esc(x.brokerLabel) + '</td><td class="num sub" style="white-space:nowrap">' + pxCell + '</td><td class="sub">' + esc(x.reason.slice(0, 38)) + '</td><td class="num" style="white-space:nowrap">' + resCell + '</td></tr>';
+      }).join('');
+      const rightHead = isShadow
+        ? '<div class="kv" style="text-align:right"><b class="' + cls(sg.sumR) + '">' + R(sg.sumR, 1) + '</b><span class="sub">media ' + R(sg.avgR, 2) + '</span></div>'
+        : '<div class="kv" style="text-align:right"><b class="' + cls(sg.sumU) + '">' + money(sg.sumU) + '</b><span class="' + cls(sg.sumR) + '">' + R(sg.sumR, 1) + '</span></div>';
+      return '<details class="group" data-rc="' + esc(sg.code) + '"' + (isOpen ? ' open' : '') + '><summary><div class="kv"><div class="row" style="justify-content:flex-start;gap:8px;flex-wrap:wrap"><b style="font-size:15px">' + esc(name) + '</b><span class="tag ' + f.tag + '">' + esc(f.txt) + '</span></div><span>' + sg.n + ' cerradas · ' + fmtN(sg.wr, 0) + ' % ganadoras · ' + esc(sg.tfs) + '</span></div><div class="row" style="gap:10px">' + rightHead + '<svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg></div></summary><div style="padding:0 14px 14px"><div class="tablebox"><table><thead><tr><th>Hora</th><th>Activo · marco</th><th>Broker / salida</th><th class="num">Precio</th><th>Motivo</th><th class="num">Resultado</th></tr></thead><tbody>' + rowsHtml + '</tbody></table></div></div></details>';
+    }).join('') : '<div class="empty">No hay operaciones cerradas con estos filtros.</div>';
+    $('res-groups').querySelectorAll('details.group').forEach(el => el.addEventListener('toggle', () => { ui.resTouched = true; const c = el.dataset.rc; if (el.open) ui.resOpenGroups.add(c); else ui.resOpenGroups.delete(c); }));
+
+    // 6. Clasificación oficial (≥20 ops) y auditoría sin agrupar (solo en modo Reales)
+    $('res-rank-card').hidden = isShadow;
+    $('res-hist-wrap').hidden = isShadow;
+    if (!isShadow) {
+      const g = {};
+      rawFiltered.forEach(t => { const k = stratCode(t) + '|' + (t.timeframe || '–'); (g[k] = g[k] || []).push(t); });
+      const rows = Object.entries(g).map(([k, ts]) => {
+        const [c, tf] = k.split('|'); const ev = [];
+        ts.forEach(t => { const nUsd = Math.abs(num(t.qty) || 0) * (num(t.entryPrice) || 0); ev.push([Date.parse(t.openedAt), nUsd], [Date.parse(t.closedAt), -nUsd]); });
+        ev.sort((a, b) => a[0] - b[0] || a[1] - b[1]); let cur = 0, peak = 0; ev.forEach(([, v]) => { cur += v; peak = Math.max(peak, cur); });
+        const tot = ts.reduce((a, t) => a + pnlUSD(t), 0), td = ts.filter(t => romeDay(t.closedAt) === today).reduce((a, t) => a + pnlUSD(t), 0);
+        return { c, tf, n: ts.length, tot, td, peak, ret: peak > 0 ? tot / peak * 100 : null, f: fiable(lightOf(c)) };
+      });
+      const ranked = rows.filter(r => r.n >= 20).sort((a, b) => (b.ret ?? -1e9) - (a.ret ?? -1e9));
+      const watch = rows.filter(r => r.n < 20).sort((a, b) => b.n - a.n);
+      $('rank-body').innerHTML = ranked.length ? ranked.map((r, i) => '<tr><td>' + (i + 1) + '</td><td><b>' + esc(NAMES[r.c] || r.c) + '</b> · ' + esc(r.tf) + '</td><td class="num">' + r.n + '</td><td class="num ' + cls(r.td) + '">' + money(r.td) + '</td><td class="num ' + cls(r.tot) + '"><b>' + money(r.tot) + '</b></td><td class="num">' + absMoney(r.peak, '$', 0) + '</td><td class="num ' + cls(r.ret) + '"><b>' + (r.ret == null ? '–' : sign(r.ret) + fmtN(r.ret, 2) + ' %') + '</b></td><td><span class="tag ' + r.f.tag + '">' + esc(r.f.txt) + '</span></td></tr>').join('') : '<tr><td colspan="8" class="sub">Ninguna estrategia lleva 20 operaciones en este filtro. Para entrar en la clasificación hacen falta 20.</td></tr>';
+      $('rank-watch').innerHTML = watch.length ? '<b>En observación (menos de 20 operaciones):</b> ' + watch.map(r => esc(NAMES[r.c] || r.c) + ' · ' + esc(r.tf) + ' (' + r.n + ', <span class="' + cls(r.tot) + '">' + money(r.tot) + '</span>)').join(' · ') : '';
+
+      const allEp = (st.closedTradesHistory || []).filter(t => {
+        const ts = Date.parse(t.closedAt || 0);
+        return t.strategyVersion && Date.parse(t.openedAt || 0) >= ep && inPeriod(ts) &&
+          (ui.rTf === 'all' || (t.timeframe || '–') === ui.rTf) &&
+          (ui.rAsset === 'all' || assetOf(t.symbol) === ui.rAsset) &&
+          (ui.rBroker === 'all' || brokerKey(t.broker) === ui.rBroker);
+      });
+      const failedEp = allEp.filter(t => t.brokerCloseExecuted === false).length;
+      $('hist-count').textContent = rawFiltered.length + ' confirmadas' + (failedEp ? ' · ' + failedEp + ' con cierre fallido (no cuentan)' : '') + ' · toca para desplegar';
+      $('hist-body').innerHTML = allEp.length ? allEp.slice(0, 150).map(t => {
+        const d = assetOf(t.symbol) === 'SOLUSD' ? 3 : 2;
+        const u = pnlUSD(t), r = num(t.rMultiple);
+        const ok = t.brokerCloseExecuted !== false;
+        const badge = t.brokerCloseExecuted === true ? '<span class="tag tag-green">Confirmado</span>' : (t.brokerCloseExecuted === false ? '<span class="tag tag-red" title="' + esc(t.closeError || '') + '">Falló · no cuenta</span>' : '<span class="tag tag-gray">Libreta</span>');
+        return '<tr' + (ok ? '' : ' style="opacity:.65"') + '><td class="sub" style="white-space:nowrap">' + (t.closedAt ? romeLabel(t.closedAt) : '–') + '</td><td><b>' + esc(ASSET_LABEL[assetOf(t.symbol)] || t.symbol) + '</b></td><td>' + esc(NAMES[stratCode(t)] || 'Otra') + ' · <span class="sub">' + esc(t.timeframe || '–') + '</span></td><td class="sub">' + esc(brokerName(t.broker)) + ' · ' + exitName(t.exitMode) + '</td><td class="num sub" style="white-space:nowrap">$' + fmtN(num(t.entryPrice), d) + ' → $' + fmtN(num(t.exitPrice), d) + '</td><td class="sub">' + esc((t.closeReason || '').replace(/[^\wÀ-ÿ ().,+\-%]/g, '').trim().slice(0, 42)) + '</td><td class="num" style="white-space:nowrap"><b class="' + cls(u) + '">' + money(u) + '</b> <span class="sub ' + cls(r) + '">' + R(r) + '</span></td><td>' + badge + '</td></tr>';
+      }).join('') : '<tr><td colspan="8" class="sub">Todavía no hay operaciones cerradas con estos filtros.</td></tr>';
+    }
   }
 
   // ---------- GRÁFICO ----------
