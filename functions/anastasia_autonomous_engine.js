@@ -72,6 +72,8 @@ const ENGINE_VERSION = 'v2-2026-11-18';
 // [CLAUDE v2.6] PUNTO CERO DE LA SEMANA: desde aquí cuentan estadísticas, laboratorio fantasma, P13 y dinero real.
 // Lo anterior NO se borra (sigue en el historial), solo deja de contar. Para otro reinicio: KRAKEN_LAB_EPOCH en Render (fecha ISO).
 const LAB_EPOCH = process.env.KRAKEN_LAB_EPOCH || '2026-11-22T23:00:00Z'; // lunes 23-nov 00:00 hora de Roma
+// [CLAUDE v2.7] Estrategias que no abren en los brokers (solo fantasma). Env KRAKEN_REAL_OFF="p4,p10"; vacío = ninguna.
+const REAL_OFF = new Set((process.env.KRAKEN_REAL_OFF !== undefined ? process.env.KRAKEN_REAL_OFF : 'p4').split(',').map(x => x.trim().toLowerCase()).filter(Boolean));
 const LAB_EPOCH_MS = Date.parse(LAB_EPOCH) || 0;
 function labEpochActive() { return Date.now() >= LAB_EPOCH_MS; }
 function inLabEpoch(t) { return !labEpochActive() || (t && t.openedAt && Date.parse(t.openedAt) >= LAB_EPOCH_MS); }
@@ -453,7 +455,7 @@ function computePerformanceStats() {
         // [CLAUDE v2] Clasificación por stratCode (antes por nombre: "Pista 10" contaba como P1, "Gap & Go (apertura)" como P7)
         byStrategy: (() => {
             const out = {};
-            ['p1','p2','p3','p4','p5','p6','p7','p8','p9','p10','p11','p12','custodia','rebuilt'].forEach(c => {
+            ['p1','p2','p3','p4','p5','p6','p7','p8','p9','p9t','p10','p11','p12','custodia','rebuilt'].forEach(c => {
                 out[c] = calc(history.filter(t => classifyStratCodeEngine(t) === c));
             });
             return out;
@@ -1904,6 +1906,9 @@ async function runAutonomousCycle() {
                     analysis.features = shadowLab.features(analysis, barsForTf, price);
                     shadowLab.onSignal(engineState, ticker, tf.label, analysis, price, barsForTf, currentBarTime, isEntryWindowForAsset(ticker));
                 } catch (e) { console.warn('[SHADOW onSignal]', e.message); }
+
+                // [CLAUDE v2.7] Estrategias apagadas en real (siguen midiéndose en el fantasma). Por defecto P4 (decisión de Pedro, 24-nov).
+                if (REAL_OFF.has(String(analysis.stratCode || '').toLowerCase())) continue;
 
                 // Máximo 1 disparo por misma vela cerrada/en curso en (activo, estrategia, timeframe)
                 const barKey = `${ticker}_${analysis.stratCode}_${tf.label}`;

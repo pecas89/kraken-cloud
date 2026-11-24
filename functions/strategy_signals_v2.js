@@ -199,6 +199,22 @@ function hermanas(ticker, bars, idx) {
     };
 }
 
+// [CLAUDE v2.7] Tendencia del marco 4 veces mayor, construida con las velas del propio marco:
+// se agrupan en bloques de reloj de 4 velas (5m→20m, 15m→1H, 1H→4H, 4H→16H), solo bloques ya cerrados,
+// y se mira si la EMA20 de esos cierres sube respecto a hace 3 bloques. null = no hay velas suficientes.
+function trendX4(bars, idx) {
+    if (!Array.isArray(bars) || idx < 40) return null;
+    const ts = []; for (let k = Math.max(1, idx - 30); k <= idx; k++) { const d = new Date(bars[k].t).getTime() - new Date(bars[k - 1].t).getTime(); if (d > 0) ts.push(d); }
+    if (!ts.length) return null;
+    ts.sort((a, b) => a - b); const step = ts[Math.floor(ts.length / 2)]; const blk = step * 4;
+    const bk = [];
+    for (let k = 0; k <= idx; k++) { const t = new Date(bars[k].t).getTime(); if (!isFinite(t) || !isFinite(bars[k].c)) continue; const key = Math.floor(t / blk); if (bk.length && bk[bk.length - 1].k === key) bk[bk.length - 1].c = bars[k].c; else bk.push({ k: key, c: bars[k].c }); }
+    bk.pop();
+    if (bk.length < 24) return null;
+    const a = 2 / 21; let e = bk[0].c; const ema = bk.map(x => (e = x.c * a + e * (1 - a))); const n = ema.length - 1;
+    return { up: ema[n] > ema[n - 3], ema: ema[n] };
+}
+
 // ------------------------------------------------------------------ evaluación P9-P12 para una vela
 function evaluateV2(ticker, bars, idx) {
     const out = [];
@@ -213,6 +229,15 @@ function evaluateV2(ticker, bars, idx) {
         blockedReason: p9.action === 'HOLD' ? p9.reason : null, signalReason: p9.reason,
         sl: +(price - atr * 1.5).toFixed(4), tp: +(price + atr * 3).toFixed(4), breakevenTrigger: +(price + atr * 1.5).toFixed(4),
         indicators: { atr: cur.atr, rvol: cur.rvol, groups: p9.groups || null, nivel: p9.nivel || null } });
+
+    // [CLAUDE v2.7] P9T = P9 idéntica + solo a favor de la tendencia del marco x4 (variante pedida por Pedro, 24-nov)
+    const tx4 = trendX4(bars, idx);
+    const p9tBuy = p9.action === 'BUY' && !!(tx4 && tx4.up);
+    out.push({ ...base('p9t', 'Pista 9T: 🐙 26 Hermanas + tendencia x4', p9.pez || '🐙 HERMANAS'), score: p9.score, action: p9tBuy ? 'BUY' : 'HOLD',
+        blockedReason: p9tBuy ? null : (p9.action !== 'BUY' ? p9.reason : (tx4 ? 'P9 compra, pero la tendencia x4 baja' : 'Sin velas suficientes para la tendencia x4')),
+        signalReason: p9tBuy ? p9.reason + ', tendencia x4 a favor' : null,
+        sl: +(price - atr * 1.5).toFixed(4), tp: +(price + atr * 3).toFixed(4), breakevenTrigger: +(price + atr * 1.5).toFixed(4),
+        indicators: { atr: cur.atr, rvol: cur.rvol, groups: p9.groups || null, nivel: p9.nivel || null, trendX4: tx4 } });
 
     const isSessionAsset = SESSION_TICKERS.includes(ticker);
     const ctx = isSessionAsset ? sessionContext(bars, idx) : null;
@@ -268,4 +293,4 @@ function evaluateV2(ticker, bars, idx) {
     return out;
 }
 
-module.exports = { evaluateV2, hermanas, STRATEGY_VERSION };
+module.exports = { trendX4, evaluateV2, hermanas, STRATEGY_VERSION };
