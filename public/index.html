@@ -215,6 +215,7 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
         <p class="sub" style="margin:0" id="lab-meta"></p>
       </div>
       <div class="stack">
+        <div class="card stack" id="f4-card"></div>
         <div class="card stack" id="duel-card"></div>
         <div class="card stack" id="p13-lab"></div>
       </div>
@@ -508,6 +509,19 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
   }
 
   // ---------- LABORATORIO ----------
+  // [CLAUDE v2.7] Variante: solo entradas a favor de la tendencia del marco x4 (mide, no bloquea)
+  function renderF4(sm) {
+    const box = $('f4-card'); if (!box) return;
+    const f4 = sm.f4; if (!f4) { box.innerHTML = '<h2>Filtro tendencia ×4</h2><p class="sub" style="margin:0">Empieza a medir con la próxima versión del motor.</p>'; return; }
+    const rows = CODES.map(c => { const a = ((sm.byStrategy || {})[c] || {})[ui.exit] || { n: 0 }; const b = ((f4.byStrategy || {})[c] || {})[ui.exit] || { n: 0 }; return { c, a, b }; })
+      .filter(x => x.a.n > 0).sort((x, y) => (y.b.sumR ?? -99) - (x.b.sumR ?? -99));
+    const sumR = x => x && x.n ? R(x.sumR) : '–';
+    box.innerHTML = '<h2>Filtro tendencia ×4</h2><p class="sub" style="margin:0">Mismas señales fantasma, contando solo las que entraron con la EMA20 del marco 4 veces mayor subiendo (15m→1H, 1H→4H). Solo mide: no bloquea nada.</p>'
+      + '<div class="tablebox"><table><thead><tr><th>Estrategia</th><th class="num">Todas</th><th class="num">Con filtro</th></tr></thead><tbody>'
+      + (rows.length ? rows.map(x => '<tr><td>' + esc(NAMES[x.c]) + '</td><td class="num ' + cls(x.a.sumR) + '">' + sumR(x.a) + ' <span class="sub">(' + x.a.n + ')</span></td><td class="num ' + cls(x.b.sumR) + '"><b>' + sumR(x.b) + '</b> <span class="sub">(' + (x.b.n || 0) + ')</span></td></tr>').join('') : '<tr><td colspan="3" class="sub">Aún sin operaciones cerradas.</td></tr>')
+      + '</tbody></table></div><p class="sub" style="margin:0">R total (operaciones entre paréntesis), salida ' + (ui.exit === 'STEP' ? 'escalera' : 'normal') + '.</p>';
+  }
+
   function renderLab() {
     const sm = shadowSum();
     document.querySelectorAll('[data-exit]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.exit === ui.exit)));
@@ -521,6 +535,7 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
         return { n: a.n || 0, avg: a.avgR, html: '<tr><td><b>' + esc(NAMES[c]) + '</b></td><td class="num">' + (a.n || 0) + '</td><td class="num ' + cls(a.avgR) + '"><b>' + R(a.avgR) + '</b></td><td class="num">' + (a.wr == null ? '–' : fmtN(a.wr, 0) + ' %') + '</td><td><span class="tag ' + f.tag + '">' + esc(f.txt) + '</span></td><td class="sub">' + (best ? esc(best.k) + ' <b class="' + cls(best.avgR) + '">' + R(best.avgR) + '</b> (' + best.n + ')' : '–') + '</td></tr>' };
       }).sort((x, y) => (y.n >= 10) - (x.n >= 10) || ((y.avg ?? -99) - (x.avg ?? -99)) || (y.n - x.n));
       $('lab-body').innerHTML = rows.map(r => r.html).join('');
+      try { renderF4(sm); } catch (e) { console.warn('[panel] f4', e); }
       $('lab-meta').textContent = 'Desde ' + romeLabel(sm.startedAt) + ' · ' + sm.openCount + ' fantasmas abiertas · ' + ((st.shadowLab.recent || []).length) + ' cerradas recientes.';
     }
     const ex = (st.performanceStats && st.performanceStats.byExitMode) || {};

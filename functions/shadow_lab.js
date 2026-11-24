@@ -24,6 +24,7 @@ function ensure(engineState) {
     const s = engineState.shadowLab;
     if (!Array.isArray(s.open)) s.open = [];
     if (!s.agg || typeof s.agg !== 'object') s.agg = {};
+    if (!s.aggF4 || typeof s.aggF4 !== 'object') s.aggF4 = {};   // [CLAUDE v2.7] variante "a favor de la tendencia x4"
     if (!Array.isArray(s.recent)) s.recent = [];
     return s;
 }
@@ -55,6 +56,29 @@ function features(analysis, bars, price) {
     };
 }
 
+// [CLAUDE v2.7] Tendencia del marco 4 veces mayor (5m→20m, 15m→1H, 1H→4H, 4H→16H).
+// Se construye agrupando las velas del propio marco en bloques de reloj de 4 velas (solo velas ya cerradas
+// del bloque anterior, para no mirar el futuro) y se mira si la EMA20 de esos cierres sube (vs hace 3 bloques).
+// Solo MIDE: no bloquea ninguna entrada, ni real ni fantasma.
+const TF_MS = { '5m': 3e5, '15m': 9e5, '1H': 36e5, '4H': 144e5 };
+function htfTrend(bars, tf) {
+    const ms = TF_MS[tf];
+    if (!ms || !Array.isArray(bars) || bars.length < 40) return null;
+    const blk = ms * 4, buckets = [];
+    for (const b of bars) {
+        const t = typeof b.t === 'number' ? b.t : Date.parse(b.t);
+        if (!isFinite(t) || !isFinite(b.c)) continue;
+        const k = Math.floor(t / blk);
+        if (buckets.length && buckets[buckets.length - 1].k === k) buckets[buckets.length - 1].c = b.c;
+        else buckets.push({ k, c: b.c });
+    }
+    buckets.pop();                                  // el bloque en curso todavía no ha cerrado
+    if (buckets.length < 24) return null;
+    const a = 2 / 21; let e = buckets[0].c; const ema = buckets.map(x => (e = x.c * a + e * (1 - a)));
+    const n = ema.length - 1;
+    return { tf: tf + 'x4', up: ema[n] > ema[n - 3], above: buckets[n].c > ema[n] };
+}
+
 function key(code, tf, ticker) { return `${code}_${tf}_${ticker}`; }
 
 // Llamar por cada análisis BUY que ya pasó los filtros de diseño de la estrategia
@@ -79,7 +103,8 @@ function onSignal(engineState, ticker, tf, analysis, price, bars, barTime, inEnt
         closeAtSessionEnd: !!analysis.closeAtSessionEnd,
         std: null, step: null, stepK: 0,
         mfeR: 0, maeR: 0,
-        f: features(analysis, bars, price)
+        f: features(analysis, bars, price),
+        htf: htfTrend(bars, tf)
     };
     s.open.push(o);
     if (!s.lastBar) s.lastBar = {};
@@ -87,9 +112,10 @@ function onSignal(engineState, ticker, tf, analysis, price, bars, barTime, inEnt
     return o;
 }
 
-function addAgg(s, aggKey, exit, R, win) {
-    if (!s.agg[aggKey]) s.agg[aggKey] = { STD: { n: 0, sumR: 0, sumR2: 0, wins: 0 }, STEP: { n: 0, sumR: 0, sumR2: 0, wins: 0 } };
-    const a = s.agg[aggKey][exit];
+function addAgg(s, aggKey, exit, R, win, bucket) {
+    const store = bucket || s.agg;
+    if (!store[aggKey]) store[aggKey] = { STD: { n: 0, sumR: 0, sumR2: 0, wins: 0 }, STEP: { n: 0, sumR: 0, sumR2: 0, wins: 0 } };
+    const a = store[aggKey][exit];
     a.n += 1; a.sumR += R; a.sumR2 += R * R; if (win) a.wins += 1;
 }
 
@@ -99,6 +125,10 @@ function finish(s, o) {
         const r = R[x];
         addAgg(s, key(o.code, o.tf, o.ticker), x, r, r > 0);
         addAgg(s, o.code, x, r, r > 0);          // total por estrategia
+        if (o.htf && o.htf.up === true) {        // [CLAUDE v2.7] misma operación, contada también en la variante filtrada
+            addAgg(s, key(o.code, o.tf, o.ticker), x, r, r > 0, s.aggF4);
+            addAgg(s, o.code, x, r, r > 0, s.aggF4);
+        }
     });
     s.recent.unshift({
         code: o.code, tf: o.tf, ticker: o.ticker, entry: o.entry, rr: o.rr,
@@ -106,7 +136,8 @@ function finish(s, o) {
         rStd: Math.round(R.STD * 1000) / 1000, rStep: Math.round(R.STEP * 1000) / 1000,
         whyStd: o.std.why, whyStep: o.step.why,
         mfeR: Math.round(o.mfeR * 100) / 100, maeR: Math.round(o.maeR * 100) / 100,
-        f: o.f
+        f: o.f,
+        htfUp: o.htf ? o.htf.up : null
     });
     if (s.recent.length > MAX_RECENT) s.recent.length = MAX_RECENT;
 }
@@ -172,8 +203,14 @@ function summarize(engineState) {
         const target = k.includes('_') ? out.byCell : out.byStrategy;
         target[k] = { STD: statsOf(v.STD), STEP: statsOf(v.STEP) };
     });
+    // [CLAUDE v2.7] variante "solo a favor de la tendencia x4": mismas operaciones, subconjunto filtrado
+    out.f4 = { rule: 'EMA20 del marco x4 subiendo (5m→20m, 15m→1H, 1H→4H, 4H→16H)', byStrategy: {}, byCell: {} };
+    Object.entries(s.aggF4 || {}).forEach(([k, v]) => {
+        const target = k.includes('_') ? out.f4.byCell : out.f4.byStrategy;
+        target[k] = { STD: statsOf(v.STD), STEP: statsOf(v.STEP) };
+    });
     s.summary = out;
     return out;
 }
 
-module.exports = { onSignal, manage, summarize, features, statsOf };
+module.exports = { onSignal, manage, summarize, features, statsOf, htfTrend };
