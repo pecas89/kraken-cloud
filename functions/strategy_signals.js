@@ -369,6 +369,33 @@ function evaluateStrategiesForBar(ticker, enrichedBars, barIndex = -1, promotedM
         }
     });
 
+    // [CLAUDE v2.7] P6M = P6 + "pánico, no desplome": misma señal, pero no entra si el objetivo (volver a la media)
+    // queda a más de 3 veces el riesgo (precio a más de ~3 ATR bajo la media). Sale siempre con salida normal (STD).
+    {
+        const p6TpUsed = p6Tp > currentPrice ? p6Tp : parseFloat((currentPrice + (atr * 1.5)).toFixed(2));
+        const riskU = currentPrice - p6Sl;
+        const rrTarget = riskU > 0 ? (p6TpUsed - currentPrice) / riskU : Infinity;
+        const okDist = rrTarget <= 3;
+        const buy = p6Action === 'BUY' && okDist;
+        strategies.push({
+            stratCode: 'p6m',
+            strategyName: 'Pista 6M: 🎯 Reversión a la Media (pánico, no desplome)',
+            pez: '🎯 REVERSIÓN',
+            score: p6Score,
+            action: buy ? 'BUY' : 'HOLD',
+            blockedReason: buy ? null : (p6Action !== 'BUY' ? p6Reason : `Objetivo a ${rrTarget.toFixed(1)}R (> 3R): desplome, no pánico`),
+            signalReason: buy ? p6Reason + ` · objetivo a ${rrTarget.toFixed(1)}R` : '',
+            isPromoted: isPromoted('p6'),
+            atr,
+            sl: p6Sl,
+            tp: p6TpUsed,
+            breakevenTrigger: parseFloat((currentPrice + (atr * 0.7)).toFixed(2)),
+            timeStopBars: 12,
+            exitModeOverride: 'STD',
+            indicators: { rsi2: cur.rsi2, bollingerLower: cur.bollinger ? cur.bollinger.lower : null, ema200: cur.ema200, ema20: cur.ema20, vwap: cur.vwap, atr: cur.atr, rrTarget }
+        });
+    }
+
     // ==============================================================================
     // PISTA 7: 🚪 RUPTURA DE RANGO DE APERTURA (ORB-30) - TOBY CRABEL
     // ==============================================================================
