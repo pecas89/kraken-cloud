@@ -254,6 +254,7 @@ async function hydrateFromFirestore(engineState) {
                     epoch: stateData.shadowLab.epoch || null, // [FIX ANTIGRAVITY v2.6.1] preservar epoch del punto cero al reiniciar
                     version: stateData.shadowLab.version || 'v2.4',
                     agg: stateData.shadowLab.agg || {},
+                    aggF4: stateData.shadowLab.aggF4 || {}, // [CLAUDE v2.7] variante filtro de tendencia x4
                     open: Array.isArray(stateData.shadowLab.open) ? stateData.shadowLab.open : [],
                     recent: Array.isArray(stateData.shadowLab.recent) ? stateData.shadowLab.recent : [],
                     lastBar: stateData.shadowLab.lastBar || {}
@@ -317,6 +318,7 @@ async function syncEngineState(engineState, force = false) {
                 epoch: engineState.shadowLab.epoch || null, // [FIX ANTIGRAVITY v2.6.1] evitar reinicio repetido de shadowLab tras redeploy
                 version: engineState.shadowLab.version || 'v2.4',
                 agg: engineState.shadowLab.agg || {},
+                aggF4: engineState.shadowLab.aggF4 || {}, // [CLAUDE v2.7] variante filtro de tendencia x4
                 open: (engineState.shadowLab.open || []).slice(0, 200),
                 recent: (engineState.shadowLab.recent || []).slice(0, 150),
                 lastBar: engineState.shadowLab.lastBar || {}
