@@ -322,7 +322,7 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
     </div>
   </section>
 
-  <p class="sub" style="text-align:center;margin-top:24px" id="foot">Demo · datos en vivo del motor en Render · <a href="clasico.html">panel clásico</a></p>
+  <p class="sub" style="text-align:center;margin-top:24px" id="foot">Demo · datos en vivo del motor en Google Cloud · <a href="clasico.html">panel clásico</a></p>
 </main>
 
 <nav class="bottomnav" aria-label="Secciones" id="bottomnav"></nav>
@@ -454,7 +454,7 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
     const pos = sl && sl.positions ? Object.values(sl.positions) : [];
     const greens = CODES.filter(c => lightOf(c).light === 'verde');
     let title, sub;
-    if (!st.running || stale) { title = 'El motor está parado o atrasado.'; sub = 'Último escaneo: ' + (st.lastScanAt ? romeLabel(st.lastScanAt) : 'desconocido') + '. Revisa Render.'; }
+    if (!st.running || stale) { title = 'El motor está parado o atrasado.'; sub = 'Último escaneo: ' + (st.lastScanAt ? romeLabel(st.lastScanAt) : 'desconocido') + '. Revisa Google Cloud (kraken-engine).'; }
     else if (st.emergencyStop) { title = 'Freno de emergencia activo: hoy no se abren operaciones.'; sub = esc(st.emergencyStopReason || ''); }
     else {
       const trend = pos.length && pos.every(x => x === 'FUERA') ? 'El mercado va a la baja.' : pos.length && pos.every(x => x === 'DENTRO') ? 'El mercado va al alza.' : 'El mercado está mezclado.';
