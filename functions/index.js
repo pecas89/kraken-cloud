@@ -55,7 +55,7 @@ const RISK_PARAMS = {
     maxLeverageAlpaca: "1:2"
 };
 
-const RENDER_ENGINE_URL = process.env.RENDER_ENGINE_URL || "https://kraken-cloud.onrender.com";
+const RENDER_ENGINE_URL = process.env.RENDER_ENGINE_URL || "https://34-24-255-179.sslip.io";
 
 const ALLOWED_ORIGINS = [
     "https://kraken-trading-cloud.web.app",

@@ -351,8 +351,9 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
 <script>
 (function () {
   'use strict';
-  // [CLAUDE v2.8] Dirección del motor. Se puede cambiar sin publicar con ?api=https://... (se recuerda en este navegador)
-  const API = (() => { try { const q = new URLSearchParams(location.search).get('api'); if (q) localStorage.setItem('krakenApi', q); return (q || localStorage.getItem('krakenApi') || 'https://kraken-cloud.onrender.com').replace(/\/$/, ''); } catch (e) { return 'https://kraken-cloud.onrender.com'; } })();
+  // [CLAUDE v2.8] Dirección del motor (Google Compute Engine). Se puede cambiar sin publicar con ?api=https://... (se recuerda en este navegador)
+  const DEFAULT_API = 'https://34-24-255-179.sslip.io';
+  const API = (() => { try { const q = new URLSearchParams(location.search).get('api'); if (q) localStorage.setItem('krakenApi', q); const saved = localStorage.getItem('krakenApi'); if (!q && saved && saved.includes('onrender.com')) localStorage.removeItem('krakenApi'); return (q || (!saved || saved.includes('onrender.com') ? DEFAULT_API : saved)).replace(/\/$/, ''); } catch (e) { return DEFAULT_API; } })();
   const NAMES = { p1: 'P1 Delfín', p2: 'P2 Base', p3: 'P3 TimeMachine', p4: 'P4 VWAP (solo fantasma)', p5: 'P5 SuperTrend', p6: 'P6 RSI-2', p6m: 'P6M RSI-2 (pánico, no desplome)', p7: 'P7 ORB-30', p8: 'P8 Squeeze', p9: 'P9 Hermanas', p9t: 'P9T Hermanas + tendencia ×4', p10: 'P10 Delfín E (solo fantasma)', p11: 'P11 Gap & Go', p12: 'P12 VWAP rebote', p13: 'P13 Lenta' };
   const CODES = ['p1','p2','p3','p4','p5','p6','p6m','p7','p8','p9','p9t','p10','p11','p12'];
   const ASSET_LABEL = { TSLA: 'TSLA', NVDA: 'NVDA', XAUUSD: 'Oro', SOLUSD: 'SOL' };

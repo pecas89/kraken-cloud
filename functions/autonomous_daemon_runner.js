@@ -415,7 +415,7 @@ async function startServerDaemon() {
     // 3. Notificación de Arranque a Pedro
     const bootMsg = `👑✨ <b>[KRAKEN CLOUD // LABORATORIO 24/7 EN LÍNEA]</b>\n` +
         `─────────────────────────\n` +
-        `Comandante Pedro, el motor cuántico está corriendo en el servidor autónomo Render.\n\n` +
+        `Comandante Pedro, el motor cuántico está corriendo en Google Compute Engine (us-east1).\n\n` +
         `🏛️ <b>Arquitectura Activa:</b>\n` +
         `• <b>8 Pistas:</b> P1 a P5 + P6 (RSI-2), P7 (ORB-30), P8 (TTM Squeeze)\n` +
         `• <b>4 Activos:</b> TSLA, NVDA, Oro (GLD/XAU), SOL/USD\n` +
