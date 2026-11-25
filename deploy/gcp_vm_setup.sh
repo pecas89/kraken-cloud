@@ -54,6 +54,7 @@ cd "$APP"
 npm install --omit=dev --no-audit --no-fund >/dev/null 2>&1 || npm install --omit=dev
 mkdir -p "$APP/logs"
 chown -R kraken:kraken "$APP"
+git config --system --get-all safe.directory 2>/dev/null | grep -qxF "$APP" || git config --system --add safe.directory "$APP"
 [ -f "$APP/functions/.env" ] && chmod 600 "$APP/functions/.env" || true
 
 # 4. Servicio del motor (UNA sola instancia: nunca dos motores operando a la vez)

@@ -5,6 +5,7 @@
 set -euo pipefail
 APP=/opt/kraken-cloud
 cd "$APP"
+git config --system --get-all safe.directory 2>/dev/null | grep -qxF "$APP" || git config --system --add safe.directory "$APP"
 git fetch -q origin main
 NEW=$(git rev-parse origin/main)
 OLD=$(cat .deployed_sha 2>/dev/null || git rev-parse HEAD)
