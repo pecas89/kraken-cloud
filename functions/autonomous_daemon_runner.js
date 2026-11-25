@@ -72,7 +72,18 @@ const server = http.createServer(async (req, res) => {
     if (url === '/trading_state.json') {
         const statePath = path.join(__dirname, '..', 'public', 'trading_state.json');
         if (fs.existsSync(statePath)) {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
+            // [CLAUDE v2.8] Comprimido (gzip) y con ETag: el JSON pesa cientos de KB y el panel lo pide cada minuto.
+            // Sin esto se agotó el tráfico gratuito de Render (nov-2026). Con 304 no se reenvía si no cambió.
+            const st = fs.statSync(statePath);
+            const etag = '"' + st.size.toString(16) + '-' + Math.floor(st.mtimeMs).toString(16) + '"';
+            if (req.headers['if-none-match'] === etag) { res.writeHead(304, { ETag: etag }); return res.end(); }
+            const headers = { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache', ETag: etag };
+            if (/\bgzip\b/.test(req.headers['accept-encoding'] || '')) {
+                headers['Content-Encoding'] = 'gzip';
+                res.writeHead(200, headers);
+                return fs.createReadStream(statePath).pipe(require('zlib').createGzip({ level: 6 })).pipe(res);
+            }
+            res.writeHead(200, headers);
             return fs.createReadStream(statePath).pipe(res);
         }
     }
@@ -395,7 +406,7 @@ async function startServerDaemon() {
     anastasiaEngine.startAutonomousDaemon(30000);
 
     // 2. Iniciar Keep-Alive interno anti-sleep (cada 4 min)
-    startInternalKeepAlive();
+    if (process.env.RENDER) startInternalKeepAlive(); // [CLAUDE v2.8] solo hace falta en Render (se dormía); en la VM de Google no
 
     // 3. Programar Auto-Deploy a Firebase Hosting cada 5 minutos (300,000 ms)
     setInterval(autoDeployHosting, 300000);
