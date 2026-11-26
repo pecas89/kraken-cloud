@@ -57,6 +57,7 @@ let latestEnrichedBars = {
     XAUUSD: { '5m': [], '15m': [], '1H': [], '4H': [] },
     SOLUSD: { '5m': [], '15m': [], '1H': [], '4H': [] }
 };
+const latestMirrorBars = {}; // [CLAUDE v3.0] velas en espejo por activo y marco
 
 const TELEGRAM_TOKEN = process.env.TELEGRAM_TOKEN || '';
 const TELEGRAM_CHAT_ID = process.env.TELEGRAM_CHAT_ID || '';
@@ -361,6 +362,12 @@ async function fetchMarketQuotes() {
             if (r.bars && r.bars.length > 0) {
                 if (!latestEnrichedBars[r.ticker]) latestEnrichedBars[r.ticker] = {};
                 latestEnrichedBars[r.ticker][r.tf] = ti.enrichBarsWithIndicators(r.bars);
+                // [CLAUDE v3.0] misma serie en espejo, solo para medir ventas en corto en el laboratorio fantasma
+                try {
+                    const m = shadowLab.mirrorBars(r.bars);
+                    if (!latestMirrorBars[r.ticker]) latestMirrorBars[r.ticker] = {};
+                    latestMirrorBars[r.ticker][r.tf] = { C: m.C, bars: m.C ? ti.enrichBarsWithIndicators(m.bars) : [] };
+                } catch (e) { console.warn('[ESPEJO]', e.message); }
                 const lastBar = r.bars[r.bars.length - 1];
                 // Priorizar la vela más fresca (5m es el precio más reciente tras eliminar 1m)
                 if (r.tf === '5m' || !quotes[r.ticker]) {
@@ -1938,6 +1945,24 @@ async function runAutonomousCycle() {
             const barsForTf = (latestEnrichedBars[ticker] && latestEnrichedBars[ticker][tf.label]) ? latestEnrichedBars[ticker][tf.label] : [];
             const currentBarTime = barsForTf.length ? barsForTf[barsForTf.length - 1].t : null;
             let bestForTf = null;
+
+            // [CLAUDE v3.0] Ventas en corto en espejo: SOLO laboratorio fantasma, nunca órdenes reales
+            try {
+                const mir = latestMirrorBars[ticker] && latestMirrorBars[ticker][tf.label];
+                if (mir && mir.C && mir.bars.length && price > 0) {
+                    const mirStrats = evaluateStrategiesForBar(ticker, mir.bars, -1, promotedMatrix);
+                    for (const ma of mirStrats) {
+                        if (ma.action !== 'BUY') continue;
+                        const sc = String(ma.stratCode || '');
+                        if (sc === 'p7' && ticker !== 'TSLA' && ticker !== 'NVDA') continue;
+                        if ((sc === 'p6' || sc === 'p6m') && !['NVDA', 'TSLA', 'GLD', 'XAUUSD'].includes(ticker)) continue;
+                        if (sc === 'p8' && ticker !== 'XAUUSD' && ticker !== 'GLD' && !ticker.includes('SOL')) continue;
+                        if (ticker.includes('SOL') && (ma.indicators?.rvol || 0) < 1.5) continue;
+                        ma.barPrice = mir.bars[mir.bars.length - 1].c;
+                        shadowLab.onSignal(engineState, ticker, tf.label, ma, mir.C - price, mir.bars, currentBarTime, isEntryWindowForAsset(ticker), { mirror: mir.C });
+                    }
+                }
+            } catch (e) { console.warn('[SHADOW espejo]', e.message); }
 
             for (const analysis of allStrats) {
                 analysis.timeframe = tf.label;
