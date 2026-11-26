@@ -216,6 +216,7 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
       </div>
       <div class="stack">
         <div class="card stack" id="f4-card"></div>
+        <div class="card stack" id="short-card"></div>
         <div class="card stack" id="duel-card"></div>
         <div class="card stack" id="p13-lab"></div>
       </div>
@@ -524,6 +525,19 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
       + '</tbody></table></div><p class="sub" style="margin:0">R total (operaciones entre paréntesis), salida ' + (ui.exit === 'STEP' ? 'escalera' : 'normal') + '.</p>';
   }
 
+  // [CLAUDE v3.0] Ventas en corto en espejo (solo laboratorio fantasma)
+  function renderShort(sm) {
+    const box = $('short-card'); if (!box) return;
+    const sh = sm.short; if (!sh) { box.innerHTML = '<h2>Ventas en corto (espejo)</h2><p class="sub" style="margin:0">Empieza a medir con la próxima versión del motor.</p>'; return; }
+    const rows = CODES.map(c => { const a = ((sm.byStrategy || {})[c] || {})[ui.exit] || { n: 0 }; const b = ((sh.byStrategy || {})[c] || {})[ui.exit] || { n: 0 }; return { c, a, b }; })
+      .filter(x => x.a.n > 0 || x.b.n > 0).sort((x, y) => (y.b.sumR ?? -99) - (x.b.sumR ?? -99));
+    const sumR = x => x && x.n ? R(x.sumR) : '–';
+    box.innerHTML = '<h2>Ventas en corto (espejo)</h2><p class="sub" style="margin:0">Cada estrategia aplicada al gráfico invertido: donde compraría en el espejo, aquí se mide una venta en corto. Solo fantasma: no se envía ninguna orden.</p>'
+      + '<div class="tablebox"><table><thead><tr><th>Estrategia</th><th class="num">Compras</th><th class="num">Cortos</th></tr></thead><tbody>'
+      + (rows.length ? rows.map(x => '<tr><td>' + esc(NAMES[x.c]) + '</td><td class="num ' + cls(x.a.sumR) + '">' + sumR(x.a) + ' <span class="sub">(' + (x.a.n || 0) + ')</span></td><td class="num ' + cls(x.b.sumR) + '"><b>' + sumR(x.b) + '</b> <span class="sub">(' + (x.b.n || 0) + ')</span></td></tr>').join('') : '<tr><td colspan="3" class="sub">Aún sin cortos cerrados.</td></tr>')
+      + '</tbody></table></div><p class="sub" style="margin:0">R total (operaciones entre paréntesis), salida ' + (ui.exit === 'STEP' ? 'escalera' : 'normal') + '.</p>';
+  }
+
   function renderLab() {
     const sm = shadowSum();
     document.querySelectorAll('[data-exit]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.exit === ui.exit)));
@@ -538,6 +552,7 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
       }).sort((x, y) => (y.n >= 10) - (x.n >= 10) || ((y.avg ?? -99) - (x.avg ?? -99)) || (y.n - x.n));
       $('lab-body').innerHTML = rows.map(r => r.html).join('');
       try { renderF4(sm); } catch (e) { console.warn('[panel] f4', e); }
+      try { renderShort(sm); } catch (e) { console.warn('[panel] short', e); }
       $('lab-meta').textContent = 'Desde ' + romeLabel(sm.startedAt) + ' · ' + sm.openCount + ' fantasmas abiertas · ' + ((st.shadowLab.recent || []).length) + ' cerradas recientes.';
     }
     const ex = (st.performanceStats && st.performanceStats.byExitMode) || {};

@@ -25,6 +25,8 @@ function ensure(engineState) {
     if (!Array.isArray(s.open)) s.open = [];
     if (!s.agg || typeof s.agg !== 'object') s.agg = {};
     if (!s.aggF4 || typeof s.aggF4 !== 'object') s.aggF4 = {};   // [CLAUDE v2.7] variante "a favor de la tendencia x4"
+    if (!s.aggShort || typeof s.aggShort !== 'object') s.aggShort = {}; // [CLAUDE v3.0] ventas en corto en espejo
+    if (!Array.isArray(s.recentShort)) s.recentShort = [];
     if (!Array.isArray(s.recent)) s.recent = [];
     return s;
 }
@@ -82,10 +84,14 @@ function htfTrend(bars, tf) {
 function key(code, tf, ticker) { return `${code}_${tf}_${ticker}`; }
 
 // Llamar por cada análisis BUY que ya pasó los filtros de diseño de la estrategia
-function onSignal(engineState, ticker, tf, analysis, price, bars, barTime, inEntryWindow) {
+// [CLAUDE v3.0] opts.mirror = C: la señal viene de las velas en espejo (precio' = C - precio). Una COMPRA en el espejo
+// es una VENTA EN CORTO en el precio real. La fantasma vive en el espacio espejo, así SL/TP/escalera/R no cambian.
+function onSignal(engineState, ticker, tf, analysis, price, bars, barTime, inEntryWindow, opts = {}) {
     if (!analysis || analysis.action !== 'BUY' || !(price > 0) || !inEntryWindow) return null;
     const s = ensure(engineState);
-    const code = String(analysis.stratCode || 'otros').toLowerCase();
+    const baseCode = String(analysis.stratCode || 'otros').toLowerCase();
+    const mirror = (opts && opts.mirror > 0) ? opts.mirror : null;
+    const code = mirror ? baseCode + 's' : baseCode;   // p9 -> p9s (corto) solo para la casilla viva
     const k = key(code, tf, ticker);
     if (s.open.some(o => o.k === k)) return null;                 // ya hay una fantasma viva en esa casilla
     if (barTime && s.lastBar && s.lastBar[k] === barTime) return null; // una por vela
@@ -95,10 +101,10 @@ function onSignal(engineState, ticker, tf, analysis, price, bars, barTime, inEnt
     const risk = Math.max(atr * 0.5, (isFinite(analysis.sl) && bp > analysis.sl) ? (bp - analysis.sl) : atr * 1.5);
     const reward = Math.max(atr * 1.0, (isFinite(analysis.tp) && analysis.tp > bp) ? (analysis.tp - bp) : atr * 3.0);
     const o = {
-        k, code, tf, ticker,
+        k, code, baseCode, tf, ticker, side: mirror ? 'SELL' : 'BUY', mirror,
         entry: price, risk, sl: price - risk, tp: price + reward,
         rr: Math.round(reward / risk * 100) / 100,
-        costR: (price * COST_BPS_PER_SIDE * 2 / 10000) / risk,
+        costR: ((mirror ? (mirror - price) : price) * COST_BPS_PER_SIDE * 2 / 10000) / risk, // coste sobre el precio real
         openedAt: new Date().toISOString(),
         closeAtSessionEnd: !!analysis.closeAtSessionEnd,
         std: null, step: null, stepK: 0,
@@ -121,6 +127,14 @@ function addAgg(s, aggKey, exit, R, win, bucket) {
 
 function finish(s, o) {
     const R = { STD: o.std.R - o.costR, STEP: o.step.R - o.costR };
+    if (o.mirror) {                                   // [CLAUDE v3.0] cortos: estadística aparte, no mezcla con las compras
+        ['STD', 'STEP'].forEach(x => { const r = R[x]; addAgg(s, key(o.baseCode, o.tf, o.ticker), x, r, r > 0, s.aggShort); addAgg(s, o.baseCode, x, r, r > 0, s.aggShort); });
+        s.recentShort.unshift({ code: o.baseCode, side: 'SELL', tf: o.tf, ticker: o.ticker, entry: Math.round((o.mirror - o.entry) * 10000) / 10000, rr: o.rr,
+            openedAt: o.openedAt, closedAt: new Date().toISOString(), rStd: Math.round(R.STD * 1000) / 1000, rStep: Math.round(R.STEP * 1000) / 1000,
+            whyStd: o.std.why, whyStep: o.step.why, mfeR: Math.round(o.mfeR * 100) / 100, maeR: Math.round(o.maeR * 100) / 100 });
+        if (s.recentShort.length > 200) s.recentShort.length = 200;
+        return;
+    }
     ['STD', 'STEP'].forEach(x => {
         const r = R[x];
         addAgg(s, key(o.code, o.tf, o.ticker), x, r, r > 0);
@@ -149,7 +163,8 @@ function manage(engineState, getPrice, isSessionOpen) {
     const ny = nyParts().mins;
     const still = [];
     for (const o of s.open) {
-        const q = getPrice(o.ticker);
+        const raw = getPrice(o.ticker);
+        const q = (o.mirror && raw > 0) ? o.mirror - raw : raw;   // [CLAUDE v3.0] cortos: precio en espejo
         const sessionOk = isSessionOpen(o.ticker);
         if (!(q > 0) || !sessionOk) { still.push(o); continue; }   // fuera de sesión el precio está congelado
         const rNow = (q - o.entry) / o.risk;
@@ -209,8 +224,22 @@ function summarize(engineState) {
         const target = k.includes('_') ? out.f4.byCell : out.f4.byStrategy;
         target[k] = { STD: statsOf(v.STD), STEP: statsOf(v.STEP) };
     });
+    // [CLAUDE v3.0] ventas en corto en espejo (mismas estrategias sobre el gráfico invertido)
+    out.short = { rule: 'Cada estrategia aplicada al gráfico en espejo: su COMPRA ahí = VENTA EN CORTO real', byStrategy: {}, byCell: {} };
+    Object.entries(s.aggShort || {}).forEach(([k, v]) => {
+        const target = k.includes('_') ? out.short.byCell : out.short.byStrategy;
+        target[k] = { STD: statsOf(v.STD), STEP: statsOf(v.STEP) };
+    });
     s.summary = out;
     return out;
 }
 
-module.exports = { onSignal, manage, summarize, features, statsOf, htfTrend };
+// [CLAUDE v3.0] Velas en espejo: precio' = C - precio (C = 2 x máximo de la serie, siempre positivo).
+// Las subidas pasan a ser bajadas, los máximos mínimos; el volumen y la hora no cambian.
+function mirrorBars(rawBars) {
+    if (!Array.isArray(rawBars) || !rawBars.length) return { C: null, bars: [] };
+    const C = 2 * Math.max(...rawBars.map(b => b.h || b.c || 0));
+    return { C, bars: rawBars.map(b => ({ ...b, o: C - b.o, h: C - b.l, l: C - b.h, c: C - b.c })) };
+}
+
+module.exports = { onSignal, manage, summarize, features, statsOf, htfTrend, mirrorBars };
