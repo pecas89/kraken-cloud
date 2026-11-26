@@ -98,7 +98,8 @@ async function processIncomingSignal(signal) {
     // XAUUSD (Oro): 100 = 0.01 lotes (1 onza)
     let cTraderVolume = 100;
     if (signal.ticker.includes('SOL')) {
-        cTraderVolume = 100;
+        // [CLAUDE v2.9] volumen = cantidad que apunta el motor (100 = 1 SOL). Antes era 100 fijo.
+        cTraderVolume = Math.max(1, Math.round((parseFloat(signal.qty) || 1) * 100));
     } else if (signal.ticker === 'NVDA' || signal.ticker === 'TSLA') {
         cTraderVolume = 10;
     } else if (signal.ticker.includes('XAU')) {
