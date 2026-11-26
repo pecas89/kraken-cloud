@@ -117,7 +117,7 @@ const ASSETS_CONFIG = {
         alpacaSymbol: 'SOL/USD',
         alpacaQty: 1, // 1 SOL
         pepperstoneSymbol: 'SOLUSD',
-        pepperstoneQty: 0.01, // 0.01 micro-lotes CFD
+        pepperstoneQty: 1, // [CLAUDE v2.9] 1 SOL (cTrader volume 100). Antes la libreta decía 0,01 pero cTrader recibía siempre 1 SOL (x100).
         baseAtr: 2.10
     }
 };
@@ -687,6 +687,7 @@ async function executeAutonomousOpen(ticker, price, analysis) {
         const pepRes = await pepperstoneService.processIncomingSignal({
             action: 'BUY',
             ticker: config.pepperstoneSymbol,
+            qty: config.pepperstoneQty, // [CLAUDE v2.9] el tamaño que se apunta es el que se envía
             price: liveRefPrice,
             score: analysis.score,
             pez: analysis.pez,
@@ -795,8 +796,23 @@ function isSessionOpenForAsset(symbol) {
     const mins = d.getHours() * 60 + d.getMinutes();
     return mins >= 15 * 60 + 30 && mins < 22 * 60; // 15:30 - 22:00 Roma
 }
+// [CLAUDE v2.9] Calendario real de Wall Street (festivos, cierres anticipados) desde Alpaca /v2/clock
+const US_CLOCK = { open: null, checkedAt: 0 };
+async function refreshUsClock() {
+    if (Date.now() - US_CLOCK.checkedAt < 2 * 60 * 1000) return US_CLOCK;
+    await new Promise(resolve => {
+        const req = https.get({ hostname: alpacaService.ALPACA_CONFIG.baseUrl, path: '/v2/clock', headers: { 'APCA-API-KEY-ID': alpacaService.ALPACA_CONFIG.apiKey, 'APCA-API-SECRET-KEY': alpacaService.ALPACA_CONFIG.secretKey } }, res => {
+            let d = ''; res.on('data', c => d += c);
+            res.on('end', () => { try { const j = JSON.parse(d); if (typeof j.is_open === 'boolean') { US_CLOCK.open = j.is_open; US_CLOCK.nextOpen = j.next_open; US_CLOCK.checkedAt = Date.now(); } } catch (e) { } resolve(); });
+        });
+        req.on('error', () => resolve()); req.setTimeout(8000, () => { req.destroy(); resolve(); });
+    });
+    return US_CLOCK;
+}
+
 function isEntryWindowForAsset(symbol) {
     if ((symbol || '').includes('SOL')) return true;
+    if (US_CLOCK.open === false) return false; // [CLAUDE v2.9] festivo o mercado cerrado según Alpaca
     const d = romeNow();
     const day = d.getDay();
     if (day === 0 || day === 6) return false;
@@ -1125,6 +1141,22 @@ async function syncBrokerReality() {
             }
         }
 
+        // [CLAUDE v2.9] Tamaño real de las posiciones de Pepperstone según el broker (corrige la libreta x100 de SOL)
+        if (pepReconOk) {
+            const volById = {};
+            pepRealPositions.forEach(p => { const v = p.tradeData && p.tradeData.volume; if (v) volById[String(p.positionId)] = v; });
+            engineState.openPositions.forEach(op => {
+                if (!(op.broker || '').includes('Pepperstone') || !String(op.symbol || '').includes('SOL')) return;
+                const v = volById[String(op.positionId || op.id)];
+                if (!v) return;
+                const realQty = v / 100;
+                if (Math.abs((op.qty || 0) - realQty) > 1e-6) {
+                    console.log(`🔧 [SYNC cTrader] ${op.symbol} ${op.positionId}: libreta ${op.qty} -> real ${realQty} SOL`);
+                    op.qty = realQty; op.initialQty = realQty; op.unit = 'SOL'; op.sizeFixedFromBroker = true;
+                }
+            });
+        }
+
         // [CLAUDE v2.2] Posiciones Alpaca recuperadas de Firestore: si el broker ya no tiene ese símbolo, se cerraron mientras el motor estaba caído
         if (Array.isArray(alpPositions)) {
             const alpQtyBySym = {};
@@ -1154,6 +1186,40 @@ async function syncBrokerReality() {
 
         const realAlpaca = {};
         (alpPositions || []).forEach(p => { realAlpaca[p.symbol] = p.qty; });
+
+        // [CLAUDE v2.9] Órdenes que el broker nunca ejecutó (p. ej. festivo en EE. UU.): si la libreta tiene más
+        // cantidad que Alpaca, se quitan las posiciones más recientes (con más de 15 min) hasta cuadrar.
+        // No se inventa ningún resultado: van a notFilledLog, no al historial de operaciones.
+        if (Array.isArray(alpPositions)) {
+            const normS = x => String(x || '').replace('/', '').toUpperCase();
+            const realBy = {}; alpPositions.forEach(p => { realBy[normS(p.symbol)] = parseFloat(p.qty) || 0; });
+            const removed = [];
+            const bySym = {};
+            engineState.openPositions.forEach(op => { if ((op.broker || '').includes('Alpaca') && !op.pendingClose) (bySym[normS(op.orderSymbol || op.symbol)] = bySym[normS(op.orderSymbol || op.symbol)] || []).push(op); });
+            Object.entries(bySym).forEach(([sym, list]) => {
+                const ext = (engineState.externalQty && parseFloat(engineState.externalQty[sym])) || 0;
+                const isRecent = op => Date.now() - Date.parse(op.openedAt || 0) < 15 * 60 * 1000;
+                // las recientes pueden estar ya ejecutadas en el broker: se descuentan del exceso y nunca se retiran
+                let excess = list.filter(op => !isRecent(op)).reduce((a, op) => a + (op.qty || 0), 0) - Math.max(0, (realBy[sym] || 0) - ext);
+                list.sort((a, b) => Date.parse(b.openedAt || 0) - Date.parse(a.openedAt || 0));
+                for (const op of list) {
+                    if (excess < (op.qty || 0) * 0.9) break;                        // tolera redondeos de comisión crypto
+                    if (isRecent(op)) continue;
+                    removed.push(op); excess -= (op.qty || 0);
+                }
+            });
+            if (removed.length) {
+                const ids = new Set(removed.map(o => o.id));
+                engineState.openPositions = engineState.openPositions.filter(op => !ids.has(op.id));
+                if (!Array.isArray(engineState.notFilledLog)) engineState.notFilledLog = [];
+                removed.forEach(op => engineState.notFilledLog.push({ id: op.id, symbol: op.symbol, stratCode: op.stratCode, timeframe: op.timeframe, openedAt: op.openedAt, removedAt: new Date().toISOString(), reason: 'Alpaca no tiene esta posición (orden no ejecutada o ya cerrada fuera del motor)' }));
+                engineState.notFilledLog = engineState.notFilledLog.slice(-100);
+                Object.keys(engineAlpaca).forEach(k => { engineAlpaca[k] = 0; });
+                engineState.openPositions.filter(p => (p.broker || '').includes('Alpaca')).forEach(p => { engineAlpaca[p.orderSymbol] = (engineAlpaca[p.orderSymbol] || 0) + (p.qty || 0); });
+                console.warn(`🧹 [SYNC Alpaca] ${removed.length} posiciones de libreta sin respaldo en el broker: ${removed.map(o => o.symbol + ' ' + o.stratCode + ' ' + o.timeframe).join(', ')}`);
+                notifyPedro(`🧹 <b>[ANASTASIA]</b> ${removed.length} posiciones de la libreta no existían en Alpaca (orden no ejecutada). Retiradas sin resultado: ${removed.map(o => o.symbol + ' ' + (o.stratCode || '')).join(', ')}`).catch(() => {});
+            }
+        }
 
         const divergences = [];
         const norm = s => (s || '').replace('/', '').toUpperCase();
@@ -1823,6 +1889,7 @@ async function runAutonomousCycle() {
 
     // 1. Gestionar posiciones abiertas existentes (Trailing BE, TP, SL)
     await manageOpenPositions(quotes);
+    try { await refreshUsClock(); } catch (e) { } // [CLAUDE v2.9]
 
     // [CLAUDE v2.6] Punto cero de la semana: laboratorio fantasma y comparación P13 empiezan de cero (una sola vez)
     if (labEpochActive()) {
