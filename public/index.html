@@ -271,7 +271,8 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
         <label id="r-broker-lbl">Broker</label><div class="seg" role="group" aria-label="Broker o salida" id="r-broker"></div>
       </div>
     </div>
-    <div class="card card-dark stack" id="res-summary"></div>
+    <div class="card stack" id="audit-card"></div>
+        <div class="card card-dark stack" id="res-summary"></div>
     <div class="section card stack">
       <div class="row"><h2>Curva acumulada (R)</h2><span class="sub" id="res-curve-sub">evolución en el período</span></div>
       <div class="filters" id="res-curve-legend" style="gap:10px;font-size:12px"></div>
@@ -538,6 +539,27 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
       + '</tbody></table></div><p class="sub" style="margin:0">R total (operaciones entre paréntesis), salida ' + (ui.exit === 'STEP' ? 'escalera' : 'normal') + '.</p>';
   }
 
+  // [CLAUDE v3.2] Verificación contra el historial real de los brokers
+  function renderAudit() {
+    const box = $('audit-card'); if (!box) return;
+    const a = st && st.brokerAudit;
+    if (!a) { box.innerHTML = '<h2>Verificación con los brokers</h2><p class="sub" style="margin:0">La primera comprobación llega unos minutos después de arrancar el motor.</p>'; return; }
+    const p = a.pepperstone || {}, al = a.alpaca || {};
+    const ok = (x, n) => '<b style="color:' + (x === n ? '#16A34A' : '#D97706') + '">' + x + '/' + n + '</b>';
+    box.innerHTML = '<h2>Verificación con los brokers</h2><p class="sub" style="margin:0">Cada 30 min el motor compara su libreta con el historial real de Alpaca y cTrader (desde ' + esc(new Date(a.since).toLocaleDateString('es-ES')) + '). Última: ' + esc(new Date(a.checkedAt).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })) + '.</p>'
+      + '<div class="tablebox"><table><tbody>'
+      + (p.ok ? '<tr><td>Pepperstone · operaciones cuadradas</td><td class="num">' + ok(p.matched, p.ledgerTrades) + '</td></tr>'
+        + '<tr><td>Pepperstone · resultado según el broker (incl. comisiones y swaps)</td><td class="num ' + cls(p.brokerEur) + '"><b>' + money(p.brokerEur, '€') + '</b></td></tr>'
+        + '<tr><td>Pepperstone · lo que había calculado el motor</td><td class="num">' + money(p.ledgerEur, '€') + '</td></tr>'
+        + '<tr><td>Pepperstone · cierres en el broker que el motor no tiene</td><td class="num">' + (p.missingInLedgerCount || 0) + '</td></tr>'
+        : '<tr><td>Pepperstone</td><td class="num">sin datos (' + esc(p.error || '') + ')</td></tr>')
+      + (al.ok ? '<tr><td>Alpaca · entradas encontradas en el broker</td><td class="num">' + ok(al.entryMatched, al.ledgerTrades) + '</td></tr>'
+        + '<tr><td>Alpaca · salidas encontradas en el broker</td><td class="num">' + ok(al.exitMatched, al.ledgerTrades) + '</td></tr>'
+        + '<tr><td>Alpaca · deslizamiento medio entrada / salida</td><td class="num">' + (al.avgEntrySlipBp != null ? fmtN(al.avgEntrySlipBp, 1) : '–') + ' / ' + (al.avgExitSlipBp != null ? fmtN(al.avgExitSlipBp, 1) : '–') + ' pb</td></tr>'
+        : '<tr><td>Alpaca</td><td class="num">sin datos (' + esc(al.error || '') + ')</td></tr>')
+      + '</tbody></table></div><p class="sub" style="margin:0">En Pepperstone, el dinero de cada operación cuadrada ya es el del broker. Los R no cambian: se calculan sobre el precio.</p>';
+  }
+
   function renderLab() {
     const sm = shadowSum();
     document.querySelectorAll('[data-exit]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.exit === ui.exit)));
@@ -707,6 +729,7 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
     resChart.timeScale().fitContent();
   }
   function renderResults() {
+    try { renderAudit(); } catch (e) { console.warn("[panel] audit", e); } // [CLAUDE v3.2]
     const isShadow = ui.rSource === 'shadow';
     seg($('r-source'), [['real', 'Reales (brokers)'], ['shadow', 'Fantasma (igualdad)']], ui.rSource, v => { ui.rSource = v; renderResults(); });
     seg($('r-period'), [['today', 'Hoy'], ['week', 'Semana'], ['all', 'Punto cero']], ui.rPeriod, v => { ui.rPeriod = v; renderResults(); });

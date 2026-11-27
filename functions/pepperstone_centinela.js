@@ -428,7 +428,43 @@ function getOpenPositionsViaOpenAPI() {
     });
 }
 
+// [CLAUDE v3.2] Historial real de operaciones (deals) de cTrader entre dos fechas (máx. 1 semana por petición)
+function getDealListViaOpenAPI(fromMs, toMs, maxRows = 1000) {
+    return new Promise((resolve) => {
+        let isDone = false;
+        let ws = null;
+        const finish = (result) => {
+            if (isDone) return;
+            isDone = true;
+            if (ws) { try { ws.onerror = null; ws.onclose = null; ws.onmessage = null; if (ws.readyState === 1 || ws.readyState === 0) ws.close(); } catch(e) {} }
+            resolve(result);
+        };
+        try { ws = new WebSocket('wss://demo.ctraderapi.com:5036'); } catch(e) { return resolve({ error: e.message }); }
+        ws.onopen = () => {
+            try { ws.send(JSON.stringify({ clientMsgId: 'auth_app', payloadType: 2100, payload: { clientId: PEPPERSTONE_CONFIG.clientId, clientSecret: PEPPERSTONE_CONFIG.clientSecret } })); } catch(e) { finish({ error: e.message }); }
+        };
+        ws.onmessage = (event) => {
+            if (isDone) return;
+            try {
+                const res = JSON.parse(event.data);
+                if (res.clientMsgId === 'auth_app') {
+                    ws.send(JSON.stringify({ clientMsgId: 'auth_acc', payloadType: 2102, payload: { ctidTraderAccountId: PEPPERSTONE_CONFIG.accountId, accessToken: PEPPERSTONE_CONFIG.accessToken } }));
+                } else if (res.clientMsgId === 'auth_acc') {
+                    ws.send(JSON.stringify({ clientMsgId: 'deals', payloadType: 2133, payload: { ctidTraderAccountId: PEPPERSTONE_CONFIG.accountId, fromTimestamp: Math.floor(fromMs), toTimestamp: Math.floor(toMs), maxRows } }));
+                } else if (res.clientMsgId === 'deals') {
+                    if (res.payload && res.payload.errorCode) return finish({ error: res.payload.errorCode, description: res.payload.description });
+                    finish({ deals: (res.payload && res.payload.deal) || [], hasMore: !!(res.payload && res.payload.hasMore) });
+                }
+            } catch(e) { finish({ error: e.message }); }
+        };
+        ws.onerror = (err) => finish({ error: err ? err.message : 'WS Error' });
+        ws.onclose = () => finish({ error: 'WS closed' });
+        setTimeout(() => finish({ error: 'timeout' }), 15000);
+    });
+}
+
 module.exports = {
+    getDealListViaOpenAPI,
     syncOpenPositions,
     PEPPERSTONE_CONFIG,
     centinelaState,
