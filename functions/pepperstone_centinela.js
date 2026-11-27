@@ -140,9 +140,11 @@ async function processIncomingSignal(signal) {
         boundTp = parseFloat((isBuy ? fillPrice * (1 + tpPct) : fillPrice * (1 - tpPct)).toFixed(2));
     }
 
+    // [CLAUDE v3.1.1] Oro sin precio de ejecución: no fijar SL/TP en escala GLD (spot ≈ 10,8x). Lo corrige la reconciliación del motor.
+    const goldUnknownFill = signal.ticker.includes('XAU') && isFinite(fillPrice) && isFinite(refPrice) && Math.abs(fillPrice - refPrice) / refPrice <= 0.05;
     // Vincular SL/TP reales en el servidor Spotware cTrader (Mandato Control 3.B.3)
     let brokerSltpBound = false;
-    if (isFinite(boundSl) && isFinite(boundTp)) {
+    if (!goldUnknownFill && isFinite(boundSl) && isFinite(boundTp)) {
         try {
             const amendRes = await amendPositionSLTPViaOpenAPI(positionId, boundSl, boundTp);
             if (amendRes && !amendRes.errorCode && !amendRes.error && !amendRes.timeout) {

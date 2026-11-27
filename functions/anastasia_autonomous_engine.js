@@ -1159,6 +1159,30 @@ async function syncBrokerReality() {
             }
         }
 
+        // [CLAUDE v3.1.1] Oro en Pepperstone: si la libreta quedó en escala GLD (cTrader no devolvió el precio de ejecución),
+        // se toma la entrada real del broker, se reescala SL/TP/breakeven y se fijan en el servidor cTrader.
+        if (pepReconOk) {
+            const pxById = {};
+            pepRealPositions.forEach(p => { const px = parseFloat(p.price); if (px > 0) pxById[String(p.positionId)] = px; });
+            for (const op of engineState.openPositions) {
+                if (op.symbol !== 'XAUUSD' || !(op.broker || '').includes('Pepperstone')) continue;
+                const real = pxById[String(op.positionId || op.id)];
+                if (!real || !(op.entryPrice > 0) || real / op.entryPrice < 3) continue;   // ya está en escala spot
+                const k = real / op.entryPrice;
+                const sc = v => (isFinite(v) ? parseFloat((v * k).toFixed(2)) : v);
+                op.priceScale = (op.priceScale || 1) * k;
+                op.entryPrice = real; op.fillPrice = real;
+                op.sl = sc(op.sl); op.tp = sc(op.tp); op.breakevenTrigger = sc(op.breakevenTrigger);
+                op.initialRiskPerUnit = parseFloat(Math.abs(op.entryPrice - op.sl).toFixed(2));
+                ['tp1', 'tp2', 'tp3', 'tp4'].forEach(t => { if (isFinite(op[t])) op[t] = sc(op[t]); });
+                try {
+                    const am = await pepperstoneService.amendPositionSLTPViaOpenAPI(op.positionId || op.id, op.sl, op.tp);
+                    op.brokerSltpBound = !!(am && !am.errorCode && !am.error && !am.timeout);
+                } catch (e) { op.brokerSltpBound = false; }
+                console.log(`🔧 [ORO cTrader] #${op.positionId}: escala ${k.toFixed(3)} -> entrada ${real}, SL ${op.sl}, TP ${op.tp}, fijado=${op.brokerSltpBound}`);
+            }
+        }
+
         // [CLAUDE v2.9] Tamaño real de las posiciones de Pepperstone según el broker (corrige la libreta x100 de SOL)
         if (pepReconOk) {
             const volById = {};
