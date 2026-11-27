@@ -77,8 +77,9 @@ async function processIncomingSignal(signal) {
     }
 
     const livePosCount = Math.max(centinelaState.openPositions.length, centinelaState.realBrokerCount || 0);
-    if (livePosCount >= 24) {
-        console.warn(`⚠️ [FILTRO MARGEN] Máximo 24 posiciones en paralelo alcanzado (${livePosCount}/24 reales en cTrader).`);
+    const maxPos = parseInt(process.env.KRAKEN_PEP_MAX_POS || '80', 10); // [CLAUDE v3.1] antes 24 fijo
+    if (livePosCount >= maxPos) {
+        console.warn(`⚠️ [FILTRO MARGEN] Máximo ${maxPos} posiciones en paralelo alcanzado (${livePosCount}/${maxPos} reales en cTrader).`);
         return { executed: false, reason: 'Límite de posiciones simultáneas alcanzado' };
     }
 
@@ -103,7 +104,8 @@ async function processIncomingSignal(signal) {
     } else if (signal.ticker === 'NVDA' || signal.ticker === 'TSLA') {
         cTraderVolume = 10;
     } else if (signal.ticker.includes('XAU')) {
-        cTraderVolume = 100;
+        // [CLAUDE v3.1] volumen = onzas que apunta el motor (100 = 0,01 lotes = 1 onza)
+        cTraderVolume = Math.max(100, Math.round((parseFloat(signal.qty) || 1) * 100));
     }
 
     console.log(`[cTrader WebSocket] Disparando orden REAL en Pepperstone: ${signal.action} ${signal.ticker} (SymbolID: ${symbolId}, Vol: ${cTraderVolume})...`);

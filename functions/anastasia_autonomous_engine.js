@@ -75,6 +75,10 @@ const ENGINE_VERSION = 'v2-2026-11-18';
 const LAB_EPOCH = process.env.KRAKEN_LAB_EPOCH || '2026-11-22T23:00:00Z'; // lunes 23-nov 00:00 hora de Roma
 // [CLAUDE v2.7] Estrategias que no abren en los brokers (solo fantasma). Env KRAKEN_REAL_OFF="p4,p10"; vacío = ninguna.
 const REAL_OFF = new Set((process.env.KRAKEN_REAL_OFF !== undefined ? process.env.KRAKEN_REAL_OFF : 'p4,p10').split(',').map(x => x.trim().toLowerCase()).filter(Boolean));
+// [CLAUDE v3.1] Pepperstone ejecuta todas las señales (laboratorio real). KRAKEN_PEP_ALL=off para volver al turno justo único.
+const PEP_ALL_SIGNALS = process.env.KRAKEN_PEP_ALL !== 'off';
+const PEP_MAX_POS = parseInt(process.env.KRAKEN_PEP_MAX_POS || '80', 10);
+const PEP_EXTRA_PER_CYCLE = parseInt(process.env.KRAKEN_PEP_EXTRA_PER_CYCLE || '6', 10);
 const LAB_EPOCH_MS = Date.parse(LAB_EPOCH) || 0;
 function labEpochActive() { return Date.now() >= LAB_EPOCH_MS; }
 function inLabEpoch(t) { return !labEpochActive() || (t && t.openedAt && Date.parse(t.openedAt) >= LAB_EPOCH_MS); }
@@ -107,7 +111,7 @@ const ASSETS_CONFIG = {
         alpacaSymbol: 'GLD', // SPDR Gold Trust ETF en Alpaca para competir en Oro en igualdad
         alpacaQty: 1, // 1 acción
         pepperstoneSymbol: 'XAUUSD',
-        pepperstoneQty: 0.01, // 0.01 micro-lotes CFD
+        pepperstoneQty: 1, // [CLAUDE v3.1] 1 onza = 0,01 lotes (mínimo de cTrader). La libreta apunta onzas, en escala spot.
         baseAtr: 18.50
     },
     SOLUSD: {
@@ -536,7 +540,7 @@ function calculate26HermanasScore(ticker, currentPrice) {
 // ------------------------------------------------------------------------------
 // 🚀 EJECUCIÓN AUTÓNOMA DE APERTURA: DUELO EN VIVO (AMBOS BROKERS EN LAS 4 ACCIONES)
 // ------------------------------------------------------------------------------
-async function executeAutonomousOpen(ticker, price, analysis) {
+async function executeAutonomousOpen(ticker, price, analysis, opts = {}) { // [CLAUDE v3.1] opts.pepOnly: solo Pepperstone
     const config = ASSETS_CONFIG[ticker];
     if (!config) return null;
 
@@ -580,11 +584,11 @@ async function executeAutonomousOpen(ticker, price, analysis) {
 
     // [CLAUDE v2.5] LA JAULA: el reglamento decide si la orden puede salir hacia Alpaca
     const alpEquity = parseFloat((engineState.liveMetrics && engineState.liveMetrics.alpacaEquityUsd) || 0);
-    const gateAlp = riskGate.check(engineState, { brokerKey: 'alpaca', symbol: ticker, qty: config.alpacaQty, price: liveRefPrice, sl: analysis.sl, equity: alpEquity });
-    riskGate.record(engineState, { ok: gateAlp.ok, broker: 'Alpaca', symbol: ticker, stratCode: analysis.stratCode, timeframe: analysis.timeframe, reason: gateAlp.reason || null });
-    if (!gateAlp.ok) console.log(`🔒 [JAULA] Alpaca ${ticker} ${analysis.stratCode}: RECHAZADA — ${gateAlp.reason}`);
+    const gateAlp = opts.pepOnly ? { ok: false, reason: 'solo Pepperstone' } : riskGate.check(engineState, { brokerKey: 'alpaca', symbol: ticker, qty: config.alpacaQty, price: liveRefPrice, sl: analysis.sl, equity: alpEquity });
+    if (!opts.pepOnly) riskGate.record(engineState, { ok: gateAlp.ok, broker: 'Alpaca', symbol: ticker, stratCode: analysis.stratCode, timeframe: analysis.timeframe, reason: gateAlp.reason || null });
+    if (!gateAlp.ok && !opts.pepOnly) console.log(`🔒 [JAULA] Alpaca ${ticker} ${analysis.stratCode}: RECHAZADA — ${gateAlp.reason}`);
 
-    if (gateAlp.ok && existingAlpSameSym < MAX_ALPACA_SUBPOS_PER_SYMBOL) { // [FIX CLAUDE 18-NOV] sin bracket ya no hay choque entre subposiciones
+    if (opts.pepOnly) { /* [CLAUDE v3.1] señal extra: solo Pepperstone */ } else if (gateAlp.ok && existingAlpSameSym < MAX_ALPACA_SUBPOS_PER_SYMBOL) { // [FIX CLAUDE 18-NOV] sin bracket ya no hay choque entre subposiciones
         try {
             const isCrypto = config.alpacaSymbol.includes('/');
             let alpacaTp = analysis.tp;
@@ -682,12 +686,16 @@ async function executeAutonomousOpen(ticker, price, analysis) {
     // (~$4000). SL/TP, breakeven y PnL salían en la escala equivocada. Se reactiva con KRAKEN_PEP_GOLD=on cuando haya cotización spot.
     // [CLAUDE v2.5] LA JAULA también para Pepperstone (valor en USD frente a saldo en EUR: más prudente, no menos)
     const pepEquity = parseFloat((engineState.liveMetrics && engineState.liveMetrics.pepperstoneBalanceEur) || 0);
-    const gatePep = (ticker === 'XAUUSD' && process.env.KRAKEN_PEP_GOLD !== 'on') ? { ok: true, skip: true }
+    // [CLAUDE v3.1] Oro reactivado por defecto: la libreta guarda priceScale (spot/GLD) y gestiona en escala spot. Apagar con KRAKEN_PEP_GOLD=off.
+    const pepGoldOff = ticker === 'XAUUSD' && process.env.KRAKEN_PEP_GOLD === 'off';
+    const pepGoldOpen = engineState.openPositions.filter(p => p.symbol === 'XAUUSD' && (p.broker || '').includes('Pepperstone')).length;
+    const pepGoldFull = ticker === 'XAUUSD' && pepGoldOpen >= (parseInt(process.env.KRAKEN_PEP_GOLD_MAX || '4', 10));
+    const gatePep = (pepGoldOff || pepGoldFull) ? { ok: true, skip: true }
         : riskGate.check(engineState, { brokerKey: 'pepperstone', symbol: ticker, qty: config.pepperstoneQty, price: liveRefPrice, sl: analysis.sl, equity: pepEquity });
     if (!gatePep.skip) riskGate.record(engineState, { ok: gatePep.ok, broker: 'Pepperstone', symbol: ticker, stratCode: analysis.stratCode, timeframe: analysis.timeframe, reason: gatePep.reason || null });
 
-    if (ticker === 'XAUUSD' && process.env.KRAKEN_PEP_GOLD !== 'on') {
-        console.log('⏸️ [PEPPERSTONE ORO] En pausa (escala GLD vs spot). Solo Alpaca GLD.');
+    if (pepGoldOff || pepGoldFull) {
+        console.log(pepGoldOff ? '⏸️ [PEPPERSTONE ORO] Apagado (KRAKEN_PEP_GOLD=off).' : `🔒 [PEPPERSTONE ORO] Máximo de ${pepGoldOpen} posiciones de oro abiertas (1 onza ≈ 3.600 $ de exposición cada una).`);
     } else if (!gatePep.ok) {
         console.log(`🔒 [JAULA] Pepperstone ${ticker} ${analysis.stratCode}: RECHAZADA — ${gatePep.reason}`);
     } else try {
@@ -718,7 +726,10 @@ async function executeAutonomousOpen(ticker, price, analysis) {
                 orderSymbol: config.pepperstoneSymbol,
                 qty: config.pepperstoneQty,
                 initialQty: config.pepperstoneQty,
-                unit: 'micro-lotes',
+                unit: ticker === 'XAUUSD' ? 'onzas' : (ticker === 'SOLUSD' ? 'SOL' : 'lotes CFD'),
+                // [CLAUDE v3.1] escala entre el precio del broker y la cotización que ve el motor (oro: spot / GLD ≈ 10,8; resto 1)
+                priceScale: (liveRefPrice > 0 && Math.abs(pepEntry / liveRefPrice - 1) > 0.05) ? pepEntry / liveRefPrice : 1,
+                pepOnly: !!opts.pepOnly,
                 currency: 'EUR',
                 side: 'BUY',
                 entryPrice: pepEntry,
@@ -1502,7 +1513,10 @@ async function manageOpenPositions(currentQuotes) {
             continue;
         }
 
-        const currentPrice = currentQuotes[pos.symbol] || pos.entryPrice;
+        // [CLAUDE v3.1] posiciones en otra escala (oro spot en Pepperstone vs GLD): se gestiona con precio x priceScale
+        const rawQuote = currentQuotes[pos.symbol];
+        if (!pos.priceScale && rawQuote > 0 && pos.entryPrice > 0 && pos.entryPrice / rawQuote > 3 && (pos.broker || '').includes('Pepperstone')) pos.priceScale = pos.entryPrice / rawQuote;
+        const currentPrice = (rawQuote > 0 ? rawQuote * (pos.priceScale || 1) : 0) || pos.entryPrice;
         const config = ASSETS_CONFIG[pos.symbol];
         let positionClosed = false;
         let closeReason = '';
@@ -2008,13 +2022,13 @@ async function runAutonomousCycle() {
                     continue;
                 }
 
-                // Evitar duplicar posición en el mismo activo, misma estrategia y mismo timeframe
-                const hasOpenInSameStrategy = engineState.openPositions.some(p => 
-                    p.symbol === ticker && 
-                    p.strategy === analysis.strategyName &&
-                    (p.timeframe === tf.label || (!p.timeframe && tf.label === '5m'))
-                );
-                if (hasOpenInSameStrategy) continue;
+                // [CLAUDE v3.1] Se recogen TODAS las candidatas con sus banderas. Luego:
+                //  - Turno justo (ambos brokers): 1 por activo y ciclo, sin posición abierta de esa casilla y fuera de la espera del activo.
+                //  - Pepperstone "laboratorio real": el resto de candidatas también entran, SOLO en Pepperstone, si esa casilla no tiene ya
+                //    una posición abierta en Pepperstone (igual que el fantasma: una viva por estrategia x marco x activo).
+                const sameCell = p => p.symbol === ticker && p.strategy === analysis.strategyName && (p.timeframe === tf.label || (!p.timeframe && tf.label === '5m'));
+                const openAny = engineState.openPositions.some(sameCell);
+                const openPep = engineState.openPositions.some(p => sameCell(p) && (p.broker || '').includes('Pepperstone'));
 
                 // Cooldown anti-churn proporcional al timeframe tras cierre (o reinicio desde historial)
                 const cooldownKey = `${ticker}_${analysis.strategyName}_${tf.label}`;
@@ -2024,31 +2038,15 @@ async function runAutonomousCycle() {
                     const elapsed = Date.now() - engineState.closedCooldowns[cooldownKey];
                     if (elapsed < minCooldown) continue;
                 }
-                if (engineState.closedCooldowns && engineState.closedCooldowns[assetCooldownKey]) {
-                    const elapsedAsset = Date.now() - engineState.closedCooldowns[assetCooldownKey];
-                    if (elapsedAsset < 10 * 60 * 1000) continue; // Mínimo 10 min entre aperturas en el mismo activo
-                }
-                if (openedTickerThisCycle) continue; // Máximo 1 apertura simultánea por activo y escaneo
+                const assetCd = !!(engineState.closedCooldowns && engineState.closedCooldowns[assetCooldownKey] && (Date.now() - engineState.closedCooldowns[assetCooldownKey]) < 10 * 60 * 1000);
 
                 // ⏰ MANDATO PEDRO: no abrir fuera de sesión ni en los últimos 30 min (SOL es 24/7)
                 if (!isEntryWindowForAsset(ticker)) {
                     console.log(`⏰ [HORARIO] Señal ${ticker} (${analysis.strategyName} • ${tf.label}) ignorada: fuera de ventana de entrada (15:30-21:30 Roma, L-V).`);
                     continue;
                 }
-
-                // Candado sagrado de máximo 24 posiciones simultáneas REALES en Pepperstone (libreta + API cTrader)
-                const pepLibretaCount = engineState.openPositions.filter(p => !p.broker || p.broker.includes('Pepperstone')).length;
-                const ctraderRealCount = (engineState.brokerReconciliation && typeof engineState.brokerReconciliation.ctraderRealCount === 'number')
-                    ? engineState.brokerReconciliation.ctraderRealCount : pepLibretaCount;
-                const pepCount = Math.max(pepLibretaCount, ctraderRealCount);
-
-                if (pepCount < 24 && price > 0) {
-                    // [CLAUDE v2.4] TURNO JUSTO: no abrir "la primera de la lista" (P1-P2 en 5m se quedaban siempre el hueco).
-                    // Se juntan todas las candidatas del activo y al final del ciclo entra la estrategia con menos operaciones reales.
-                    fairCandidates.push({ analysis: { ...analysis }, tfLabel: tf.label, barKey, currentBarTime, assetCooldownKey });
-                } else {
-                    console.log(`🔒 [CANDADO PEPPERSTONE] Máximo 24 posiciones reales alcanzado (${pepCount}/24 en cTrader). Señal ${ticker} (${analysis.strategyName} • ${tf.label}) en espera.`);
-                }
+                if (openAny && openPep) continue;
+                if (price > 0) fairCandidates.push({ analysis: { ...analysis }, tfLabel: tf.label, barKey, currentBarTime, assetCooldownKey, openAny, openPep, assetCd });
             }
 
             if (bestForTf) {
@@ -2085,7 +2083,15 @@ async function runAutonomousCycle() {
 
         // [CLAUDE v2.4] TURNO JUSTO: de todas las candidatas del activo, entra la estrategia con MENOS operaciones reales
         // en el laboratorio v2 (empate: mayor score). Así P9-P12 y los marcos 1H/4H también reciben operaciones reales.
-        if (fairCandidates.length > 0) {
+        // [CLAUDE v3.1] Tope de posiciones reales en Pepperstone (libreta + cTrader). Antes 24 fijo.
+        const pepLibretaCount = engineState.openPositions.filter(p => (p.broker || '').includes('Pepperstone')).length;
+        const ctraderRealCount = (engineState.brokerReconciliation && typeof engineState.brokerReconciliation.ctraderRealCount === 'number') ? engineState.brokerReconciliation.ctraderRealCount : pepLibretaCount;
+        let pepCount = Math.max(pepLibretaCount, ctraderRealCount);
+        const allFair = fairCandidates;
+        const fairOk = allFair.filter(c => !c.openAny && !c.assetCd && !openedTickerThisCycle && pepCount < PEP_MAX_POS);
+        let pickedRef = null;
+        if (fairOk.length > 0) {
+            const fairCandidates = fairOk;
             const realCount = {};
             (engineState.closedTradesHistory || []).forEach(t => { if (t.strategyVersion && t.stratCode) realCount[t.stratCode] = (realCount[t.stratCode] || 0) + 1; });
             (engineState.openPositions || []).forEach(p => { if (p.stratCode) realCount[p.stratCode] = (realCount[p.stratCode] || 0) + 1; });
@@ -2096,11 +2102,28 @@ async function runAutonomousCycle() {
             });
             const pick = fairCandidates[0];
             console.log(`⚖️ [TURNO JUSTO] ${ticker}: ${fairCandidates.length} candidatas (${fairCandidates.map(c => c.analysis.stratCode + '/' + c.tfLabel).join(', ')}) → entra ${pick.analysis.stratCode}/${pick.tfLabel} (${realCount[pick.analysis.stratCode] || 0} ops reales).`);
+            pickedRef = pick;
             const opened = await executeAutonomousOpen(ticker, price, pick.analysis);
             if (opened && opened.length > 0) {
                 if (pick.currentBarTime) engineState.lastSignalBarTime[pick.barKey] = pick.currentBarTime;
                 if (!engineState.closedCooldowns) engineState.closedCooldowns = {};
                 engineState.closedCooldowns[pick.assetCooldownKey] = Date.now();
+                pepCount++;
+            }
+        }
+
+        // [CLAUDE v3.1] PEPPERSTONE = LABORATORIO REAL: el resto de señales del activo también se ejecutan, solo en Pepperstone.
+        if (PEP_ALL_SIGNALS) {
+            const extras = allFair.filter(c => c !== pickedRef && !c.openPep).slice(0, PEP_EXTRA_PER_CYCLE);
+            for (const c of extras) {
+                if (pepCount >= PEP_MAX_POS) { console.log(`🔒 [CANDADO PEPPERSTONE] ${pepCount}/${PEP_MAX_POS} posiciones: señales extra en espera.`); break; }
+                if (REAL_OFF.has(String(c.analysis.stratCode || '').toLowerCase())) continue;
+                const opened = await executeAutonomousOpen(ticker, price, c.analysis, { pepOnly: true });
+                if (opened && opened.length > 0) {
+                    pepCount++;
+                    if (c.currentBarTime) engineState.lastSignalBarTime[c.barKey] = c.currentBarTime;
+                    console.log(`🧪 [PEPPERSTONE TODAS] ${ticker} ${c.analysis.stratCode}/${c.tfLabel} ejecutada solo en Pepperstone.`);
+                }
             }
         }
 
