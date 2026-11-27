@@ -708,7 +708,7 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
   }
   function renderResults() {
     const isShadow = ui.rSource === 'shadow';
-    seg($('r-source'), [['real', 'Reales (brokers)'], ['shadow', 'Fantasma (igualdad)']], ui.rSource, v => { ui.rSource = v; renderResults(); });
+    seg($('r-source'), [['real', 'Reales'], ['shadow', 'Fantasma'], ['both', 'Comparar']], ui.rSource, v => { ui.rSource = v; renderResults(); });
     seg($('r-period'), [['today', 'Hoy'], ['week', 'Semana'], ['all', 'Punto cero']], ui.rPeriod, v => { ui.rPeriod = v; renderResults(); });
     seg($('r-tf'), [['all', 'Todos'], ['5m', '5m'], ['15m', '15m'], ['1H', '1H'], ['4H', '4H']], ui.rTf, v => { ui.rTf = v; renderResults(); });
     seg($('r-asset'), [['all', 'Todos'], ['TSLA', 'TSLA'], ['NVDA', 'NVDA'], ['XAUUSD', 'Oro'], ['SOLUSD', 'SOL']], ui.rAsset, v => { ui.rAsset = v; renderResults(); });
@@ -727,9 +727,11 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
       return true;
     };
 
+    // [CLAUDE v3.1] Recoge operaciones reales o fantasma con los filtros actuales
+    const collect = (isShadow) => {
     // Normalizar operaciones (reales o fantasma) al mismo formato para filtros, gráficos y acordeones
-    let items = [];
-    let rawFiltered = [];
+      let items = [];
+      let rawFiltered = [];
     if (isShadow) {
       const recent = (st.shadowLab && st.shadowLab.recent) || [];
       items = recent.map(r => {
@@ -784,6 +786,35 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
       }));
     }
 
+      return { items, rawFiltered };
+    };
+
+    let { items, rawFiltered } = collect(isShadow);
+
+    // [CLAUDE v3.1] "Comparar": reales y fantasma lado a lado (no se suman: el fantasma ya incluye las mismas señales que se ejecutaron)
+    if (ui.rSource === 'both') {
+      const real = collect(false).items, sh = collect(true).items;
+      const blk = (title, arr, withMoney) => {
+        const tot = arr.reduce((a, x) => a + x.r, 0), w = arr.filter(x => x.r > 0).length, u = withMoney ? arr.reduce((a, x) => a + (x.usd || 0), 0) : null;
+        return '<div class="stack" style="gap:6px"><span class="eyebrow">' + esc(title) + '</span><div class="grid g4">' +
+          '<div class="kv"><span class="sub">Operaciones</span><b class="big">' + arr.length + '</b></div>' +
+          '<div class="kv"><span class="sub">Ganadoras</span><b class="big">' + (arr.length ? fmtN(w / arr.length * 100, 0) : '0') + ' %</b></div>' +
+          '<div class="kv"><span class="sub">Total R</span><b class="big" style="color:' + (tot >= 0 ? '#86EFAC' : '#FCA5A5') + '">' + R(tot, 1) + '</b></div>' +
+          (withMoney ? '<div class="kv"><span class="sub">Total dinero</span><b class="big" style="color:' + (u >= 0 ? '#86EFAC' : '#FCA5A5') + '">' + money(u) + '</b></div>'
+                     : '<div class="kv"><span class="sub">R medio</span><b class="big" style="color:' + ((arr.length ? tot / arr.length : 0) >= 0 ? '#86EFAC' : '#FCA5A5') + '">' + R(arr.length ? tot / arr.length : null, 2) + '</b></div>') +
+          '</div></div>';
+      };
+      const codes = [...new Set(real.map(x => x.code).concat(sh.map(x => x.code)))];
+      const rowsC = codes.map(c => { const a = real.filter(x => x.code === c), b = sh.filter(x => x.code === c); return { c, an: a.length, ar: a.reduce((s, x) => s + x.r, 0), bn: b.length, br: b.reduce((s, x) => s + x.r, 0) }; })
+        .sort((x, y) => (y.ar + y.br) - (x.ar + x.br));
+      $('res-summary').innerHTML = blk('Reales · ' + (ui.rPeriod === 'today' ? 'Hoy' : (ui.rPeriod === 'week' ? 'Esta semana' : 'Desde punto cero')), real, true) +
+        '<div style="height:1px;background:rgba(255,255,255,.12)"></div>' +
+        blk('Fantasma · ' + exitName(ui.rShadowExit), sh, false) +
+        '<div class="tablebox"><table><thead><tr><th>Estrategia</th><th class="num">Reales</th><th class="num">Fantasma</th></tr></thead><tbody>' +
+        rowsC.map(x => '<tr><td>' + esc(NAMES[x.c] || x.c) + '</td><td class="num ' + cls(x.ar) + '">' + (x.an ? R(x.ar, 1) : '–') + ' <span class="sub">(' + x.an + ')</span></td><td class="num ' + cls(x.br) + '">' + (x.bn ? R(x.br, 1) : '–') + ' <span class="sub">(' + x.bn + ')</span></td></tr>').join('') +
+        '</tbody></table></div><p class="sub" style="margin:0">No se suman: el fantasma mide todas las señales en igualdad y ya incluye las que se ejecutaron en real. Debajo, gráficos y detalle de las reales.</p>';
+    }
+
     const filterTags = [
       isShadow ? 'Fantasma (' + exitName(ui.rShadowExit) + ')' : 'Reales',
       ui.rPeriod === 'today' ? 'Hoy' : (ui.rPeriod === 'week' ? 'Esta semana' : 'Desde punto cero'),
@@ -798,7 +829,7 @@ input[type=text],input[type=password],textarea{font:inherit;font-size:14px;borde
     const totR = items.reduce((a, x) => a + x.r, 0);
     const avgR = items.length ? totR / items.length : null;
     const totU = isShadow ? null : items.reduce((a, x) => a + x.usd, 0);
-    $('res-summary').innerHTML = '<span class="eyebrow">' + esc(filterTags) + '</span><div class="grid g4">' +
+    if (ui.rSource !== 'both') $('res-summary').innerHTML = '<span class="eyebrow">' + esc(filterTags) + '</span><div class="grid g4">' +
       '<div class="kv"><span class="sub">Operaciones</span><b class="big">' + items.length + '</b></div>' +
       '<div class="kv"><span class="sub">Ganadoras</span><b class="big">' + (items.length ? fmtN(wins / items.length * 100, 0) : '0') + ' %</b></div>' +
       '<div class="kv"><span class="sub">Total R</span><b class="big" style="color:' + (totR >= 0 ? '#86EFAC' : '#FCA5A5') + '">' + R(totR, 1) + '</b></div>' +
