@@ -28,6 +28,7 @@ const pepperstoneService = require('./pepperstone_centinela');
 const ti = require('./technical_indicators');
 const { evaluateStrategiesForBar } = require('./strategy_signals');
 const shadowLab = require('./shadow_lab'); // [CLAUDE v2.4] laboratorio fantasma: todas las señales, en igualdad
+const brokerAudit = require('./broker_audit'); // [CLAUDE v3.2] auditoría contra los brokers
 const riskGate = require('./risk_gate');   // [CLAUDE v2.5] la jaula: toda orden pasa por aquí antes del broker
 const slowLab = require('./slow_lab');     // [CLAUDE v2.5] P13 lenta vs comprar y mantener
 const firestoreStore = require('./firestore_store');
@@ -1935,6 +1936,13 @@ async function runAutonomousCycle() {
     // 1. Gestionar posiciones abiertas existentes (Trailing BE, TP, SL)
     await manageOpenPositions(quotes);
     try { await refreshUsClock(); } catch (e) { } // [CLAUDE v2.9]
+    // [CLAUDE v3.2] Auditoría contra el historial real de los brokers cada 30 min (solo lectura)
+    try {
+        if (!engineState.brokerAudit || Date.now() - Date.parse(engineState.brokerAudit.checkedAt || 0) > 30 * 60 * 1000) {
+            const a = await brokerAudit.run(engineState, { getDealList: pepperstoneService.getDealListViaOpenAPI, alpacaRequest: alpacaService.alpacaRequest }, LAB_EPOCH);
+            console.log(`🔎 [AUDITORÍA] Pepperstone: ${a.pepperstone.ok ? (a.pepperstone.matched + '/' + a.pepperstone.ledgerTrades + ' cuadradas, libreta ' + a.pepperstone.ledgerEur + ' € vs broker ' + a.pepperstone.brokerEur + ' €') : a.pepperstone.error} | Alpaca: ${a.alpaca.ok ? (a.alpaca.entryMatched + '/' + a.alpaca.ledgerTrades + ' entradas y ' + a.alpaca.exitMatched + ' salidas encontradas') : a.alpaca.error}`);
+        }
+    } catch (e) { console.warn('[AUDITORÍA]', e.message); }
 
     // [CLAUDE v2.6] Punto cero de la semana: laboratorio fantasma y comparación P13 empiezan de cero (una sola vez)
     if (labEpochActive()) {
